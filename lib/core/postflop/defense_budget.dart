@@ -21,14 +21,31 @@ class ComboStrength {
         ? 0.0
         : (r.flushDraw ? 9 : 0) + (r.oesd ? 8 : (r.gutshot ? 4 : 0)) + (r.overcards ? 3 : 0) + (r.backdoorFlush ? 1.5 : 0);
     final frac = (ev & 0xFFFFF) / (1 << 20);
-    return switch (r.tier) {
+    final unblock = river ? _missedSuitPenalty(a, b, board) : 0.0;
+    return -unblock + switch (r.tier) {
       HandTier.nutsMonster => 6 + HandEvaluator.category(ev) / 10 + frac / 10,
       HandTier.strongTopPairOverpair => 5 + frac,
-      HandTier.marginalMadeShowdown => 3 + ((ev >> 16) & 0xF) / 15 + outs * 0.03,
-      HandTier.highEquityComboDraw => 3 + outs * 0.05,
+      HandTier.marginalMadeShowdown => 3 + ((ev >> 16) & 0xF) / 15 + outs * 0.03 + (ev & 0xFFFF) / (1 << 16) / 20,
+      HandTier.highEquityComboDraw => 3 + outs * 0.05 + frac / 100,
       HandTier.backdoorBlockerBluff => 2 + outs * 0.05 + frac / 10,
       HandTier.airGiveUp => 1 + frac,
     };
+  }
+
+  /// River: penaliza bluff-catchers que bloquean el proyecto de color fallido del rival (prioriza unblockers).
+  static double _missedSuitPenalty(int a, int b, List<int> board) {
+    final turn = List<int>.filled(4, 0), fin = List<int>.filled(4, 0);
+    for (var i = 0; i < board.length; i++) {
+      if (i < 4) turn[board[i] & 3]++;
+      fin[board[i] & 3]++;
+    }
+    for (var s = 0; s < 4; s++) {
+      if (turn[s] >= 2 && fin[s] < 3) {
+        final n = ((a & 3) == s ? 1 : 0) + ((b & 3) == s ? 1 : 0);
+        return n * 0.04;
+      }
+    }
+    return 0;
   }
 }
 
@@ -48,7 +65,8 @@ class DefenseBudget {
 
   static double factor(ReadProfile r, Stake stake) => switch (r.archetype) {
         GgArchetype.agroSpewy => 1.15,
-        GgArchetype.scaredMoneyReg || GgArchetype.recPassiveFish when stake.index <= Stake.nl50.index => 0.82,
+        GgArchetype.recPassiveFish when stake.index <= Stake.nl50.index => 0.82,
+        GgArchetype.scaredMoneyReg when stake.index <= Stake.nl50.index => 0.90,
         _ => 1.0,
       };
 

@@ -140,14 +140,14 @@ class PreflopRangesDb {
   static const _flatMicroBtn = '66-TT,AQs,KQs';
 
   static const _vs3bet = {
-    (Position.utg, false): ('KK+,AKs,A5s', '77-QQ,AKo,AQs,AJs,KQs,QJs,JTs'),
+    (Position.utg, false): ('KK+,AKs,A5s,A4s', '77-QQ,AKo,AQs,AJs,KQs,QJs,JTs'),
     (Position.mp, false): ('KK+,AKs,A5s,A4s', '77-QQ,AKo,AQs,AJs,ATs,KQs,KJs,QJs,JTs,T9s'),
-    (Position.co, false): ('QQ+,AKs,AKo,A5s,A4s', '66-JJ,AQs,AJs,ATs,KQs,KJs,QJs,JTs,T9s,98s'),
-    (Position.utg, true): ('KK+,AKs,A5s', '77-QQ,AKo,AQs,AJs,KQs,QJs,JTs,AQo'),
+    (Position.co, false): ('QQ+,AKs,AKo,A5s-A3s', '66-JJ,AQs,AJs,ATs,KQs,KJs,QJs,JTs,T9s,98s'),
+    (Position.utg, true): ('KK+,AKs,A5s,A4s', '77-QQ,AKo,AQs,AJs,KQs,QJs,JTs,AQo'),
     (Position.mp, true): ('KK+,AKs,A5s,A4s', '77-QQ,AKo,AQs,AJs,ATs,KQs,KJs,QJs,JTs,AQo'),
-    (Position.co, true): ('QQ+,AKs,AKo,A5s,A4s', '66-JJ,ATs-AQs,KJs+,QJs,JTs,T9s,AQo,KQo'),
-    (Position.btn, true): ('QQ+,AKs,AKo,A5s-A4s', '55-JJ,A9s-AQs,KTs+,QTs+,JTs,T9s,98s,87s,76s,AJo,AQo,KQo'),
-    (Position.sb, false): ('QQ+,AKs,AKo,A5s,A4s', '66-JJ,ATs-AQs,KTs+,QJs,JTs,T9s'),
+    (Position.co, true): ('QQ+,AKs,AKo,A5s-A3s', '66-JJ,ATs-AQs,KJs+,QJs,JTs,T9s,AQo,KQo'),
+    (Position.btn, true): ('QQ+,AKs,AKo,A5s-A3s', '55-JJ,A9s-AQs,KTs+,QTs+,JTs,T9s,98s,87s,76s,AJo,AQo,KQo'),
+    (Position.sb, false): ('QQ+,AKs,AKo,A5s-A3s', '66-JJ,ATs-AQs,KTs+,QJs,JTs,T9s'),
   };
 
   /// Referencia de 4-bet/5-bet para blocker_weight.

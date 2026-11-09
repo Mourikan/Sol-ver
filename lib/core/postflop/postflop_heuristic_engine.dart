@@ -319,7 +319,9 @@ class PostflopHeuristicEngine {
     }
     final agroSafe = rp.archetype == GgArchetype.agroSpewy &&
         (cat >= HandEvaluator.twoPair || h.tier == HandTier.strongTopPairOverpair);
-    if (a.allowsCall || agroSafe || nuts) {
+    final budget = DefenseBudget.evaluate(s, rp, potBeforeBet: potBeforeBet, call: toCall);
+    metrics.add(KeyMetric(MetricType.rangeActionFreq, budget.target, 'presupuesto de defensa River (MDF x factor)'));
+    if ((a.allowsCall && budget.continues) || agroSafe || nuts) {
       return DecisionOutput(
           action: DecisionAction.call,
           sizing: Sizing(bb: toCall, potPct: betFrac * 100),
