@@ -77,6 +77,36 @@ class ActionEvCalculator {
     }.clamp(0.0, 0.95);
   }
 
+  /// Future_Bluff_Capture_EV (horizonte 2 calles): tras pagar en Flop/Turn vs Reg/Agro, fracción de faroles que el rival
+  /// seguirá apostando en la siguiente calle (acotada por el ratio de indiferencia del sizing siguiente), ponderada por
+  /// unblockers (no tener cartas del proyecto del rival) y por nuestra probabilidad de seguir en la mano.
+  static double futureBluffCapture(GameState s, ({List<(int, int)> combos, List<double> weights, List<HandTier> tiers}) vc, double eq,
+      {required double potAfterCall}) {
+    if (s.street == Street.river) return 0;
+    final vp = s.villainProfile;
+    final regOrAgro = vp == VillainProfile.gtoBase || vp == VillainProfile.regAgro || vp == VillainProfile.maniac;
+    if (!regOrAgro) return 0;
+    var tot = 0.0, bluffs = 0.0;
+    for (var k = 0; k < vc.combos.length; k++) {
+      tot += vc.weights[k];
+      final t = vc.tiers[k];
+      if (t == HandTier.airGiveUp || t == HandTier.backdoorBlockerBluff || t == HandTier.highEquityComboDraw) bluffs += vc.weights[k];
+    }
+    if (tot == 0) return 0;
+    final b = bluffs / tot;
+    final b2 = 0.66 * potAfterCall;
+    final alpha2 = b2 / (potAfterCall + 2 * b2);
+    final bluffBets = math.min(b, (1 - b) * alpha2 / (1 - alpha2));
+    final suits = List<int>.filled(4, 0);
+    for (final c in s.board) {
+      suits[c.suit.index]++;
+    }
+    final drawSuit = suits.indexWhere((n) => n == 2);
+    final blocking = drawSuit < 0 ? 0 : [s.hero!.high, s.hero!.low].where((c) => c.suit.index == drawSuit).length;
+    final unblock = 1 - 0.25 * blocking;
+    return bluffBets * b2 * unblock * eq.clamp(0.0, 1.0);
+  }
+
   static double _rake(GameState s, double finalPot) => RakeConfig.byStake[s.stake]!.rakeOn(finalPot);
 
   /// [potBefore] = bote antes de la apuesta del villano (incluye lo ya comprometido por ambos en la calle);
@@ -132,7 +162,7 @@ class ActionEvCalculator {
     final double cc;
     if (facing) {
       final fin = potNow + toCall;
-      cc = eqAll * eqr * (fin - _rake(s, fin)) - toCall;
+      cc = eqAll * eqr * (fin - _rake(s, fin)) - toCall + futureBluffCapture(s, vc, eqAll, potAfterCall: fin);
     } else {
       cc = eqAll * eqr * (potNow - _rake(s, potNow));
     }

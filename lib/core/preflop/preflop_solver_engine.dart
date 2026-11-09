@@ -6,6 +6,7 @@ import '../models/action_mixer.dart';
 import '../reads/gg_profiler.dart';
 import '../postflop/postflop_ranges.dart';
 import 'hand_normalizer.dart';
+import 'structure_modifier.dart';
 import 'preflop_ranges_db.dart';
 import 'range_notation.dart';
 
@@ -44,7 +45,7 @@ class PreflopContext {
         }
       }
     }
-    final pot = committed.values.fold<double>(0, (x, y) => x + y);
+    final pot = committed.values.fold<double>(0, (x, y) => x + y) + s.extraDeadMoneyBb;
     final call = current - (committed[s.heroPosition] ?? 0);
 
     if (raises.isEmpty) {
@@ -186,6 +187,7 @@ class PreflopSolverEngine {
   /// EQR por profundidad: >120bb premia suited/pares (nutted), <60bb premia pares y high cards.
   static double stackEqrMultiplier(int i, double? stack) {
     if (stack == null) return 1.0;
+    if (stack > StructureModifier.ultraDeepBb) return StructureModifier.ultraDeepEqr(i, stack) * (Matrix169.isPair(i) || Matrix169.isSuited(i) ? 1.05 : 0.97);
     final pair = Matrix169.isPair(i), suited = Matrix169.isSuited(i);
     final high = Matrix169.highRank(i), low = Matrix169.lowRank(i);
     if (stack > 120) return pair || suited ? 1.05 : 0.97;
@@ -270,7 +272,8 @@ class PreflopSolverEngine {
         rangeLabel = 'iso = RFI de ${tighter.name.toUpperCase()} (rango 1 posición más tight)';
       }
     } else {
-      range = PreflopRangesDb.rfi(hero, tier).weights[PreflopAction.raise]!;
+      final exp = StructureModifier.rfiExpansion(s, hero);
+      range = exp > 0 ? StructureModifier.expandedRfi(hero, tier, exp) : PreflopRangesDb.rfi(hero, tier).weights[PreflopAction.raise]!;
       rangeLabel = 'RFI ${hero.name.toUpperCase()} ${PreflopRangesDb.rfi(hero, tier).percent(PreflopAction.raise).toStringAsFixed(1)}%';
     }
 
@@ -282,7 +285,7 @@ class PreflopSolverEngine {
 
     final base = ctx.limpers > 0
         ? (ip ? 3.5 : 4.5) + ctx.limpers
-        : PreflopRangesDb.openSizeBb[hero]!;
+        : StructureModifier.openSize(s, PreflopRangesDb.openSizeBb[hero]!);
     final f = {PreflopAction.raise: w, PreflopAction.fold: 1 - w};
     final (a, roll, norm) = _pick(f, s);
     final raise = a == PreflopAction.raise;

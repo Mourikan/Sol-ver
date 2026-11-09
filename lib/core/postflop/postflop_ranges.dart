@@ -5,6 +5,7 @@ import '../models/game_state.dart';
 import '../preflop/preflop_ranges_db.dart';
 import '../preflop/preflop_solver_engine.dart';
 import '../preflop/range_notation.dart';
+import 'four_bet_pot_solver.dart';
 
 /// Rangos de llegada al flop HU derivados del árbol preflop (mismas tablas que el motor preflop).
 class PostflopRanges {
@@ -40,7 +41,8 @@ class PostflopRanges {
 
   /// (rango PFA, rango defensor) para el bote HU.
   static (Float32List, Float32List) forPot(Position pfa, Position defender, PotType potType, RakeTier tier) {
-    if (potType == PotType.threeBet || potType == PotType.fourBetPlus) {
+    if (potType == PotType.fourBetPlus) return (FourBetPotSolver.fourBettorRange, FourBetPotSolver.callerRange);
+    if (potType == PotType.threeBet) {
       final opener = defender, threeBettor = pfa;
       final tb = threeBettor.index > opener.index
           ? PreflopRangesDb.vsRfi(threeBettor, opener, tier).weights[PreflopAction.raise]!

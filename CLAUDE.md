@@ -42,3 +42,11 @@ Actúa integrando dos roles simultáneos:
 - Comprime toda salida de consola a máximo 6 líneas.
 - Al final de CADA respuesta en el chat añade una línea de telemetría estimada (`Chars / 3.8`, aproximada; no es facturación):
   `[TELEMETRÍA TOKENS | In_Est: ~X tok | Out_Est: ~Y tok | Tip: usa /cost para facturación exacta API]`.
+
+## 7. SKILL INTERNA: [COST_AND_REGRESSION_GUARD]
+- **Gasto por mensaje:** al final de CADA respuesta, una única línea con tokens estimados (`Chars / 3.8`) y costo estimado en USD
+  (`Sonnet: In*$0.000003 + Out*$0.000015` | `Opus: In*$0.000015 + Out*$0.000075`; tarifas declaradas por el usuario, estimación):
+  `[GASTO TURNO | ~In: X tok / ~Out: Y tok | Costo Est: $0.XXXX USD (Sonnet) / $0.YYYY USD (Opus) | Exacto: /cost]`
+- **Protocolo Zero-Break:** prohibido alterar firmas públicas o romper los checks de `docs/deep_engine_ev_audit.md`
+  (Preflop_Tree 11/11, Flop_Buckets 7/7, Turn_River_Solver 7/7, Range_Funnel 5/5, Discipline_Auditor 1/1, EV_Calculator 3/3, Coverage 10/10).
+  Antes de cerrar cualquier cambio: `flutter test` + todos los scripts de `docs/audit_scripts/`.

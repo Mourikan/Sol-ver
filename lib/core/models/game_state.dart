@@ -56,6 +56,13 @@ class PlayerAction {
       type == ActionType.bet || type == ActionType.raise || type == ActionType.allIn;
 }
 
+/// Villano activo modelado por separado en botes multiway.
+class VillainSeatState {
+  const VillainSeatState(this.position, {this.profile = VillainProfile.gtoBase});
+  final Position position;
+  final VillainProfile profile;
+}
+
 class GameState {
   GameState({
     required this.stake,
@@ -68,7 +75,11 @@ class GameState {
     List<PlayerAction> actions = const [],
     this.villainProfile = VillainProfile.gtoBase,
     this.activePlayers = 2,
-  })  : board = List.unmodifiable(board),
+    List<VillainSeatState> activeVillains = const [],
+    this.anteBb = 0.0,
+    this.hasStraddle = false,
+  })  : activeVillains = List.unmodifiable(activeVillains),
+        board = List.unmodifiable(board),
         actions = List.unmodifiable(actions) {
     if (board.length > 5 || board.length == 1 || board.length == 2) {
       throw ArgumentError('Board debe tener 0, 3, 4 o 5 cartas');
@@ -92,19 +103,34 @@ class GameState {
 
   /// Jugadores activos en el bote (>=3 => multiway).
   final int activePlayers;
+
+  /// Villanos modelados por separado (multiway). Vacío => modo HU retrocompatible con [villainPosition].
+  final List<VillainSeatState> activeVillains;
+
+  /// Ante por jugador (bb) y straddle de UTG (2bb).
+  final double anteBb;
+  final bool hasStraddle;
   late final int deadMask;
 
-  GameState copyWith({VillainProfile? villainProfile, List<PlayerAction>? actions, HoleCards? hero}) => GameState(
+  /// Dinero muerto adicional a las ciegas (antes de 6 jugadores + straddle).
+  double get extraDeadMoneyBb => anteBb * 6 + (hasStraddle ? 2.0 : 0.0);
+
+  GameState copyWith({VillainProfile? villainProfile, List<PlayerAction>? actions, HoleCards? hero, Position? villainPosition,
+          int? activePlayers, List<VillainSeatState>? activeVillains}) =>
+      GameState(
         stake: stake,
         heroPosition: heroPosition,
-        villainPosition: villainPosition,
+        villainPosition: villainPosition ?? this.villainPosition,
         effectiveStackBb: effectiveStackBb,
         potBb: potBb,
         hero: hero ?? this.hero,
         board: board,
         actions: actions ?? this.actions,
         villainProfile: villainProfile ?? this.villainProfile,
-        activePlayers: activePlayers,
+        activePlayers: activePlayers ?? this.activePlayers,
+        activeVillains: activeVillains ?? this.activeVillains,
+        anteBb: anteBb,
+        hasStraddle: hasStraddle,
       );
 
   RakeTier get rakeTier => stake.rakeTier;

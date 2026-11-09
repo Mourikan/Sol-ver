@@ -29,20 +29,34 @@ class RakeConfig {
   };
 
   /// Expected_Final_Pot_Rake / E_Final_Pot.
+  /// Distribución de tamaños de bote final (bb, probabilidad) por tipo de bote: pequeño / medio / grande / stack-off.
+  static const potDistribution = <PotType, List<(double, double)>>{
+    PotType.limped: [(4, 0.55), (10, 0.30), (25, 0.10), (80, 0.05)],
+    PotType.srp: [(10, 0.40), (25, 0.30), (60, 0.20), (200, 0.10)],
+    PotType.threeBet: [(25, 0.30), (55, 0.35), (120, 0.20), (200, 0.15)],
+    PotType.fourBetPlus: [(50, 0.25), (100, 0.30), (200, 0.45)],
+  };
+
+  /// Rake efectivo ponderado por tamaño de bote: Σ p·min(%·pot, cap) / Σ p·pot (los caps muerden en botes medianos/grandes).
   double effectiveRate(PotType t) {
-    final e = expectedFinalPot[t]!;
-    return rakeOn(e) / e;
+    var num = 0.0, den = 0.0;
+    for (final (pot, p) in potDistribution[t]!) {
+      num += p * rakeOn(pot);
+      den += p * pot;
+    }
+    return num / den;
   }
 
-  /// Plantilla genérica por stake (% y cap en bb). Editable: NO corresponde a una sala concreta; verifica tu sala.
+  /// Plantilla estilo GGPoker (5% con caps en bb decrecientes; anclas del usuario NL10 ~8bb, NL25 ~4bb).
+  /// NO verificada contra la tabla oficial de la sala ni modela PVI: editable.
   static const byStake = {
-    Stake.nl2: RakeConfig(0.05, 15.0),
-    Stake.nl5: RakeConfig(0.05, 10.0),
-    Stake.nl10: RakeConfig(0.05, 6.0),
+    Stake.nl2: RakeConfig(0.05, 20.0),
+    Stake.nl5: RakeConfig(0.05, 9.0),
+    Stake.nl10: RakeConfig(0.05, 8.0),
     Stake.nl25: RakeConfig(0.05, 4.0),
     Stake.nl50: RakeConfig(0.05, 3.0),
-    Stake.nl100: RakeConfig(0.045, 2.5),
-    Stake.nl200: RakeConfig(0.04, 1.5),
+    Stake.nl100: RakeConfig(0.05, 2.5),
+    Stake.nl200: RakeConfig(0.05, 1.5),
   };
 
   /// Valores por defecto editables: verificar contra la estructura real de la sala.

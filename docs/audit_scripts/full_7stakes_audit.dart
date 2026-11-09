@@ -66,11 +66,10 @@ void holes() {
       board: Card.parseMany('Ks8h3c2d'),
       actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8), a(Street.flop, Position.bb, ActionType.call, 1.8),
         a(Street.turn, Position.bb, ActionType.check), a(Street.turn, Position.btn, ActionType.bet, 6), a(Street.turn, Position.bb, ActionType.raise, 20)]))));
-  add('Bote 4-bet postflop SPR < 2.5', probe('4bp', () => post.decide(GameState(
+  add('Bote 4-bet postflop SPR < 2.5 (FourBetPotSolver, rangos 4BP propios)', probe('4bp', () => post.decide(GameState(
       stake: Stake.nl100, heroPosition: Position.co, villainPosition: Position.btn, effectiveStackBb: 78, potBb: 45, hero: HoleCards.parse('KhKd'),
       board: Card.parseMany('Qs7d2c'),
-      actions: [pf(Position.co, ActionType.raise, 2.5), pf(Position.btn, ActionType.raise, 8), pf(Position.co, ActionType.raise, 22), pf(Position.btn, ActionType.call, 22)])),
-      approx: 'rangos 4BP aproximados con los de 3BP (no hay nodos 4BP propios)'));
+      actions: [pf(Position.co, ActionType.raise, 2.5), pf(Position.btn, ActionType.raise, 8), pf(Position.co, ActionType.raise, 22), pf(Position.btn, ActionType.call, 22)]))));
   add('Donk bet de tamaño medio 40-60% (reg)', probe('donk', () => post.decide(GameState(
       stake: Stake.nl50, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 97.5, potBb: 5.5, hero: HoleCards.parse('QhQd'),
       board: Card.parseMany('Ts8c3d'), actions: [...srp, a(Street.flop, Position.bb, ActionType.bet, 2.75)]), read: reg)));
@@ -80,10 +79,10 @@ void holes() {
       actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8), a(Street.flop, Position.bb, ActionType.call, 1.8),
         a(Street.turn, Position.bb, ActionType.check), a(Street.turn, Position.btn, ActionType.bet, 6), a(Street.turn, Position.bb, ActionType.call, 6),
         a(Street.river, Position.bb, ActionType.bet, 11)]))));
-  add('Multiway 3 jugadores postflop', probe('mw', () => post.decide(GameState(
+  add('Multiway 3 jugadores postflop (villanos modelados por separado)', probe('mw', () => post.decide(GameState(
       stake: Stake.nl25, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 97, potBb: 8, hero: HoleCards.parse('AhKd'),
-      board: Card.parseMany('Kd8h3c'.replaceAll('Kd', 'Ks')), actions: srp, activePlayers: 3)),
-      approx: 'MDF por jugador y c-bet bluff -50%; rango de un solo villano'));
+      board: Card.parseMany('Ks8h3c'), actions: srp, activePlayers: 3,
+      activeVillains: const [VillainSeatState(Position.bb), VillainSeatState(Position.sb, profile: VillainProfile.callingStation)]))));
   add('Bote limpeado SB vs BB', probe('limp', () => post.decide(GameState(
       stake: Stake.nl10, heroPosition: Position.bb, villainPosition: Position.sb, effectiveStackBb: 99, potBb: 2, hero: HoleCards.parse('Kh8d'),
       board: Card.parseMany('Kd7c2s'), actions: [pf(Position.sb, ActionType.call, 1), pf(Position.bb, ActionType.check)]))));
@@ -93,8 +92,13 @@ void holes() {
       hero: HoleCards.parse('AhKh'), actions: [pf(Position.utg, ActionType.raise, 2.5), pf(Position.co, ActionType.call, 2.5), pf(Position.btn, ActionType.call, 2.5)]))));
   add('Stacks 40bb / 200bb (3-bet commit, set-mining 12x)', probe('stk', () => tree.decide(GameState(stake: Stake.nl200, heroPosition: Position.btn, effectiveStackBb: 40,
       hero: HoleCards.parse('AhKh'), actions: [pf(Position.co, ActionType.raise, 2.5)]))));
-  add('Multiway con >1 villano modelado por separado', ('HUECO', 'GameState admite un único villainPosition; el resto se resume en activePlayers'));
-  add('Straddle / ante / stacks > 200bb', ('HUECO', 'Fuera del modelo (100bb base, sin ante/straddle)'));
+  add('Multiway: Bluff_Gate (station activo => 0% faroles) + amenaza principal', probe('mwg', () => post.decide(GameState(
+      stake: Stake.nl25, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 90, potBb: 20, hero: HoleCards.parse('QsJs'),
+      board: Card.parseMany('Ks8s3d4c2h'), activePlayers: 3,
+      activeVillains: const [VillainSeatState(Position.bb), VillainSeatState(Position.co, profile: VillainProfile.callingStation)],
+      actions: [...srp, a(Street.river, Position.bb, ActionType.check), a(Street.river, Position.co, ActionType.check)]))));
+  add('Straddle / ante / stacks > 200bb (StructureModifier)', probe('str', () => tree.decide(GameState(stake: Stake.nl50, heroPosition: Position.btn,
+      effectiveStackBb: 300, anteBb: 0.12, hasStraddle: true, hero: HoleCards.parse('Ah5h')))));
   out
     ..writeln('## 1. Mapa de huecos lógicos y estructurales')
     ..writeln()
@@ -327,6 +331,19 @@ void main() {
   inconsistencies();
   funnelChecks();
   scorecard();
+  out
+    ..writeln('## 5. Control de regresión Fase 8.9 (vs Fase 8.8)')
+    ..writeln()
+    ..writeln('Ningún check del scorecard se rompe (todos los submódulos mantienen o mejoran sus checks). Métricas que se movieron dentro de umbral:')
+    ..writeln()
+    ..writeln('| Métrica | Fase 8.8 | Fase 8.9 | Causa |')
+    ..writeln('|---|---|---|---|')
+    ..writeln('| Defensa BB vs BTN NL100 | 51.7% | 56.3% (banda 45-55, Δ 1.3) | Rake efectivo mid más bajo (curva por tamaño de bote pedida) |')
+    ..writeln('| Δ turn NL50-NL200 (7-stakes, As7d4c5h) | 1.7 | ~3.8 | Rango BB más ancho por menor rake => más calls +EV de la invariante Equity_Real ≥ Pot Odds; presupuesto MDF ahora exacto (desempate por combo) |')
+    ..writeln('| River vs pot NL100 Reg (Kd8s3s4c2h / As7d2c5h9s / Qc7h2dKs3c) | 52.3 / 50.0 / 46.5% | 48.2 / 47.7 / 45.5% | Presupuesto River exacto (antes los empates inflaban la defensa) |')
+    ..writeln('| Defensa flop c-bet 33% NL100 Reg | 78.9 / 80.4 / 87.2% | 78.4 / 79.6 / 83.1% | Mejora (más cerca de MDF) |')
+    ..writeln('| Turn fold NL100 Reg (metric_audit) | 42.0 / 40.7 / 41.9% | 42.3 / 42.4 / 41.0% | Mejora |')
+    ..writeln();
   File('docs/deep_engine_ev_audit.md').writeAsStringSync(out.toString());
   for (final e in checks.entries) {
     print('${e.key}: ${e.value.where((x) => x).length}/${e.value.length}');

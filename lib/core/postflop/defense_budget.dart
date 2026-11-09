@@ -63,7 +63,7 @@ class DefenseResult {
 class DefenseBudget {
   DefenseBudget._();
 
-  static final _cache = <String, List<(double, double)>>{};
+  static final _cache = <String, List<(double, double, int)>>{};
 
   static double factor(ReadProfile r, Stake stake) => switch (r.archetype) {
         GgArchetype.agroSpewy => 1.15,
@@ -251,19 +251,38 @@ class DefenseBudget {
     final sorted = _cache.putIfAbsent(_key(s, r, call), () {
       if (_cache.length > 512) _cache.clear();
       final range = heroRangeAtStreet(s, r);
-      final list = [for (final e in range.entries) (ComboStrength.score(e.key ~/ 52, e.key % 52, board), e.value)]
-        ..sort((x, y) => y.$1.compareTo(x.$1));
+      // Desempate determinista por hash del combo: el presupuesto cubre exactamente MDF x factor aunque haya empates de score.
+      final list = [for (final e in range.entries) (ComboStrength.score(e.key ~/ 52, e.key % 52, board), e.value, e.key)]
+        ..sort((x, y) {
+          final c = y.$1.compareTo(x.$1);
+          return c != 0 ? c : _tie(x.$3).compareTo(_tie(y.$3));
+        });
       return list;
     });
     final total = sorted.fold<double>(0, (x, y) => x + y.$2);
     final mine = ComboStrength.score(s.hero!.high.id, s.hero!.low.id, board);
+    final a = s.hero!.high.id, b = s.hero!.low.id;
+    final myKey = a < b ? a * 52 + b : b * 52 + a;
     var above = 0.0;
-    for (final (sc, w) in sorted) {
-      if (sc > mine) above += w;
+    var found = false;
+    for (final (_, w, k) in sorted) {
+      if (k == myKey) {
+        found = true;
+        break;
+      }
+      above += w;
+    }
+    if (!found) {
+      above = 0;
+      for (final (sc, w, _) in sorted) {
+        if (sc > mine) above += w;
+      }
     }
     final pct = total == 0 ? 0.0 : above / total;
     return DefenseResult(pct < target, target, pct, mdf);
   }
+
+  static int _tie(int key) => (key * 2654435761) & 0x7FFFFFFF;
 
   /// Percentil (0 = mejor) de la mano de Hero dentro de su propio rango actual.
   static double percentile(GameState s, ReadProfile r) =>

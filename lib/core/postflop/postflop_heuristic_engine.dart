@@ -6,6 +6,7 @@ import '../models/game_state.dart';
 import 'exploit_modifier.dart';
 import 'defense_budget.dart';
 import 'flop_lookup_table.dart';
+import 'four_bet_pot_solver.dart';
 import 'geometry.dart';
 import 'hand_tier.dart';
 import '../discipline/blocker_bluff_converter.dart';
@@ -15,6 +16,7 @@ import '../discipline/ev_sanity_guard.dart';
 import '../discipline/bluff_catch_auditor.dart';
 import '../discipline/timing_tells_matrix.dart';
 import '../reads/gg_profiler.dart';
+import '../reads/multiway_threat_aggregator.dart';
 import 'postflop_ranges.dart';
 import 'range_equity.dart';
 import 'turn_river_solver.dart';
@@ -23,6 +25,7 @@ class PostflopHeuristicEngine {
   const PostflopHeuristicEngine();
 
   DecisionOutput decide(GameState input, {ReadProfile? read}) {
+    if (input.activeVillains.length >= 2) return _multiway(input, read);
     final missing = input.missingForPostflop();
     if (missing.isNotEmpty) throw MissingInputs(missing);
     final rp = read ?? ReadProfile.fromVillainProfile(input.villainProfile);
@@ -75,6 +78,47 @@ class PostflopHeuristicEngine {
     return evGate(s, rp, inv, pot: pot, stack: stack, toCall: toCall, potBeforeBet: potBeforeBet);
   }
 
+  /// Multiway con villanos modelados por separado: decide contra la amenaza principal y consolida
+  /// Bluff_Gate_Multiway (min factor x 0.5^(N-1)) y Value_Threshold_Multiway (equity > 50% vs la amenaza más fuerte).
+  DecisionOutput _multiway(GameState input, ReadProfile? read) {
+    final a = MultiwayThreatAggregator.assess(input);
+    final main = a.mainThreat;
+    final s = input.copyWith(
+      villainPosition: main.position,
+      villainProfile: main.profile,
+      activePlayers: a.villains.length + 1,
+      activeVillains: const [],
+    );
+    final d = decide(s, read: read ?? ReadProfile.fromVillainProfile(main.profile));
+    if (d.action != DecisionAction.betRaise) return d;
+    final h = HandTierClassifier.classify(s.hero!.high.id, s.hero!.low.id, [for (final c in s.board) c.id]);
+    const bluffTiers = {HandTier.airGiveUp, HandTier.backdoorBlockerBluff, HandTier.highEquityComboDraw};
+    final tag = 'Multiway ${a.villains.length} villanos [${a.notes.join('; ')}] | amenaza principal ${main.position.name}';
+    if (bluffTiers.contains(h.tier)) {
+      final keep = !a.bluffBlocked &&
+          DeterministicActionMixer.roll([s.hero!.high, s.hero!.low], s.board, s.potBb ?? 1) < a.bluffFactor * 100;
+      if (!keep) {
+        return d.copyWith(
+          action: DecisionAction.check,
+          clearSizing: true,
+          freqGto: {DecisionAction.betRaise: a.bluffFactor, DecisionAction.check: 1 - a.bluffFactor},
+          freqSource: FreqSource.modelCalibrated,
+          ajusteExplotativoRead: '$tag | Bluff_Gate_Multiway: factor ${a.bluffFactor.toStringAsFixed(2)}${a.bluffBlocked ? ' (Fish/Station activo => 0%)' : ''}. ${d.ajusteExplotativoRead}',
+        );
+      }
+    } else if (h.tier != HandTier.nutsMonster) {
+      final eq = RangeEquity.vsVillainLine(s);
+      if (eq < 0.5) {
+        return d.copyWith(
+          action: DecisionAction.check,
+          clearSizing: true,
+          ajusteExplotativoRead: '$tag | Value_Threshold_Multiway: equity ${(eq * 100).toStringAsFixed(1)}% < 50% vs amenaza principal. ${d.ajusteExplotativoRead}',
+        );
+      }
+    }
+    return d.copyWith(ajusteExplotativoRead: '$tag. ${d.ajusteExplotativoRead}');
+  }
+
   /// Marcadores de intervenciones documentadas que la puerta de EV respeta (reglas explotativas / cordura).
   static const protectedMarkers = [
     EvSanityGuard.tag,
@@ -88,6 +132,9 @@ class PostflopHeuristicEngine {
     'Fish/Station',
     'Station',
     'Exploit_Bluff_Factor 0.0',
+    // Faroles del selector balanceado (cupo = alpha x factor): individualmente -EV en el modelo de 1 calle por diseño.
+    'Farol seleccionado',
+    'Rank_Shift',
   ];
 
   /// Banda de indiferencia: diferencias de EV menores se tratan como mezcla de equilibrio (no se corrigen).
@@ -172,6 +219,10 @@ class PostflopHeuristicEngine {
       double pot, double stack, bool heroIp, List<KeyMetric> metrics, List<PlayerAction> street, double heroIn,
       double villainIn, double toCall, bool hadInitiative, bool limped) {
     final villain = s.villainPosition!;
+    if (s.potType == PotType.fourBetPlus) {
+      return FourBetPotSolver.decide(s, h,
+          pot: pot, stack: stack, toCall: toCall, potBeforeBet: pot - villainIn + heroIn, heroIsPfa: s.preflopAggressor == s.heroPosition);
+    }
     if (toCall > 0) {
       final firstAgg = street.where((a) => a.isAggressive).firstOrNull;
       final donk = firstAgg != null && firstAgg.actor == villain && hadInitiative;

@@ -9,6 +9,7 @@ import 'hand_normalizer.dart';
 import 'preflop_ranges_db.dart';
 import 'preflop_solver_engine.dart';
 import 'range_notation.dart';
+import 'structure_modifier.dart';
 
 enum TreeScenario { rfi, isoVsLimpers, threeBetHu, squeeze, standard4Bet, cold4Bet, facing4Bet, facing5Bet }
 
@@ -77,7 +78,7 @@ class FullTreePreflop {
         }
       }
     }
-    final pot = committed.values.fold<double>(0, (x, y) => x + y);
+    final pot = committed.values.fold<double>(0, (x, y) => x + y) + s.extraDeadMoneyBb;
     final hero = s.heroPosition;
     if (raises.isEmpty) {
       return TreeSpot(limpers > 0 ? TreeScenario.isoVsLimpers : TreeScenario.rfi, limpers: limpers, potBb: pot);
@@ -159,7 +160,7 @@ class FullTreePreflop {
     final allIn = spot.lastRaiseBb >= stack * 0.9 || spot.scenario == TreeScenario.facing5Bet;
     final tight = vp == VillainProfile.nit || vp == VillainProfile.trapperPremium;
     final odds = spot.callBb / (spot.potBb + spot.callBb);
-    final callOffR = RangeNotation.parse(tight ? callOffVsNit : callOff);
+    final callOffR = RangeNotation.parse(StructureModifier.stackOffRange(stack, vp, tight ? callOffVsNit : callOff));
     final ip = s.heroPosition.isInPositionVs(spot.opener!);
     final label = spot.scenario == TreeScenario.facing5Bet ? '5-bet' : '4-bet';
     DecisionOutput out(DecisionAction a, String why, {Sizing? sz}) => DecisionOutput(
@@ -176,7 +177,7 @@ class FullTreePreflop {
       }
       return out(DecisionAction.fold, PreflopRangesDb.isBluff4Bet(i) ? '${hand.label} es farol/blocker: 100% fold vs $label all-in.' : 'Fuera del rango de call-off.');
     }
-    if (RangeNotation.parse(tight ? callOffVsNit : fiveBetJam)[i] > 0) {
+    if (RangeNotation.parse(StructureModifier.stackOffRange(stack, vp, tight ? callOffVsNit : fiveBetJam))[i] > 0) {
       return out(DecisionAction.betRaise, '5-bet jam por valor.', sz: Sizing(bb: stack, potPct: stack / spot.potBb * 100));
     }
     if (ip && !tight && RangeNotation.parse(call4BetIp)[i] > 0) {
@@ -270,7 +271,7 @@ class FullTreePreflop {
     final n = spot.callers + 2;
     final committed = hero == Position.bb ? 1.0 : 0.0;
     final call = spot.openBb - committed;
-    final req = engine.rakedPotOdds(call, spot.potBb, s.rakeTier);
+    final req = engine.rakedPotOdds(call, spot.potBb, s.rakeTier, stake: s.stake);
     final eqr = white ? hand.eqr : hand.eqr * multiwayOffsuitEqr;
     final eqMw = eqHu * 2 / n * eqr;
     if (eqMw < req) return null;
