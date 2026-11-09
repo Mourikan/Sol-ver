@@ -158,7 +158,7 @@ class PreflopSolverEngine {
     if (stealVsNit) w = 1.0;
 
     final base = ctx.limpers > 0
-        ? (ip ? (station ? 4.0 : 3.0) : (station ? 5.0 : 4.0)) + ctx.limpers
+        ? (ip ? 3.5 : 4.5) + ctx.limpers
         : PreflopRangesDb.openSizeBb[hero]!;
     final f = {PreflopAction.raise: w, PreflopAction.fold: 1 - w};
     final a = _pick(f, hand.index, 'RFI_${hero.name}');
