@@ -45,6 +45,6 @@ void main() {
         }
       }
     }
-    print('${e.key.padRight(8)} turn Kd7s2s-4h (BTN RFI llega completo): bet ${((v + bl) / tot * 100).toStringAsFixed(1)}% | bluff share EJECUTADO ${(bl / (v + bl) * 100).toStringAsFixed(1)}% vs REPORTADO ${reported}');
+    print('${e.key.padRight(8)} turn Kd7s2s-4h (BTN RFI llega completo): bet ${((v + bl) / tot * 100).toStringAsFixed(1)}% | bluff share EJECUTADO ${(bl / (v + bl) * 100).toStringAsFixed(1)}% vs REPORTADO $reported');
   }
 }
