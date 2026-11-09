@@ -34,6 +34,17 @@ class RakeConfig {
     return rakeOn(e) / e;
   }
 
+  /// Plantilla genérica por stake (% y cap en bb). Editable: NO corresponde a una sala concreta; verifica tu sala.
+  static const byStake = {
+    Stake.nl2: RakeConfig(0.05, 15.0),
+    Stake.nl5: RakeConfig(0.05, 10.0),
+    Stake.nl10: RakeConfig(0.05, 6.0),
+    Stake.nl25: RakeConfig(0.05, 4.0),
+    Stake.nl50: RakeConfig(0.05, 3.0),
+    Stake.nl100: RakeConfig(0.045, 2.5),
+    Stake.nl200: RakeConfig(0.04, 1.5),
+  };
+
   /// Valores por defecto editables: verificar contra la estructura real de la sala.
   static const defaults = {
     RakeTier.microHighRake: RakeConfig(0.05, 4.0),

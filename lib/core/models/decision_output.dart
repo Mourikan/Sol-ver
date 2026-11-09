@@ -30,6 +30,8 @@ class DecisionOutput {
     this.freqGto,
     this.freqSource = FreqSource.pure,
     this.roll,
+    this.actionEVs,
+    this.heuristicAction,
     this.metrics = const [],
     required this.justificacionGto,
     required this.ajusteExplotativoRead,
@@ -44,6 +46,12 @@ class DecisionOutput {
 
   /// Roll determinista 0..99 usado por el mezclador (null si la acción es pura).
   final int? roll;
+
+  /// EV aproximado (bb) por acción legal: {fold, check|call, betRaise}.
+  final Map<String, double>? actionEVs;
+
+  /// Acción de la heurística antes de la puerta de EV (null si no hubo corrección).
+  final DecisionAction? heuristicAction;
   final List<KeyMetric> metrics;
   final String justificacionGto;
   final String ajusteExplotativoRead;
@@ -54,13 +62,16 @@ class DecisionOutput {
   DecisionAction get majorityAction => frequencies.entries.reduce((a, b) => b.value > a.value ? b : a).key;
 
   DecisionOutput copyWith({DecisionAction? action, Sizing? sizing, String? ajusteExplotativoRead, List<KeyMetric>? metrics,
-          Map<DecisionAction, double>? freqGto, FreqSource? freqSource}) =>
+          Map<DecisionAction, double>? freqGto, FreqSource? freqSource, Map<String, double>? actionEVs, DecisionAction? heuristicAction,
+          bool clearSizing = false}) =>
       DecisionOutput(
         action: action ?? this.action,
-        sizing: sizing ?? this.sizing,
+        sizing: clearSizing ? null : (sizing ?? this.sizing),
         freqGto: freqGto ?? this.freqGto,
         freqSource: freqSource ?? this.freqSource,
         roll: roll,
+        actionEVs: actionEVs ?? this.actionEVs,
+        heuristicAction: heuristicAction ?? this.heuristicAction,
         metrics: metrics ?? this.metrics,
         justificacionGto: justificacionGto,
         ajusteExplotativoRead: ajusteExplotativoRead ?? this.ajusteExplotativoRead,
@@ -72,6 +83,7 @@ class DecisionOutput {
         'freq_gto': {for (final e in frequencies.entries) e.key.name: double.parse((e.value * 100).toStringAsFixed(1))},
         'accion_mayoritaria': majorityAction.name,
         'freq_source': freqSource.name,
+        if (actionEVs != null) 'action_evs_bb': actionEVs,
         'metricas': [for (final m in metrics) m.toJson()],
         'justificacion_gto': justificacionGto,
         'ajuste_explotativo_read': ajusteExplotativoRead,

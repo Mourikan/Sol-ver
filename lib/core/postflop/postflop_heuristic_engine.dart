@@ -1,4 +1,5 @@
 import '../evaluators/board_analyzer.dart';
+import '../evaluators/action_ev_calculator.dart';
 import '../evaluators/hand_evaluator.dart';
 import '../models/decision_output.dart';
 import '../models/game_state.dart';
@@ -70,7 +71,68 @@ class PostflopHeuristicEngine {
     final potBeforeBet = pot - villainIn + heroIn;
     final d = _route(s, rp, h, node, pfa, defender, pot, stack, heroIp, metrics, street, heroIn, villainIn, toCall, hadInitiative, limped);
     final guarded = EvSanityGuard.postflop(s, rp, d, h, toCall: toCall, potBeforeBet: potBeforeBet);
-    return _invariants(s, rp, guarded, h, pot: pot, stack: stack, toCall: toCall, potBeforeBet: potBeforeBet);
+    final inv = _invariants(s, rp, guarded, h, pot: pot, stack: stack, toCall: toCall, potBeforeBet: potBeforeBet);
+    return evGate(s, rp, inv, pot: pot, stack: stack, toCall: toCall, potBeforeBet: potBeforeBet);
+  }
+
+  /// Marcadores de intervenciones documentadas que la puerta de EV respeta (reglas explotativas / cordura).
+  static const protectedMarkers = [
+    EvSanityGuard.tag,
+    'Turn_SDV_Into_Bluff',
+    'FOLD DISCIPLINADO',
+    'Nutted_Unbalanced_Value',
+    'Trapper',
+    'trap',
+    'Maniac',
+    'inducir',
+    'Fish/Station',
+    'Station',
+    'Exploit_Bluff_Factor 0.0',
+  ];
+
+  /// Banda de indiferencia: diferencias de EV menores se tratan como mezcla de equilibrio (no se corrigen).
+  static double evTolerance(double pot) => pot * 0.05 < 0.25 ? 0.25 : pot * 0.05;
+
+  /// Puerta de EV: si la acción heurística pierde más que la banda frente al argmax(EV), se corrige y se documenta.
+  DecisionOutput evGate(GameState s, ReadProfile rp, DecisionOutput d,
+      {required double pot, required double stack, required double toCall, required double potBeforeBet}) {
+    final candidate = d.action == DecisionAction.betRaise && d.sizing != null
+        ? d.sizing!.bb
+        : (toCall > 0 ? (toCall * 3 < stack ? toCall * 3 : stack) : (pot * 0.5 < stack ? pot * 0.5 : stack));
+    final ev = ActionEvCalculator.postflop(s, rp, potBefore: potBeforeBet, toCall: toCall, betSizeBb: candidate);
+    final evs = ev.toMap();
+    double evOf(DecisionAction a) => switch (a) {
+          DecisionAction.fold => toCall > 0 ? ev.fold : ev.checkCall,
+          DecisionAction.check || DecisionAction.call => ev.checkCall,
+          DecisionAction.betRaise => ev.betRaise,
+        };
+    final chosen = evOf(d.action);
+    final text = '${d.justificacionGto} ${d.ajusteExplotativoRead}';
+    final protected = protectedMarkers.any(text.contains);
+    final withEv = d.copyWith(actionEVs: evs);
+    // Solo des-escala: la acción agresiva/inversora (bet, raise, call) que pierde frente a la pasiva (check/fold)
+    // más que la banda se corrige. Nunca escala (el modelo de 1 calle no ve protección de rango ni calles futuras).
+    final passive = toCall > 0 ? (DecisionAction.call, ev.checkCall) : (DecisionAction.check, ev.checkCall);
+    // Los calls quedan bajo la restricción MDF (DefenseBudget/auditor por combos): el modelo de 1 calle infravalora faroles.
+    final invests = d.action == DecisionAction.betRaise;
+    if (!invests || protected || passive.$1 == d.action || passive.$2 - chosen <= evTolerance(potBeforeBet + toCall)) return withEv;
+    final best = passive.$2;
+    final target = passive.$1;
+    final sizing = switch (target) {
+      DecisionAction.betRaise => Sizing(bb: candidate, potPct: candidate / (potBeforeBet + toCall) * 100),
+      DecisionAction.call => Sizing(bb: toCall, potPct: toCall / potBeforeBet * 100),
+      _ => null,
+    };
+    return withEv.copyWith(
+      action: target,
+      sizing: sizing,
+      clearSizing: sizing == null,
+      heuristicAction: d.action,
+      freqGto: {target: 1.0},
+      freqSource: FreqSource.pure,
+      ajusteExplotativoRead: '[EV_GATE] ${d.action.name} -> ${target.name}: EV ${chosen.toStringAsFixed(2)}bb vs argmax '
+          '${best.toStringAsFixed(2)}bb (banda ${evTolerance(potBeforeBet + toCall).toStringAsFixed(2)}bb). ${d.ajusteExplotativoRead}',
+    );
   }
 
   /// Invariantes inquebrantables (monotonía de EV).

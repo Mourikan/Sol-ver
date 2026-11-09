@@ -25,3 +25,20 @@ Actúa integrando dos roles simultáneos:
   - En NL2-NL50, las líneas de `River Raise`, `Turn Check-Raise` y `Triple Barrel Overbet` del pool general están sub-faroleadas entre un 12% y un 18% respecto al GTO. Por defecto, todos los `Pure Bluff-Catchers` (1 par o dobles bajas en boards dinámicos) tienen EV negativo (-EV) en esos nodos salvo que exista un `Read = Agro_Spewy` o un sobre-conteo explícito de faroles rotos.
 - **Regla de Oro de Disciplina (Anti-Inmolación):** Prohibido recomendar un Call en Turn/River basándose únicamente en la fuerza absoluta de la mano de Hero (ej. Overpair AA/KK o Top Pair) o en MDF teórico ciego. Todo Call de River pasa por `Bluff_Combo_Audit` (combos reales); en Turn el filtro es `DefenseBudget`. Con `Agro_Spewy/Maniac` el piso aditivo `max(ratio x 1.4, pot odds + 5%)` desactiva hero folds forzados con TwoPair+/TopPair fuerte.
 - Implementación: `lib/core/discipline/` (`bluff_catch_auditor.dart`, `blocker_bluff_converter.dart`, `timing_tells_matrix.dart`). Los porcentajes MDA/timing son priors poblacionales declarados por el usuario (constantes explícitas), no frecuencias de solver.
+
+## 5. LÍMITES PERMANENTES DEL PROYECTO
+**LO QUE NO HACEMOS (PROHIBIDO):**
+1. Prohibido implementar `Hand History Tracker` / registro de sesiones o logs persistentes de manos.
+2. Prohibido tocar o generar código de UI mientras se audita o calibra `lib/core/`.
+3. Prohibido usar multiplicadores en cascada sin piso (`floor`) o estrategias 100% puras sin `freq_gto`.
+4. Prohibido imprimir bloques de código o explicaciones largas en el chat.
+
+**LO QUE SÍ HACEMOS (OBLIGATORIO):**
+1. Maximización de EV Acotada (`Bounded-GTO + Safe Exploit`) con validación por `EV_Sanity_Guard` y puerta de EV (`[EV_GATE]`, solo des-escala apuestas propias -EV; los calls quedan bajo MDF).
+2. Persistencia en memoria `O(1)` (`< 0.5ms` por consulta).
+3. Cobertura exacta de los 7 Stakes: `NL2, NL5, NL10, NL25` (High-Rake, caps en bb por stake en `RakeConfig.byStake`) y `NL50, NL100, NL200` (Mid/Low-Rake). Los caps son plantilla editable, no datos de una sala concreta.
+
+## 6. SKILL INTERNA: [TOKEN_SAVER_AND_TELEMETRY]
+- Comprime toda salida de consola a máximo 6 líneas.
+- Al final de CADA respuesta en el chat añade una línea de telemetría estimada (`Chars / 3.8`, aproximada; no es facturación):
+  `[TELEMETRÍA TOKENS | In_Est: ~X tok | Out_Est: ~Y tok | Tip: usa /cost para facturación exacta API]`.

@@ -33,19 +33,37 @@ class RangeEquity {
     return 1.0;
   }
 
-  /// [valuePrior]: si se da (p.ej. 0.85 en pot-donk nutted), re-pondera el rango para que los monsters pesen ese prior.
-  static double vsVillainLine(GameState s, {int samples = 600, double? valuePrior}) {
+  /// Combos del villano (sin cartas muertas) ponderados por su línea; [tiers] = tier actual de cada combo.
+  static final _vcCache = <String, ({List<(int, int)> combos, List<double> weights, List<HandTier> tiers})>{};
+
+  /// Cacheado por nodo (sin las cartas de Hero: el muestreo rechaza los combos bloqueados por Hero).
+  static ({List<(int, int)> combos, List<double> weights, List<HandTier> tiers}) villainCombos(GameState s, {double? valuePrior}) {
+    final key = [
+      s.board.join(),
+      s.villainPosition?.name,
+      s.heroPosition.name,
+      s.stake.name,
+      s.potType.name,
+      valuePrior,
+      for (final a in s.actions) '${a.street.index}${a.actor.index}${a.type.index}${a.amountBb}',
+    ].join('|');
+    return _vcCache.putIfAbsent(key, () {
+      if (_vcCache.length > 256) _vcCache.clear();
+      return _buildVillainCombos(s, valuePrior);
+    });
+  }
+
+  static ({List<(int, int)> combos, List<double> weights, List<HandTier> tiers}) _buildVillainCombos(GameState s, double? valuePrior) {
     final range = DefenseBudget.villainPreflopRange(s);
     final ids = [for (final c in s.board) c.id];
-    final hero = [s.hero!.high.id, s.hero!.low.id];
     var dead = 0;
-    for (final c in [...ids, ...hero]) {
+    for (final c in ids) {
       dead |= 1 << c;
     }
     final v = s.villainPosition!;
     StrategyClass? pfaClass;
     var trap = false;
-    if (s.preflopAggressor == v && s.potType != PotType.limped) {
+    if (s.preflopAggressor == v && s.potType != PotType.limped && ids.length >= 3) {
       final node = FlopLookupTable.nodeOf(s.potType, pfaInPosition: v.isInPositionVs(s.heroPosition));
       final flop = s.board.sublist(0, 3);
       pfaClass = FlopLookupTable.strategy(FlopLookupTable.bucketOf(flop), node).strategy;
@@ -53,7 +71,7 @@ class RangeEquity {
     }
     final combos = <(int, int)>[];
     final weights = <double>[];
-    final monster = <bool>[];
+    final tiers = <HandTier>[];
     for (var i = 0; i < 169; i++) {
       if (range[i] <= 0) continue;
       for (final (a, b) in Matrix169.concreteCombos(i)) {
@@ -74,14 +92,13 @@ class RangeEquity {
         if (w <= 0) continue;
         combos.add((a, b));
         weights.add(w);
-        monster.add(HandTierClassifier.classify(a, b, ids).tier == HandTier.nutsMonster);
+        tiers.add(ids.length >= 3 ? HandTierClassifier.classify(a, b, ids).tier : HandTier.airGiveUp);
       }
     }
-    if (combos.isEmpty) return 1.0;
-    if (valuePrior != null) {
+    if (valuePrior != null && combos.isNotEmpty) {
       var m = 0.0, o = 0.0;
       for (var k = 0; k < weights.length; k++) {
-        if (monster[k]) {
+        if (tiers[k] == HandTier.nutsMonster) {
           m += weights[k];
         } else {
           o += weights[k];
@@ -90,9 +107,21 @@ class RangeEquity {
       if (m > 0 && o > 0) {
         final scale = m * (1 - valuePrior) / valuePrior / o;
         for (var k = 0; k < weights.length; k++) {
-          if (!monster[k]) weights[k] *= scale;
+          if (tiers[k] != HandTier.nutsMonster) weights[k] *= scale;
         }
       }
+    }
+    return (combos: combos, weights: weights, tiers: tiers);
+  }
+
+  /// Monte Carlo determinista: devuelve por muestra (índice de combo del villano, resultado de Hero 0/0.5/1).
+  static List<(int, double)> sampleShowdowns(GameState s, List<(int, int)> combos, List<double> weights, int samples) {
+    if (combos.isEmpty) return const [];
+    final ids = [for (final c in s.board) c.id];
+    final hero = [s.hero!.high.id, s.hero!.low.id];
+    var dead = 0;
+    for (final c in [...ids, ...hero]) {
+      dead |= 1 << c;
     }
     final cum = <double>[];
     var acc = 0.0;
@@ -109,7 +138,8 @@ class RangeEquity {
 
     final need = 5 - ids.length;
     final cards = List<int>.filled(7, 0);
-    var score = 0.0;
+    final out = <(int, double)>[];
+    var rejected = 0;
     for (var k = 0; k < samples; k++) {
       final x = rnd(1 << 30) / (1 << 30) * acc;
       var lo = 0, hi = cum.length - 1;
@@ -122,6 +152,11 @@ class RangeEquity {
         }
       }
       final (va, vb) = combos[lo];
+      if (dead & ((1 << va) | (1 << vb)) != 0) {
+        if (++rejected > samples * 20) break;
+        k--;
+        continue;
+      }
       var d = dead | (1 << va) | (1 << vb);
       for (var j = 0; j < ids.length; j++) {
         cards[2 + j] = ids[j];
@@ -140,9 +175,18 @@ class RangeEquity {
       cards[0] = va;
       cards[1] = vb;
       final vs = HandEvaluator.evaluate(cards, 7);
-      score += hs > vs ? 1 : (hs == vs ? 0.5 : 0);
+      out.add((lo, hs > vs ? 1.0 : (hs == vs ? 0.5 : 0.0)));
     }
-    return score / samples;
+    return out;
+  }
+
+  /// [valuePrior]: si se da (p.ej. 0.85 en pot-donk nutted), re-pondera el rango para que los monsters pesen ese prior.
+  static double vsVillainLine(GameState s, {int samples = 600, double? valuePrior}) {
+    final v = villainCombos(s, valuePrior: valuePrior);
+    if (v.combos.isEmpty) return 1.0;
+    final r = sampleShowdowns(s, v.combos, v.weights, samples);
+    if (r.isEmpty) return 1.0;
+    return r.fold<double>(0, (a, x) => a + x.$2) / r.length;
   }
 
   /// Nuts absolutas en River: ningún combo de 2 cartas posible supera a Hero (y Hero mejora al board).
