@@ -1,0 +1,220 @@
+import 'dart:typed_data';
+
+import '../models/game_state.dart';
+import 'range_notation.dart';
+
+enum PreflopAction { fold, call, raise }
+
+enum RangeSource { seedApprox, solverImport }
+
+enum ThreeBetStructure { polar, linear }
+
+class RakeConfig {
+  const RakeConfig(this.percent, this.capBb);
+  final double percent;
+  final double capBb;
+
+  double rakeOn(double potBb) {
+    final r = potBb * percent;
+    return r < capBb ? r : capBb;
+  }
+
+  /// Valores por defecto editables: verificar contra la estructura real de la sala.
+  static const defaults = {
+    RakeTier.microHighRake: RakeConfig(0.05, 4.0),
+    RakeTier.midRake: RakeConfig(0.04, 1.0),
+  };
+}
+
+/// Nodo compilado: pesos 0..1 por mano (índice 169) y acción. Lookup O(1).
+class RangeNode {
+  RangeNode(this.id, Map<PreflopAction, String> notation, {this.source = RangeSource.seedApprox})
+      : weights = _compile(notation);
+
+  final String id;
+  final RangeSource source;
+  final Map<PreflopAction, Float32List> weights;
+
+  double freq(PreflopAction a, int i) => weights[a]?[i] ?? (a == PreflopAction.fold ? _fold(i) : 0);
+
+  double _fold(int i) {
+    var s = 0.0;
+    for (final w in weights.values) {
+      s += w[i];
+    }
+    return 1 - s;
+  }
+
+  double percent(PreflopAction a) => weights[a] == null ? 0 : Matrix169.percent(weights[a]!);
+
+  /// Prioridad por orden de declaración: raise > call. La suma por mano nunca excede 1.
+  static Map<PreflopAction, Float32List> _compile(Map<PreflopAction, String> n) {
+    final used = Float32List(169);
+    final out = <PreflopAction, Float32List>{};
+    for (final e in n.entries) {
+      final w = RangeNotation.parse(e.value);
+      for (var i = 0; i < 169; i++) {
+        final free = 1 - used[i];
+        if (w[i] > free) w[i] = free;
+        used[i] += w[i];
+      }
+      out[e.key] = w;
+    }
+    return Map.unmodifiable(out);
+  }
+}
+
+/// Rangos semilla 100bb 6-max (aproximación de charts públicos; reemplazables por import de solver).
+class PreflopRangesDb {
+  PreflopRangesDb._();
+
+  static const openSizeBb = {
+    Position.utg: 2.5,
+    Position.mp: 2.5,
+    Position.co: 2.5,
+    Position.btn: 2.5,
+    Position.sb: 3.0,
+  };
+
+  static const _rfiMicro = {
+    Position.utg: '22+,A2s+,KTs+,QTs+,JTs,T9s,98s,AJo+,KQo',
+    Position.mp: '22+,A2s+,K9s+,Q9s+,J9s+,T9s,98s,87s,ATo+,KJo+',
+    Position.co: '22+,A2s+,K5s+,Q8s+,J8s+,T8s+,97s+,86s+,76s,65s,54s,A9o+,KTo+,QTo+,JTo',
+    Position.btn: '22+,A2s+,K2s+,Q4s+,J6s+,T6s+,96s+,85s+,74s+,64s+,53s+,43s,A2o+,K8o+,Q9o+,J9o+,T9o,98o',
+    Position.sb: '22+,A2s+,K2s+,Q5s+,J7s+,T7s+,97s+,86s+,75s+,64s+,54s,A2o+,K9o+,Q9o+,J9o+,T9o',
+  };
+
+  static const _rfiMidExtra = {
+    Position.utg: '',
+    Position.mp: '',
+    Position.co: 'K2s+,Q6s+,J7s+,T7s+,96s+,75s+,A8o+,K9o+',
+    Position.btn: 'Q2s+,J4s+,T5s+,95s+,84s+,73s+,K7o+,Q8o+',
+    Position.sb: 'Q2s+,J5s+,T6s+,96s+,85s+,K7o+',
+  };
+
+  static const threeBetValue = _tbValue;
+  static const _tbValue = {
+    Position.utg: 'QQ+,AKs,AKo',
+    Position.mp: 'JJ+,AQs+,AKo',
+    Position.co: 'TT+,AJs+,KQs,AQo+',
+    Position.btn: '99+,ATs+,KJs+,AJo+,KQo',
+    Position.sb: '88+,A9s+,KTs+,QJs,ATo+,KJo+',
+  };
+
+  static const _tbPolarBluffs = {
+    Position.utg: 'A5s,A4s',
+    Position.mp: 'A5s-A3s',
+    Position.co: 'A5s-A2s,K9s,76s',
+    Position.btn: 'A5s-A2s,K9s,Q9s,J9s,T8s,76s,65s',
+    Position.sb: 'A5s-A2s,K9s,K8s,Q9s,J9s,T8s,97s,86s,76s,65s',
+  };
+
+  static const _tbLinearExt = {
+    Position.utg: 'JJ,AQs,KQs',
+    Position.mp: 'TT,AJs,KQs,AQo',
+    Position.co: '99,ATs,KJs,QJs,JTs,AJo,KQo,A5s',
+    Position.btn: '77-88,A8s-A9s,KTs,QTs+,JTs,T9s,ATo,KJo,QJo,A5s-A4s',
+    Position.sb: '77,A8s,K9s,QTs,JTs,T9s,A9o,KTo,QJo,A5s-A4s',
+  };
+
+  static const _flatMidIp = {
+    Position.utg: '55-JJ,AJs-AQs,KJs+,QJs,JTs,T9s,98s',
+    Position.mp: '55-TT,ATs-AJs,KJs+,QJs,JTs,T9s,98s,87s,AQo',
+    Position.co: '22-99,A9s-ATs,KTs+,QTs+,JTs,T9s,98s,87s,76s,AJo,KQo',
+  };
+
+  static const _flatMicroBtn = '66-TT,AQs,KQs';
+
+  static const _vs3bet = {
+    (Position.utg, false): ('KK+,AKs,A5s', '77-QQ,AKo,AQs,AJs,KQs,QJs,JTs'),
+    (Position.mp, false): ('KK+,AKs,A5s,A4s', '77-QQ,AKo,AQs,AJs,ATs,KQs,KJs,QJs,JTs,T9s'),
+    (Position.co, false): ('QQ+,AKs,AKo,A5s,A4s', '66-JJ,AQs,AJs,ATs,KQs,KJs,QJs,JTs,T9s,98s'),
+    (Position.utg, true): ('KK+,AKs,A5s', '77-QQ,AKo,AQs,AJs,KQs,QJs,JTs,AQo'),
+    (Position.mp, true): ('KK+,AKs,A5s,A4s', '77-QQ,AKo,AQs,AJs,ATs,KQs,KJs,QJs,JTs,AQo'),
+    (Position.co, true): ('QQ+,AKs,AKo,A5s,A4s', '66-JJ,ATs-AQs,KJs+,QJs,JTs,T9s,AQo,KQo'),
+    (Position.btn, true): ('QQ+,AKs,AKo,A5s-A4s', '55-JJ,A9s-AQs,KTs+,QTs+,JTs,T9s,98s,87s,76s,AJo,AQo,KQo'),
+    (Position.sb, false): ('QQ+,AKs,AKo,A5s,A4s', '66-JJ,ATs-AQs,KTs+,QJs,JTs,T9s'),
+  };
+
+  /// Referencia de 4-bet/5-bet para blocker_weight.
+  static const blockerReference = 'QQ+,AKs,AKo';
+
+  static const vsNitAgroExtra4BetValue = 'TT+,AQs+,AKo';
+  static const agroExtra4BetBluffs = 'A3s-A2s,K9s,KTs';
+  static const stationValue3Bet = '88+,AJo+,KQo,KJs+';
+
+  static final Map<String, RangeNode> _cache = {};
+
+  static String _tierKey(RakeTier t) => t == RakeTier.microHighRake ? 'HR' : 'MR';
+
+  static RangeNode rfi(Position p, RakeTier tier) {
+    if (p == Position.bb) throw ArgumentError('BB no tiene RFI');
+    return _cache.putIfAbsent('${_tierKey(tier)}_RFI_${p.name}', () {
+      final r = tier == RakeTier.microHighRake ? _rfiMicro[p]! : '${_rfiMicro[p]},${_rfiMidExtra[p]}';
+      return RangeNode('${_tierKey(tier)}_RFI_${p.name}', {PreflopAction.raise: r});
+    });
+  }
+
+  static String rfiNotation(Position p, RakeTier tier) =>
+      tier == RakeTier.microHighRake ? _rfiMicro[p]! : '${_rfiMicro[p]},${_rfiMidExtra[p]}';
+
+  static ThreeBetStructure structure(Position hero, Position opener) {
+    if (hero == Position.sb) return ThreeBetStructure.linear;
+    if (hero == Position.bb) {
+      return (opener == Position.utg || opener == Position.mp)
+          ? ThreeBetStructure.linear
+          : ThreeBetStructure.polar;
+    }
+    return ThreeBetStructure.polar;
+  }
+
+  static bool flatsAllowed(Position hero, Position opener, RakeTier tier) {
+    if (hero == Position.bb) return true;
+    if (tier == RakeTier.microHighRake) return hero == Position.btn;
+    return (hero == Position.btn || hero == Position.co) && _flatMidIp.containsKey(opener);
+  }
+
+  /// Nodo vs RFI. BB: el rango de call se deriva por pot odds en el motor; aquí solo 3-bet.
+  static RangeNode vsRfi(Position hero, Position opener, RakeTier tier) {
+    if (hero.index <= opener.index) throw ArgumentError('$hero no puede enfrentar open de $opener');
+    final id = '${_tierKey(tier)}_VS_${hero.name}_${opener.name}';
+    return _cache.putIfAbsent(id, () {
+      final s = structure(hero, opener);
+      final micro = tier == RakeTier.microHighRake;
+      final threeBet = <String>[_tbValue[opener]!];
+      String call = '';
+      if (s == ThreeBetStructure.linear) {
+        threeBet.add(_tbLinearExt[opener]!);
+      } else {
+        threeBet.add(_tbPolarBluffs[opener]!);
+        if (hero != Position.bb && !flatsAllowed(hero, opener, tier)) {
+          threeBet.add(_tbLinearExt[opener]!);
+        }
+      }
+      if (hero != Position.bb && flatsAllowed(hero, opener, tier)) {
+        call = micro ? _flatMicroBtn : _flatMidIp[opener]!;
+      }
+      return RangeNode(id, {
+        PreflopAction.raise: threeBet.join(','),
+        if (call.isNotEmpty) PreflopAction.call: call,
+      });
+    });
+  }
+
+  static String threeBetNotation(Position hero, Position opener, RakeTier tier) {
+    final n = vsRfi(hero, opener, tier).weights[PreflopAction.raise]!;
+    return [for (var i = 0; i < 169; i++) if (n[i] > 0) Matrix169.label(i)].join(',');
+  }
+
+  static RangeNode vs3Bet(Position hero, {required bool heroInPosition}) {
+    final key = (hero, heroInPosition);
+    final d = _vs3bet[key] ??
+        _vs3bet[(hero, !heroInPosition)] ??
+        (throw ArgumentError('Sin nodo vs 3-bet para $hero'));
+    final id = 'VS3B_${hero.name}_${heroInPosition ? 'IP' : 'OOP'}';
+    return _cache.putIfAbsent(
+        id, () => RangeNode(id, {PreflopAction.raise: d.$1, PreflopAction.call: d.$2}));
+  }
+
+  static bool isBluff4Bet(int i) => const {'A5s', 'A4s', 'A3s', 'A2s', 'K9s', 'KTs'}.contains(Matrix169.label(i));
+}
