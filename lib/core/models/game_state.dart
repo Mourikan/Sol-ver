@@ -41,12 +41,16 @@ enum PotType { limped, srp, threeBet, fourBetPlus }
 
 enum VillainProfile { gtoBase, nit, callingStation, maniac, regAbc, regAgro }
 
+/// Insta < 1.5s, normal 2-5s, long tank > 8s.
+enum TimingTell { none, instaAction, normalTiming, longTank }
+
 class PlayerAction {
-  const PlayerAction(this.street, this.actor, this.type, [this.amountBb = 0]);
+  const PlayerAction(this.street, this.actor, this.type, [this.amountBb = 0, this.timing = TimingTell.none]);
   final Street street;
   final Position actor;
   final ActionType type;
   final double amountBb;
+  final TimingTell timing;
 
   bool get isAggressive =>
       type == ActionType.bet || type == ActionType.raise || type == ActionType.allIn;

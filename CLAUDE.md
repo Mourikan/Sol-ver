@@ -16,3 +16,9 @@ Actúa integrando dos roles simultáneos:
   1. Tier High-Rake (NL2-NL25): Estrategia 3-Bet o Fold desde MP/CO/BTN/SB (0% Cold Call salvo BTN con pares medios-bajos en spots específicos y BB). Sizing 3-bet agrandado (3.2x IP, 4x-4.5x OOP).
   2. Tier Mid-Rake (NL50-NL200): Habilita rangos de Flat Call IP y defensas de BB más amplias según Pot Odds.
   3. Output obligatorio de toda decisión: {accion, sizing_bb_o_pct, freq_gto, justificacion_gto, ajuste_explotativo_read}.
+
+## 4. SKILL ELITE: [DISCIPLINE_AND_MDA_ENGINE]
+- **Leyes de Mass Data Analysis (MDA) por Nivel:**
+  - En NL2-NL50, las líneas de `River Raise`, `Turn Check-Raise` y `Triple Barrel Overbet` del pool general están sub-faroleadas entre un 12% y un 18% respecto al GTO. Por defecto, todos los `Pure Bluff-Catchers` (1 par o dobles bajas en boards dinámicos) tienen EV negativo (-EV) en esos nodos salvo que exista un `Read = Agro_Spewy` o un sobre-conteo explícito de faroles rotos.
+- **Regla de Oro de Disciplina (Anti-Inmolación):** Prohibido recomendar un Call en Turn/River basándose únicamente en la fuerza absoluta de la mano de Hero (ej. Overpair AA/KK o Top Pair) o en MDF teórico ciego. Todo Call requiere pasar por el filtro `Bluff_Combo_Audit`.
+- Implementación: `lib/core/discipline/` (`bluff_catch_auditor.dart`, `blocker_bluff_converter.dart`, `timing_tells_matrix.dart`). Los porcentajes MDA/timing son priors poblacionales declarados por el usuario (constantes explícitas), no frecuencias de solver.

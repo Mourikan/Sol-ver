@@ -1,11 +1,15 @@
 import 'dart:math' as math;
 
 import '../evaluators/board_analyzer.dart';
+import '../evaluators/hand_evaluator.dart';
 import '../models/decision_output.dart';
 import '../models/game_state.dart';
 import 'flop_lookup_table.dart';
 import 'geometry.dart';
 import 'hand_tier.dart';
+import '../discipline/blocker_bluff_converter.dart';
+import '../discipline/bluff_catch_auditor.dart';
+import '../discipline/timing_tells_matrix.dart';
 import '../reads/gg_profiler.dart';
 import 'late_streets_heuristic.dart';
 import 'postflop_ranges.dart';
@@ -108,13 +112,73 @@ class PostflopHeuristicEngine {
         final adj = _donkAdjust(tell, h, potBefore, toCall, stack, metrics);
         if (adj != null) return adj;
       }
-      return _facing(s, h, potBefore, toCall, stack, heroIp, metrics);
+      final base = _facing(s, h, potBefore, toCall, stack, heroIp, metrics);
+      return s.street == Street.flop ? base : _discipline(s, rp, h, base, potBefore, toCall, metrics);
     }
 
     if (s.street == Street.flop) return _flop(s, h, node, pfa, defender, pot, stack, heroIp, metrics);
+    final villainChecked = street.any((a) => a.actor == villain && a.type == ActionType.check);
+
+    final (instaCall, riverBrick) = TimingTellsMatrix.instaCallTurnIntoRiver(s);
+    if (instaCall) {
+      final t = TimingTellsMatrix.of(
+          s.actions.lastWhere((a) => a.street == Street.turn && a.actor == villain && a.type == ActionType.call), s.stake);
+      if (riverBrick) {
+        if (!villainChecked && !heroIp) {
+          return _check(metrics, 'River brick tras insta-call en turn: rango cargado de draws rotos.',
+              '${t.note} OOP: check para inducir faroles de proyectos fallidos.');
+        }
+        if (h.tier != HandTier.marginalMadeShowdown) {
+          return _bet(85, pot, stack, metrics, 'River brick tras insta-call en turn: alta densidad de draws fallidos => River Barrel Grande 75-100%.',
+              '${t.note} IP: presión máxima (insta-fold de proyectos rotos).');
+        }
+        return _check(metrics, 'River brick: showdown marginal => check behind.', t.note);
+      }
+      if (h.tier != HandTier.nutsMonster) {
+        return _check(metrics, 'River completa proyectos tras insta-call: bluffs 0%, thin value reducido.', t.note);
+      }
+    }
+
+    final conv = BlockerBluffConverter.evaluate(s, rp, heroCanBet: villainChecked || heroIp);
+    if (conv.converts) {
+      if (conv.mode == ConversionMode.polarizedOverbetBluff) {
+        return _bet(conv.sizePct, pot, stack, metrics,
+            'Turn_SDV_Into_Bluff (LLinusLLove): ${conv.reasons.join(' | ')} => Polarized_Overbet_Bluff ${conv.sizePct.round()}%',
+            'Gate activo vs ${rp.archetype.name}: fold forzado de Qx/2P capados | ${conv.reasons.firstWhere((r) => r.startsWith('Key blocker'))}.');
+      }
+      return _check(metrics, 'Turn_SDV_Into_Bluff: ${conv.reasons.join(' | ')}', 'Plan: River_Check_Raise_Bluff ${conv.sizePct.round()}%.');
+    }
+
     const solver = TurnRiverSolver();
     final plan = solver.plan(s, rp, heroHadInitiative: hadInitiative, pot: pot, stack: stack);
     return solver.toDecision(plan, pot, stack, metrics, rp);
+  }
+
+  DecisionOutput _discipline(GameState s, ReadProfile rp, HandTierResult h, DecisionOutput base, double pot, double call, List<KeyMetric> m) {
+    if (base.action == DecisionAction.fold) return base;
+    final cat = HandEvaluator.category(HandEvaluator.evaluate([s.hero!.high.id, s.hero!.low.id, for (final c in s.board) c.id]));
+    final nuts = h.tier == HandTier.nutsMonster && cat >= HandEvaluator.straight;
+    if (base.action == DecisionAction.betRaise && h.tier == HandTier.nutsMonster && nuts) return base;
+    final a = BluffCatchAuditor.audit(s, rp, pot: pot, call: call, heroHasNuts: nuts);
+    final metrics = [...m, KeyMetric(MetricType.bluffShare, a.availableBluffs, 'faroles disponibles (${a.categories.join(', ')})')];
+    final txt = 'Bluff_Combo_Audit: ${a.reasons.join(' | ')}';
+    final mustFold = a.verdict == AuditVerdict.heroFoldDisciplined ||
+        (a.verdict == AuditVerdict.foldNegativeEv && base.action == DecisionAction.call);
+    if (mustFold) {
+      return DecisionOutput(
+          action: DecisionAction.fold,
+          metrics: metrics,
+          justificacionGto: '${base.justificacionGto} | $txt',
+          ajusteExplotativoRead: a.verdict == AuditVerdict.heroFoldDisciplined
+              ? '100% FOLD DISCIPLINADO: colapso de faroles del pool; la fuerza absoluta de la mano no justifica el call.'
+              : 'Fold: bluff-catcher -EV en este nodo/combos.');
+    }
+    return DecisionOutput(
+        action: base.action,
+        sizing: base.sizing,
+        metrics: metrics,
+        justificacionGto: '${base.justificacionGto} | $txt',
+        ajusteExplotativoRead: a.verdict == AuditVerdict.heroCallApproved ? 'HERO CALL quirúrgico aprobado.' : base.ajusteExplotativoRead);
   }
 
   DecisionOutput? _donkAdjust(DonkTell tell, HandTierResult h, double pot, double bet, double stack, List<KeyMetric> m) {
