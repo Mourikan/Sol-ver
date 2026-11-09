@@ -5,7 +5,8 @@ import 'range_notation.dart';
 
 enum PreflopAction { fold, call, raise }
 
-enum RangeSource { seedApprox, solverImport }
+/// seedApprox: charts puros; modelCalibrated: mezclas de frontera derivadas por modelo (NO solver); solverImport: exports reales.
+enum RangeSource { seedApprox, modelCalibrated, solverImport }
 
 enum ThreeBetStructure { polar, linear }
 
@@ -42,8 +43,11 @@ class RakeConfig {
 
 /// Nodo compilado: pesos 0..1 por mano (índice 169) y acción. Lookup O(1).
 class RangeNode {
-  RangeNode(this.id, Map<PreflopAction, String> notation, {this.source = RangeSource.seedApprox})
-      : weights = _compile(notation);
+  RangeNode(this.id, Map<PreflopAction, String> notation, {RangeSource? source})
+      : weights = _compile(notation),
+        source = source ?? (_hasMix(notation) ? RangeSource.modelCalibrated : RangeSource.seedApprox);
+
+  static bool _hasMix(Map<PreflopAction, String> n) => n.values.any((v) => v.contains(':'));
 
   final String id;
   final RangeSource source;
@@ -137,6 +141,13 @@ class PreflopRangesDb {
     Position.co: '22-99,A9s-ATs,KTs+,QTs+,JTs,T9s,98s,87s,76s,AJo,KQo',
   };
 
+  /// Mezclas de frontera explícitas (raise weight; el resto va al call si el nodo permite flat, si no a fold).
+  /// Valores del usuario: BTN vs CO A5s 75/25/0; CO vs MP 88 35/65/0 (mid) y 35/0/65 (micro); 99 micro 50% por monotonía.
+  static const mixOverrides = {
+    (Position.btn, Position.co): ('A5s:0.75', 'A5s:0.75', 'A5s'),
+    (Position.co, Position.mp): ('88:0.35', '88:0.35,99:0.5', ''),
+  };
+
   static const _flatMicroBtn = '66-JJ,AQs,KQs';
 
   static const _vs3bet = {
@@ -208,6 +219,11 @@ class PreflopRangesDb {
       if (hero != Position.bb && flatsAllowed(hero, opener, tier)) {
         call = micro ? _flatMicroBtn : _flatMidIp[opener]!;
       }
+      final mix = mixOverrides[(hero, opener)];
+      if (mix != null) {
+        threeBet.add(micro ? mix.$2 : mix.$1);
+        if (!micro && mix.$3.isNotEmpty && call.isNotEmpty) call = '$call,${mix.$3}';
+      }
       return RangeNode(id, {
         PreflopAction.raise: threeBet.join(','),
         if (call.isNotEmpty) PreflopAction.call: call,
@@ -229,6 +245,9 @@ class PreflopRangesDb {
     return _cache.putIfAbsent(
         id, () => RangeNode(id, {PreflopAction.raise: d.$1, PreflopAction.call: d.$2}));
   }
+
+  static const _polarBluffSet = {'A5s', 'A4s', 'A3s', 'A2s', 'K9s', 'K8s', 'Q9s', 'J9s', 'T8s', '97s', '86s', '76s', '65s'};
+  static bool isPolarBluff3Bet(int i) => _polarBluffSet.contains(Matrix169.label(i));
 
   static bool isBluff4Bet(int i) => const {'A5s', 'A4s', 'A3s', 'A2s', 'K9s', 'KTs'}.contains(Matrix169.label(i));
 }

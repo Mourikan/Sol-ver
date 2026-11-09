@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import '../discipline/ev_sanity_guard.dart';
+import '../models/action_mixer.dart';
 import '../models/decision_output.dart';
 import '../models/game_state.dart';
 import '../reads/gg_profiler.dart';
@@ -295,7 +296,9 @@ class FullTreePreflop {
         s.villainProfile != VillainProfile.nit &&
         s.villainProfile != VillainProfile.callingStation;
     final f = value ? 1.0 : (bluff ? cold4BetBluffWeight : 0.0);
-    final raise = f >= 1 || (f > 0 && _u(hand.index) < f);
+    final (pick, roll, norm) = DeterministicActionMixer.select([s.hero!.high, s.hero!.low], const [], spot.potBb,
+        {DecisionAction.betRaise: f, DecisionAction.fold: 1 - f});
+    final raise = pick == DecisionAction.betRaise;
     var size = spot.threeBetBb * (ip ? cold4BetIp : cold4BetOop);
     final potAfter = spot.potBb - spot.threeBetBb + 2 * size;
     final jam = (s.effectiveStackBb! - size) / potAfter < 1;
@@ -303,6 +306,9 @@ class FullTreePreflop {
     return DecisionOutput(
       action: raise ? DecisionAction.betRaise : DecisionAction.fold,
       sizing: raise ? Sizing(bb: size, potPct: size / spot.potBb * 100) : null,
+      freqGto: norm,
+      freqSource: norm.length > 1 ? FreqSource.modelCalibrated : FreqSource.pure,
+      roll: norm.length > 1 ? roll : null,
       metrics: [KeyMetric(MetricType.blocker, hand.blockerWeight, 'vs QQ+/AK')],
       justificacionGto: '${hand.label} cold 4-bet vs open ${spot.opener!.name.toUpperCase()} + 3-bet ${tb.name.toUpperCase()} | '
           'rango ultra-estrecho QQ+/AK (dos rangos fuertes delante) + A5s blocker-bluff baja frecuencia | 0% cold call',
@@ -311,5 +317,4 @@ class FullTreePreflop {
     );
   }
 
-  double _u(int i) => ((engine.seed ^ (i * 2654435761)) & 0xFFFFFFFF) / 0x100000000;
 }

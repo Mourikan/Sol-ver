@@ -1,9 +1,8 @@
 import '../evaluators/hand_evaluator.dart';
 import '../models/game_state.dart';
-import '../preflop/hand_normalizer.dart';
-import '../preflop/preflop_solver_engine.dart';
 import '../preflop/range_notation.dart';
 import 'defense_budget.dart';
+import 'eqr_table.dart';
 import 'flop_lookup_table.dart';
 import 'hand_tier.dart';
 
@@ -11,12 +10,12 @@ import 'hand_tier.dart';
 class RangeEquity {
   RangeEquity._();
 
-  /// Equity_Real = equity cruda x EQR(mano) x multiplicador posicional (IP 1.10 / OOP 0.85), misma fórmula que preflop.
+  /// Equity_Real = equity cruda x EQR(categoría, IP/OOP, SPR) (tabla calibrada por modelo, ver EqrTable).
   static double realized(GameState s, {double? valuePrior}) {
     final raw = vsVillainLine(s, valuePrior: valuePrior);
-    final eqr = HandProps.eqr[s.hero!.index169];
     final ip = s.heroPosition.isInPositionVs(s.villainPosition!);
-    return (raw * eqr * (ip ? PreflopSolverEngine.ipMultiplier : PreflopSolverEngine.oopMultiplier)).clamp(0.0, 1.0);
+    final spr = (s.effectiveStackBb ?? 100) / (s.potBb ?? 1);
+    return (raw * EqrTable.factor(s.hero!.index169, ip: ip, spr: spr)).clamp(0.0, 1.0);
   }
 
   /// Peso residual de tiers fuera de la política del bucket (mezclas / desviaciones del villano).
@@ -44,10 +43,13 @@ class RangeEquity {
       dead |= 1 << c;
     }
     final v = s.villainPosition!;
-    Set<HandTier>? pfaPolicy;
+    StrategyClass? pfaClass;
+    var trap = false;
     if (s.preflopAggressor == v && s.potType != PotType.limped) {
       final node = FlopLookupTable.nodeOf(s.potType, pfaInPosition: v.isInPositionVs(s.heroPosition));
-      pfaPolicy = FlopLookupTable.betTiers[FlopLookupTable.strategy(FlopLookupTable.bucketOf(s.board.sublist(0, 3)), node).strategy];
+      final flop = s.board.sublist(0, 3);
+      pfaClass = FlopLookupTable.strategy(FlopLookupTable.bucketOf(flop), node).strategy;
+      trap = FlopLookupTable.trapActive(flop, node, pfa: v, defender: s.heroPosition);
     }
     final combos = <(int, int)>[];
     final weights = <double>[];
@@ -63,8 +65,8 @@ class RangeEquity {
           if (acts.isEmpty) continue;
           final t = HandTierClassifier.classify(a, b, ids.sublist(0, st == Street.flop ? 3 : (st == Street.turn ? 4 : 5))).tier;
           final bet = acts.any((x) => x.isAggressive);
-          if (st == Street.flop && bet && pfaPolicy != null) {
-            w *= pfaPolicy.contains(t) ? 1.0 : policyMix;
+          if (st == Street.flop && bet && pfaClass != null) {
+            w *= FlopLookupTable.betProbability(pfaClass, t, trap: trap).clamp(policyMix, 1.0);
           } else {
             w *= _lineWeight(t, bet: bet, called: acts.any((x) => x.type == ActionType.call));
           }

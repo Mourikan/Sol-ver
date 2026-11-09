@@ -20,11 +20,16 @@ class KeyMetric {
       {'type': type.name, 'value': value, if (label != null) 'label': label};
 }
 
+/// Origen de la distribución de frecuencias.
+enum FreqSource { pure, modelCalibrated, solverImport }
+
 class DecisionOutput {
   const DecisionOutput({
     required this.action,
     this.sizing,
     this.freqGto,
+    this.freqSource = FreqSource.pure,
+    this.roll,
     this.metrics = const [],
     required this.justificacionGto,
     required this.ajusteExplotativoRead,
@@ -33,16 +38,40 @@ class DecisionOutput {
   final DecisionAction action;
   final Sizing? sizing;
 
-  /// Solo poblado desde datos importados de solver; null = sin frecuencia verificable.
-  final double? freqGto;
+  /// Distribución {acción: frecuencia}; null = estrategia pura sobre [action].
+  final Map<DecisionAction, double>? freqGto;
+  final FreqSource freqSource;
+
+  /// Roll determinista 0..99 usado por el mezclador (null si la acción es pura).
+  final int? roll;
   final List<KeyMetric> metrics;
   final String justificacionGto;
   final String ajusteExplotativoRead;
 
+  /// Nunca null: estrategia pura => {action: 1.0}.
+  Map<DecisionAction, double> get frequencies => freqGto ?? {action: 1.0};
+
+  DecisionAction get majorityAction => frequencies.entries.reduce((a, b) => b.value > a.value ? b : a).key;
+
+  DecisionOutput copyWith({DecisionAction? action, Sizing? sizing, String? ajusteExplotativoRead, List<KeyMetric>? metrics,
+          Map<DecisionAction, double>? freqGto, FreqSource? freqSource}) =>
+      DecisionOutput(
+        action: action ?? this.action,
+        sizing: sizing ?? this.sizing,
+        freqGto: freqGto ?? this.freqGto,
+        freqSource: freqSource ?? this.freqSource,
+        roll: roll,
+        metrics: metrics ?? this.metrics,
+        justificacionGto: justificacionGto,
+        ajusteExplotativoRead: ajusteExplotativoRead ?? this.ajusteExplotativoRead,
+      );
+
   Map<String, Object?> toJson() => {
         'accion': action.name,
         'sizing_bb_o_pct': sizing?.toJson(),
-        'freq_gto': freqGto,
+        'freq_gto': {for (final e in frequencies.entries) e.key.name: double.parse((e.value * 100).toStringAsFixed(1))},
+        'accion_mayoritaria': majorityAction.name,
+        'freq_source': freqSource.name,
         'metricas': [for (final m in metrics) m.toJson()],
         'justificacion_gto': justificacionGto,
         'ajuste_explotativo_read': ajusteExplotativoRead,

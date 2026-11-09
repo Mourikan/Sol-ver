@@ -52,6 +52,8 @@ class FlopStrategyResult {
     required this.sizePct,
     required this.betFreq,
     required this.tierShare,
+    this.monsterShareOfCheck = 0,
+    this.trapActive = false,
     required this.donkEnabled,
     this.donkFreq = 0,
     this.donkSizePct = 0,
@@ -66,6 +68,10 @@ class FlopStrategyResult {
   final double betFreq;
   double get checkFreq => 1 - betFreq;
   final Map<HandTier, double> tierShare;
+
+  /// Fracción del rango de check del PFA que son Nuts_Monster (protección del rango de check).
+  final double monsterShareOfCheck;
+  final bool trapActive;
   final bool donkEnabled;
   final double donkFreq;
   final double donkSizePct;
@@ -131,6 +137,59 @@ class FlopLookupTable {
   };
 
   static const donkTiers = {HandTier.nutsMonster, HandTier.strongTopPairOverpair, HandTier.highEquityComboDraw};
+
+  /// Matriz de distribución por HandTier: (Check, Bet33, Bet75). Parámetros del modelo (no exports de solver),
+  /// ordenados por los principios RA/NA: rango pequeño en boards de RA del PFA, polar en dinámicos, check-heavy sin RA.
+  static const tierMatrix = <StrategyClass, Map<HandTier, (double, double, double)>>{
+    StrategyClass.rangeBetSmall: {
+      HandTier.nutsMonster: (0.0, 1.0, 0.0),
+      HandTier.strongTopPairOverpair: (0.0, 1.0, 0.0),
+      HandTier.marginalMadeShowdown: (0.15, 0.85, 0.0),
+      HandTier.highEquityComboDraw: (0.0, 0.8, 0.2),
+      HandTier.backdoorBlockerBluff: (0.15, 0.85, 0.0),
+      HandTier.airGiveUp: (0.5, 0.5, 0.0),
+    },
+    StrategyClass.polarizedBetLarge: {
+      HandTier.nutsMonster: (0.0, 0.0, 1.0),
+      HandTier.strongTopPairOverpair: (0.4, 0.0, 0.6),
+      HandTier.marginalMadeShowdown: (1.0, 0.0, 0.0),
+      HandTier.highEquityComboDraw: (0.2, 0.0, 0.8),
+      HandTier.backdoorBlockerBluff: (0.6, 0.0, 0.4),
+      HandTier.airGiveUp: (1.0, 0.0, 0.0),
+    },
+    StrategyClass.highCheckWithInitiative: {
+      HandTier.nutsMonster: (0.3, 0.0, 0.7),
+      HandTier.strongTopPairOverpair: (0.85, 0.15, 0.0),
+      HandTier.marginalMadeShowdown: (1.0, 0.0, 0.0),
+      HandTier.highEquityComboDraw: (0.4, 0.0, 0.6),
+      HandTier.backdoorBlockerBluff: (1.0, 0.0, 0.0),
+      HandTier.airGiveUp: (1.0, 0.0, 0.0),
+    },
+  };
+
+  /// Trap: fracción de Nuts_Monster retenida en check (SRP, board dinámico o sin RA del PFA).
+  static const trapShare = 0.20;
+
+  static bool trapActive(List<Card> flop, HuNode node, {required Position pfa, required Position defender}) {
+    if (node != HuNode.srpIp && node != HuNode.srpOop) return false;
+    final m = BoardAnalyzer.analyze(flop, pfa: pfa, defender: defender);
+    return m.connectivity.index >= Connectivity.wet.index ||
+        m.rangeAdvantage == Advantage.neutral ||
+        m.rangeAdvantage == Advantage.defender;
+  }
+
+  /// (check, bet33, bet75) del tier con trap aplicado.
+  static (double, double, double) row(StrategyClass c, HandTier t, {bool trap = false}) {
+    final r = tierMatrix[c]![t]!;
+    if (!trap || t != HandTier.nutsMonster) return r;
+    final keep = 1 - trapShare;
+    return (r.$1 + (1 - r.$1) * trapShare, r.$2 * keep, r.$3 * keep);
+  }
+
+  static double betProbability(StrategyClass c, HandTier t, {bool trap = false}) {
+    final r = row(c, t, trap: trap);
+    return r.$2 + r.$3;
+  }
 
   static FlopBucket bucketOf(List<Card> flop) {
     if (flop.length != 3) throw ArgumentError('Flop requiere 3 cartas');
@@ -200,11 +259,14 @@ class FlopLookupTable {
   }
 
   static FlopStrategyResult evaluate(List<Card> flop, HuNode node,
-      {required Float32List pfaRange, Float32List? defenderRange}) {
+      {required Float32List pfaRange, Float32List? defenderRange, Position pfa = Position.btn, Position defender = Position.bb}) {
     final b = bucketOf(flop);
     final st = strategy(b, node);
     final dist = tierDistribution(pfaRange, flop);
-    final bet = betTiers[st.strategy]!.fold<double>(0, (s, t) => s + dist[t]!);
+    final trap = trapActive(flop, node, pfa: pfa, defender: defender);
+    final bet = HandTier.values.fold<double>(0, (s, t) => s + dist[t]! * betProbability(st.strategy, t, trap: trap));
+    final checkTotal = HandTier.values.fold<double>(0, (s, t) => s + dist[t]! * row(st.strategy, t, trap: trap).$1);
+    final monsterChecked = dist[HandTier.nutsMonster]! * row(st.strategy, HandTier.nutsMonster, trap: trap).$1;
     final donk = donkEnabled(b, node);
     var donkFreq = 0.0;
     if (donk && defenderRange != null) {
@@ -218,6 +280,8 @@ class FlopLookupTable {
       sizePct: st.sizePct,
       betFreq: bet,
       tierShare: dist,
+      monsterShareOfCheck: checkTotal <= 0 ? 0 : monsterChecked / checkTotal,
+      trapActive: trap,
       donkEnabled: donk,
       donkFreq: donkFreq,
       donkSizePct: donk ? donkSizePct : 0,

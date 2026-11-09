@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../models/decision_output.dart';
 import '../models/game_state.dart';
+import '../models/action_mixer.dart';
 import '../reads/gg_profiler.dart';
 import 'hand_normalizer.dart';
 import 'preflop_ranges_db.dart';
@@ -93,23 +94,80 @@ class PreflopSolverEngine {
   double requiredEquity(double rakedOdds, double eqr, bool ip) =>
       rakedOdds / (eqr * (ip ? ipMultiplier : oopMultiplier));
 
-  double _u(int index, String node) {
-    var h = seed ^ 0x811C9DC5;
-    for (final c in '$node#$index'.codeUnits) {
-      h = ((h ^ c) * 0x01000193) & 0xFFFFFFFF;
-    }
-    return h / 0x100000000;
+  static const _toDecision = {
+    PreflopAction.raise: DecisionAction.betRaise,
+    PreflopAction.call: DecisionAction.call,
+    PreflopAction.fold: DecisionAction.fold,
+  };
+
+  /// Selección por mezclador determinista sobre las cartas exactas de Hero.
+  (PreflopAction, int, Map<DecisionAction, double>) _pick(Map<PreflopAction, double> f, GameState s) {
+    final w = {for (final e in f.entries) if (e.value > 0) _toDecision[e.key]!: e.value};
+    final (a, roll, norm) = DeterministicActionMixer.select([s.hero!.high, s.hero!.low], const [], s.potBb ?? 1.5, w);
+    final pa = switch (a) { DecisionAction.betRaise => PreflopAction.raise, DecisionAction.call => PreflopAction.call, _ => PreflopAction.fold };
+    return (pa, roll, norm);
   }
 
-  PreflopAction _pick(Map<PreflopAction, double> f, int idx, String node) {
-    final u = _u(idx, node);
-    var acc = 0.0;
-    for (final a in [PreflopAction.raise, PreflopAction.call]) {
-      acc += f[a] ?? 0;
-      if (u < acc) return a;
-    }
-    return PreflopAction.fold;
+  static FreqSource _src(RangeNode? n, Map<DecisionAction, double> norm) {
+    if (n?.source == RangeSource.solverImport) return FreqSource.solverImport;
+    return norm.length > 1 ? FreqSource.modelCalibrated : FreqSource.pure;
   }
+
+  /// Margen de frontera (±3%) donde la decisión call/fold se mezcla linealmente por equity.
+  static const boundaryBand = 0.03;
+
+  static double boundaryWeight(double eq, double req) => ((eq - req) / (2 * boundaryBand) + 0.5).clamp(0.0, 1.0);
+
+  /// EQR por profundidad: >120bb premia suited/pares (nutted), <60bb premia pares y high cards.
+  static double stackEqrMultiplier(int i, double? stack) {
+    if (stack == null) return 1.0;
+    final pair = Matrix169.isPair(i), suited = Matrix169.isSuited(i);
+    final high = Matrix169.highRank(i), low = Matrix169.lowRank(i);
+    if (stack > 120) return pair || suited ? 1.05 : 0.97;
+    if (stack < 60) {
+      if (pair || low >= 8) return 1.05;
+      if (suited && high < 8) return 0.95;
+    }
+    return 1.0;
+  }
+
+  static final _bbCache = <String, Float32List>{};
+  static const _monoExempt = {'A5s', 'A4s', 'A3s', 'A2s', 'A5o', 'A4o', 'A3o', 'A2o'};
+
+  /// Pesos de continuación BB (frontera mezclada) con corrección isotónica: la mano dominante nunca continúa menos
+  /// que la dominada (corrige ruido Monte Carlo de la tabla de equity).
+  Float32List _bbContinue(Position opener, RakeTier tier, PreflopContext ctx, double? stack, double raked) {
+    final key = '${opener.name}|${tier.name}|${ctx.callBb}|${ctx.potBb}|${stack?.round()}|$seed';
+    return _bbCache.putIfAbsent(key, () {
+      if (_bbCache.length > 128) _bbCache.clear();
+      final w = Float32List(169);
+      for (var i = 0; i < 169; i++) {
+        final eq = HandProps.equity('${_tk(tier)}_RFI_${opener.name}', i)!;
+        final req = requiredEquity(raked, HandProps.eqr[i] * stackEqrMultiplier(i, stack), false);
+        w[i] = boundaryWeight(eq, req);
+      }
+      for (var r = 12; r > 0; r--) {
+        final lo = Matrix169.index(r, r, suited: false), hi = Matrix169.index(r - 1, r - 1, suited: false);
+        if (w[hi] < w[lo]) w[hi] = w[lo];
+      }
+      for (final suited in [true, false]) {
+        for (var h = 0; h < 12; h++) {
+          for (var k = 12; k > h + 1; k--) {
+            final low = Matrix169.index(h, k, suited: suited), up = Matrix169.index(h, k - 1, suited: suited);
+            if (_monoExempt.contains(Matrix169.label(low))) continue;
+            if (w[up] < w[low]) w[up] = w[low];
+          }
+        }
+      }
+      return w;
+    });
+  }
+
+  /// 3-bet que compromete >= 25% del stack efectivo => shove (stacks cortos 20-40bb).
+  static const commitThreshold = 0.25;
+
+  /// Set-mining viable: implícitas >= 12x el call.
+  static bool setMiningOk(double call, double? stack) => stack != null && stack >= 12 * call;
 
   String _freqLabel(Map<PreflopAction, double> f) {
     final parts = [
@@ -161,14 +219,16 @@ class PreflopSolverEngine {
         ? (ip ? 3.5 : 4.5) + ctx.limpers
         : PreflopRangesDb.openSizeBb[hero]!;
     final f = {PreflopAction.raise: w, PreflopAction.fold: 1 - w};
-    final a = _pick(f, hand.index, 'RFI_${hero.name}');
+    final (a, roll, norm) = _pick(f, s);
     final raise = a == PreflopAction.raise;
     final checkOption = hero == Position.bb && !raise;
 
     return DecisionOutput(
       action: raise ? DecisionAction.betRaise : (checkOption ? DecisionAction.check : DecisionAction.fold),
       sizing: raise ? Sizing(bb: base, potPct: base / ctx.potBb * 100) : null,
-      freqGto: null,
+      freqGto: norm,
+      freqSource: _src(null, norm),
+      roll: norm.length > 1 ? roll : null,
       metrics: [
         KeyMetric(MetricType.eqr, hand.eqr),
         KeyMetric(MetricType.equity, hand.rawEquityVsTopRange, 'vs top range'),
@@ -200,7 +260,7 @@ class PreflopSolverEngine {
 
     final odds = potOddsRequired(ctx.callBb, ctx.potBb);
     final raked = rakedPotOdds(ctx.callBb, ctx.potBb, tier);
-    final req = requiredEquity(raked, hand.eqr, ip);
+    final req = requiredEquity(raked, hand.eqr * stackEqrMultiplier(i, s.effectiveStackBb), ip);
     final eq = HandProps.equity('${_tk(tier)}_RFI_${opener.name}', i)!;
     final passes = eq >= req;
 
@@ -218,16 +278,21 @@ class PreflopSolverEngine {
       }
     }
 
-    if (hero == Position.bb && f3 < 1) {
-      fc = passes ? 1 - f3 : 0;
-      notes.add('BB: call derivado de pot odds (eq ${_p(eq)} vs req ${_p(req)}).');
+    if (hero == Position.bb && PreflopRangesDb.isPolarBluff3Bet(i) && f3 >= 1 && profile != VillainProfile.callingStation) {
+      final r = (0.5 + (req - eq) / (2 * 0.06)).clamp(0.25, 1.0);
+      f3 = r;
+      fc = (1 - r) * boundaryWeight(eq, req);
+      notes.add('BB: 3-bet bluff polar mezclado con call según margen de equity (raise ${(r * 100).round()}%).');
+    } else if (hero == Position.bb && f3 < 1) {
+      fc = (1 - f3) * _bbContinue(opener, tier, ctx, s.effectiveStackBb, raked)[i];
+      notes.add('BB: call derivado de pot odds (eq ${_p(eq)} vs req ${_p(req)}${fc > 0 && fc < 1 - f3 ? ', frontera mezclada' : ''}).');
     } else if (fc > 0 && offSize && !passes) {
       fc = 0;
       notes.add('Open ${ctx.raiseSizeBb}bb (no estándar): flat no supera umbral (eq ${_p(eq)} < ${_p(req)}).');
     }
 
     final f = {PreflopAction.raise: f3, PreflopAction.call: fc, PreflopAction.fold: 1 - f3 - fc};
-    final a = _pick(f, i, node.id);
+    final (a, roll, norm) = _pick(f, s);
 
     final micro = tier == RakeTier.microHighRake;
     final station = profile == VillainProfile.callingStation;
@@ -237,7 +302,7 @@ class PreflopSolverEngine {
             ? (micro ? 3.2 : 3.0)
             : (hero == Position.bb ? (micro ? 4.5 : 3.75) : (micro ? 4.0 : 3.75));
     var size = ctx.raiseSizeBb * mult + ctx.raiseSizeBb * ctx.coldCallers;
-    final allIn = s.effectiveStackBb != null && size >= s.effectiveStackBb!;
+    final allIn = s.effectiveStackBb != null && size >= s.effectiveStackBb! * commitThreshold;
     if (allIn) size = s.effectiveStackBb!;
 
     final noFlat = !PreflopRangesDb.flatsAllowed(hero, opener, tier);
@@ -255,7 +320,9 @@ class PreflopSolverEngine {
         PreflopAction.call => Sizing(bb: ctx.callBb, potPct: ctx.callBb / ctx.potBb * 100),
         PreflopAction.fold => null,
       },
-      freqGto: node.source == RangeSource.solverImport ? f[a] : null,
+      freqGto: norm,
+      freqSource: _src(node, norm),
+      roll: norm.length > 1 ? roll : null,
       metrics: [
         KeyMetric(MetricType.potOdds, odds),
         KeyMetric(MetricType.requiredEquity, req, 'pot odds con rake / (EQR x ${ip ? 'IP 1.10' : 'OOP 0.85'})'),
@@ -293,7 +360,7 @@ class PreflopSolverEngine {
 
     final odds = potOddsRequired(ctx.callBb, ctx.potBb);
     final raked = rakedPotOdds(ctx.callBb, ctx.potBb, tier, potType: PotType.threeBet);
-    final req = requiredEquity(raked, hand.eqr, ip);
+    final req = requiredEquity(raked, hand.eqr * stackEqrMultiplier(i, s.effectiveStackBb), ip);
 
     final micro = tier == RakeTier.microHighRake;
     final villainIp = villain.isInPositionVs(hero);
@@ -307,7 +374,7 @@ class PreflopSolverEngine {
     if (noBluff && f4 > 0 && PreflopRangesDb.isBluff4Bet(i) && f4 < 1.01 &&
         RangeNotation.parse(PreflopRangesDb.vsNitAgroExtra4BetValue)[i] == 0) {
       f4 = 0;
-      final mining = Matrix169.highRank(i) == 12 && Matrix169.isSuited(i) && ctx.callBb <= 0.10 * s.effectiveStackBb!;
+      final mining = Matrix169.highRank(i) == 12 && Matrix169.isSuited(i) && setMiningOk(ctx.callBb, s.effectiveStackBb);
       fc = mining ? 1 : 0;
       notes.add('4-bet bluff anulado vs ${read?.archetype.name ?? profile.name} (no foldea al 4-bet)'
           '${mining ? '; degradado a call (nut-flush mining, call <= 10% stack)' : '; fold'}.');
@@ -339,7 +406,7 @@ class PreflopSolverEngine {
     }
 
     final f = {PreflopAction.raise: f4, PreflopAction.call: fc, PreflopAction.fold: 1 - f4 - fc};
-    final a = _pick(f, i, node.id);
+    final (a, roll, norm) = _pick(f, s);
 
     var size = ctx.raiseSizeBb * (ip ? 2.2 : 2.5);
     final potAfter = 2 * size + (ctx.potBb - ctx.raiseSizeBb - ctx.heroOpenBb);
@@ -358,7 +425,9 @@ class PreflopSolverEngine {
         PreflopAction.call => Sizing(bb: ctx.callBb, potPct: ctx.callBb / ctx.potBb * 100),
         PreflopAction.fold => null,
       },
-      freqGto: node.source == RangeSource.solverImport ? f[a] : null,
+      freqGto: norm,
+      freqSource: _src(node, norm),
+      roll: norm.length > 1 ? roll : null,
       metrics: [
         KeyMetric(MetricType.potOdds, odds),
         KeyMetric(MetricType.requiredEquity, req, 'pot odds con rake / (EQR x ${ip ? 'IP 1.10' : 'OOP 0.85'})'),
@@ -411,7 +480,9 @@ class PreflopSolverEngine {
     final pot = ctx.potBb + call;
     final implied = call / setOnFlop - pot;
     final rate = rake[tier]!.effectiveRate(PotType.srp);
-    final stackTxt = stack == null ? 'stack desconocido' : 'stack ${stack.toStringAsFixed(0)}bb';
+    final stackTxt = stack == null
+        ? 'stack desconocido'
+        : 'stack ${stack.toStringAsFixed(0)}bb (${setMiningOk(call, stack) ? 'implícitas >= 12x OK' : 'implícitas < 12x: insuficiente'})';
     return 'Set-Mining: P(set)=${_p(setOnFlop)} exige ganar >= ${implied.toStringAsFixed(1)}bb implícitos + rake ${_p(rate)} del bote final; '
         'con $stackTxt el cold call es bloqueado por la regla 3-Bet o Fold High-Rake (riesgo de squeeze de ciegas y reverse implied) '
         'y el 3-bet lineal empieza en el par mínimo del rango de valor => fold';

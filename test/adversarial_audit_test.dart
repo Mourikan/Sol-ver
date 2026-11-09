@@ -123,11 +123,12 @@ void main() {
       expect(lead.action, DecisionAction.betRaise);
       final xr = post.decide(srpFlop(Position.bb, Position.btn, Position.btn, '7h3h', '6d5c4h',
           street: [fl(Position.bb, ActionType.check), fl(Position.btn, ActionType.bet, 1.8)]));
-      expect(xr.action, DecisionAction.betRaise);
-      expect(xr.sizing!.bb, greaterThan(1.8 * 2));
+      expect(xr.frequencies[DecisionAction.betRaise], greaterThanOrEqualTo(0.5));
+      expect(xr.action, isNot(DecisionAction.fold));
+      if (xr.action == DecisionAction.betRaise) expect(xr.sizing!.bb, greaterThan(1.8 * 2));
     });
-    test('BB con combo draw OOP enfrentando c-bet: check-raise semi-bluff', () {
-      final d = post.decide(srpFlop(Position.bb, Position.btn, Position.btn, '8d7d', '6d5c4d',
+    test('BB con combo draw OOP (FD + OESD) enfrentando c-bet: check-raise semi-bluff 100%', () {
+      final d = post.decide(srpFlop(Position.bb, Position.btn, Position.btn, '9d8d', '7d6c2d',
           street: [fl(Position.bb, ActionType.check), fl(Position.btn, ActionType.bet, 1.8)]));
       expect(d.action, DecisionAction.betRaise);
     });

@@ -40,3 +40,37 @@
 2. Benchmark: para N spots resueltos, medir acuerdo de acción por combo y pérdida de EV (mbb/mano) usando el EV del solver por acción.
 3. Sustituir los buckets de flop por estrategias agregadas de solver por bucket (frecuencias por tier) y validar que Δ por bucket < 5 pp.
 4. Calibrar EQR y pesos de línea contra la realización de equity que reporta el solver por combo.
+
+---
+
+## 5. Actualización Fase 8.5 (cierre parcial de brecha CFR+)
+
+### 5.1 Qué cambió (y qué NO)
+| Capacidad | Antes | Ahora | Origen de los números |
+|---|---|---|---|
+| Estrategias mixtas preflop | Puras | Mezclas por combo exacto con `DeterministicActionMixer` (hash de cartas con palos + board + bote) | A5s BTN vs CO 75/25/0 y 88 CO vs MP 35/65/0 · 35/0/65: **valores del usuario**. Frontera BB: **derivada por margen de equity ±3%** + corrección isotónica. Etiqueta `modelCalibrated`, **no** `solverCalibrated` |
+| `freq_gto` | `null` | Poblado en el 100% de decisiones (`{acción: %}`, acción mayoritaria, `freq_source`) | Verificado en `test/solver_calibration_test.dart` |
+| Stacks 40–200bb | Solo 100bb | Set-mining ≥12x, commit 3-bet ≥25% del stack, EQR por profundidad | Parámetros de modelo |
+| Flop | 1 sizing por bucket, tier→acción pura | Matriz por tier `[Check, B33, B75]` + trap 20% de monsters en boards dinámicos / sin RA | Parámetros de modelo ordenados por RA/NA |
+| Check-raise flop OOP | Solo monsters / FD+OESD | Frecuencial por tier; **10.7% global** vs c-bet 33% en 8 boards (objetivo del usuario 10–14%) | Cuotas por tier calibradas al objetivo del usuario, no a un solver |
+| EQR postflop | EQR preflop × posición | `EQR(categoría, IP/OOP, SPR)` | Anclas del usuario (SC IP SPR>6 = 1.00; offsuit broadway OOP SPR bajo = 0.68), resto interpolado |
+| Rango de llegada | Recorte plano por MDF | Peso por la probabilidad con la que **nuestra política** habría tomado la línea observada (bet/check por matriz, call = presupuesto − X/R) | Política propia, no la del solver |
+| River thin value | 50–66% | 33% vs rango condensado medio; 50–66% vs fish; 75–125% solo monsters + faroles | Regla del usuario |
+
+### 5.2 Métricas tras el cambio (docs/final_metrics_audit.md)
+- 0 nodos con Δ Nash > 8% sin justificación (54 nodos).
+- Range bet A/K-high secos: 72–81% (antes 58–83%).
+- Defensa BB vs c-bet 33% (Reg): 77–88%; la parte por encima de MDF son calls +EV de la invariante Equity_Real ≥ Pot Odds.
+- Turn: fold vs barrel 75% = 41–43% (objetivo 42.8%). River vs pot (Reg NL100): 47–50%.
+- Rango de check del PFA con monsters en boards dinámicos: 2.7–4.5% (antes 0%).
+
+### 5.3 Acuerdo estimado actualizado (sigue SIN benchmark contra solver)
+| Calle | Fase 8 | Fase 8.5 | Por qué sube |
+|---|---|---|---|
+| Preflop | 75–88% | 77–89% | Mezclas en fronteras; mismos rangos semilla |
+| Flop | 55–70% | 60–74% | Multisizing por tier, X/R frecuencial, trap |
+| Turn | 45–60% | 48–62% | Rango de llegada por política ejecutada |
+| River | 50–65% | 53–67% | Sizing thin/block vs polar |
+| Global | 60–72% | **63–75%** | — |
+
+Las limitaciones estructurales de la sección 3 (sin cálculo de EV por acción, sin equilibrio recursivo, abstracción por buckets/tiers, rangos semilla) **siguen vigentes**. Las mezclas y matrices nuevas son priors del modelo: reducen la predictibilidad y la abstracción, pero no garantizan que las frecuencias coincidan con las del solver. La única forma de validarlas es importar exports reales (`RangeSource.solverImport`) y medir pérdida de EV.

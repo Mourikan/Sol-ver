@@ -30,7 +30,26 @@ class LateStreetPlan {
     this.executedBluffShare = 0,
     this.valueCombos = 0,
     this.bluffCombos = 0,
+    this.heroTier = HandTier.airGiveUp,
+    this.villainState = VillainRangeState.uncapped,
+    this.street = Street.turn,
+    this.fishRead = false,
   });
+
+  final HandTier heroTier;
+  final VillainRangeState villainState;
+  final Street street;
+  final bool fishRead;
+
+  static const condensed = {VillainRangeState.cappedMedium, VillainRangeState.cappedMediumShowdown, VillainRangeState.condensedDrawsAndPairs};
+
+  /// River: thin-value / block (25-33%) vs rango condensado en manos medias; 50-66% vs fish inelástico; polar solo monsters+faroles.
+  double thinValuePct(double polarPct) {
+    if (street != Street.river) return polarPct.clamp(50, 66).toDouble();
+    if (fishRead) return polarPct.clamp(50, 66).toDouble();
+    if (condensed.contains(villainState)) return 33;
+    return 50;
+  }
 
   final LateNode node;
   final CardShift shift;
@@ -184,6 +203,10 @@ class TurnRiverSolver {
       executedBluffShare: executed,
       valueCombos: sel.value,
       bluffCombos: sel.bluff,
+      heroTier: h.tier,
+      villainState: funnel.state,
+      street: street,
+      fishRead: read.archetype == GgArchetype.recPassiveFish,
     );
   }
 
@@ -366,8 +389,9 @@ class TurnRiverSolver {
       return DecisionOutput(action: DecisionAction.check, metrics: metrics, justificacionGto: gto, ajusteExplotativoRead: readTxt);
     }
     var pct = p.sizePct;
-    if (p.role == HandRole.thinValue) pct = math.min(math.max(pct, 50), 66);
-    final bb = p.allIn && p.role != HandRole.thinValue ? stack : math.min(stack, pot * pct / 100);
+    final thin = p.role == HandRole.thinValue || (p.street == Street.river && p.role == HandRole.value && p.heroTier != HandTier.nutsMonster);
+    if (thin) pct = p.thinValuePct(pct);
+    final bb = p.allIn && !thin ? stack : math.min(stack, pot * pct / 100);
     return DecisionOutput(
       action: DecisionAction.betRaise,
       sizing: Sizing(bb: bb, potPct: bb / pot * 100),

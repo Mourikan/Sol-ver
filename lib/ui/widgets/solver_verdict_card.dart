@@ -59,7 +59,7 @@ class SolverVerdictCard extends StatelessWidget {
                   alignment: Alignment.centerLeft,
                   child: Text(label(d), style: TextStyle(color: color, fontSize: 24, fontWeight: FontWeight.w900)),
                 ),
-                Text('Freq GTO: ${d.freqGto == null ? 'n/d (rangos semilla)' : '${(d.freqGto! * 100).round()}%'}  ·  ${fsm.solverMicros}µs',
+                Text('Freq: ${d.frequencies.entries.map((e) => '${e.key.name} ${(e.value * 100).round()}%').join(' / ')} (${d.freqSource.name})  ·  ${fsm.solverMicros}µs',
                     style: const TextStyle(color: AppColors.muted, fontSize: 12)),
                 const SizedBox(height: 6),
                 Wrap(spacing: 10, runSpacing: 2, children: [

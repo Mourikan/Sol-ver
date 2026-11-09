@@ -5,6 +5,8 @@ import '../evaluators/hand_evaluator.dart';
 import '../models/game_state.dart';
 import '../preflop/range_notation.dart';
 import '../reads/gg_profiler.dart';
+import '../evaluators/board_analyzer.dart';
+import 'flop_lookup_table.dart';
 import 'geometry.dart';
 import 'hand_tier.dart';
 import 'postflop_ranges.dart';
@@ -141,16 +143,78 @@ class DefenseBudget {
     for (final st in [Street.flop, Street.turn]) {
       if (st.index >= s.street.index) break;
       final acts = s.actions.where((a) => a.street == st).toList();
-      final vBet = acts.where((a) => a.actor == s.villainPosition && a.isAggressive).lastOrNull;
-      final heroCalled = acts.any((a) => a.actor == s.heroPosition && a.type == ActionType.call);
-      if (vBet == null || !heroCalled) continue;
-      final heroIn = acts.where((a) => a.actor == s.heroPosition && a.isAggressive).lastOrNull?.amountBb ?? 0;
-      final potBefore = pots[st]! + 2 * heroIn;
-      final mdf = perPlayerMdf(PotGeometry.mdf(potBefore, vBet.amountBb - heroIn), s.activePlayers);
       final board = boardAll.sublist(0, st == Street.flop ? 3 : 4);
-      range = _top(range, board, math.min(1.0, mdf * factor(r, s.stake)));
+      final vBet = acts.where((a) => a.actor == s.villainPosition && a.isAggressive).lastOrNull;
+      final heroActs = acts.where((a) => a.actor == s.heroPosition).toList();
+      final heroCalled = heroActs.any((a) => a.type == ActionType.call);
+      final heroBet = heroActs.where((a) => a.isAggressive).firstOrNull;
+      if (vBet != null && heroCalled) {
+        final heroIn = heroActs.where((a) => a.isAggressive).lastOrNull?.amountBb ?? 0;
+        final potBefore = pots[st]! + 2 * heroIn;
+        final mdf = perPlayerMdf(PotGeometry.mdf(potBefore, vBet.amountBb - heroIn), s.activePlayers);
+        final kept = _top(range, board, math.min(1.0, mdf * factor(r, s.stake)));
+        final oop = !s.heroPosition.isInPositionVs(s.villainPosition!);
+        final frac = (vBet.amountBb - heroIn) / potBefore;
+        range = {
+          for (final e in kept.entries)
+            e.key: e.value *
+                (st == Street.flop && oop && frac <= 0.5
+                    ? 1 - checkRaiseShareCombo(e.key ~/ 52, e.key % 52, board, villain: s.villainPosition!, hero: s.heroPosition)
+                    : 1.0),
+        };
+      } else {
+        range = {
+          for (final e in range.entries)
+            e.key: e.value * _ownActionProb(s, st, e.key ~/ 52, e.key % 52, board, heroBet: heroBet, potStart: pots[st]!),
+        };
+      }
     }
     return range;
+  }
+
+  /// Probabilidad de que nuestra propia política hubiera tomado la línea observada (rango de llegada fiel).
+  static double _ownActionProb(GameState s, Street st, int a, int b, List<int> board,
+      {required PlayerAction? heroBet, required double potStart}) {
+    final heroIsPfa = s.preflopAggressor == s.heroPosition;
+    final tier = HandTierClassifier.classify(a, b, board).tier;
+    if (st == Street.flop && heroIsPfa && s.potType != PotType.limped) {
+      final pfa = s.heroPosition, def = s.villainPosition!;
+      final node = FlopLookupTable.nodeOf(s.potType, pfaInPosition: pfa.isInPositionVs(def));
+      final flop = [for (final c in s.board.sublist(0, 3)) c];
+      final cls = FlopLookupTable.strategy(FlopLookupTable.bucketOf(flop), node).strategy;
+      final row = FlopLookupTable.row(cls, tier, trap: FlopLookupTable.trapActive(flop, node, pfa: pfa, defender: def));
+      if (heroBet == null) return row.$1;
+      final small = heroBet.amountBb / potStart <= 0.5;
+      final p = small ? row.$2 : row.$3;
+      return p > 0 ? p : (small ? row.$3 : row.$2);
+    }
+    if (heroBet != null) {
+      return switch (tier) {
+        HandTier.nutsMonster || HandTier.strongTopPairOverpair || HandTier.highEquityComboDraw => 1.0,
+        HandTier.backdoorBlockerBluff => 0.5,
+        _ => 0.35,
+      };
+    }
+    return tier == HandTier.nutsMonster ? 0.3 : 1.0;
+  }
+
+  /// Check-raise frecuencial en Flop OOP vs c-bet <= 50% por tier (parámetros del modelo; objetivo agregado ~10-14% del rango).
+  static double checkRaiseShareCombo(int a, int b, List<int> board, {required Position villain, required Position hero}) {
+    final h = HandTierClassifier.classify(a, b, board);
+    final cards = [for (final id in board) Card(Rank.values[id >> 2], Suit.values[id & 3])];
+    final m = BoardAnalyzer.analyze(cards.sublist(0, 3), pfa: villain, defender: hero);
+    return checkRaiseShare(h, m);
+  }
+
+  static double checkRaiseShare(HandTierResult h, BoardMetrics b) {
+    final lowMid = b.height != BoardHeight.high && !b.isPaired;
+    return switch (h.tier) {
+      HandTier.nutsMonster => 0.65,
+      HandTier.highEquityComboDraw => h.flushDraw && h.oesd ? 1.0 : 0.45,
+      HandTier.strongTopPairOverpair => lowMid ? 0.18 : 0.10,
+      HandTier.backdoorBlockerBluff => h.backdoorFlush && (h.gutshot || h.overcards) ? 0.35 : (h.backdoorFlush || h.gutshot ? 0.12 : 0.0),
+      _ => 0.0,
+    };
   }
 
   static Map<int, double> _top(Map<int, double> range, List<int> board, double frac) {

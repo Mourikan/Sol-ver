@@ -118,8 +118,8 @@ class TrapperDecoder {
     final alert = 'ALERTA: Rango 85%+ AA/KK/AKs (prior ${(ReadProfile.trapperPremiumPrior * 100).round()}%), 15% pares bajos/random.';
     if (handClass == 'AA') return (TrapperResponse.fourBetJam, '$alert AA: domina su rango => 4-bet/jam.');
     if (handClass == 'KK' || handClass == 'AKs') return (TrapperResponse.call, '$alert $handClass: no jam (vs AA/KK); call.');
-    if (pair && call < 0.10 * effStackBb) {
-      return (TrapperResponse.setMineCall, '$alert Set-mining: call ${call.toStringAsFixed(1)}bb < 10% stack (implícitas vs rango premium).');
+    if (pair && effStackBb >= 12 * call) {
+      return (TrapperResponse.setMineCall, '$alert Set-mining: stack ${effStackBb.toStringAsFixed(0)}bb >= 12x call ${call.toStringAsFixed(1)}bb (implícitas vs rango premium).');
     }
     return (TrapperResponse.fold, '$alert $handClass fold${ratio > 4 ? ' (sizing ${ratio.toStringAsFixed(1)}x > 4x)' : ''}: dominada por AA/KK/AKs.');
   }

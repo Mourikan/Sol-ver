@@ -89,20 +89,29 @@ Map<int, DecisionOutput> sweep(Node n) => {
     };
 
 List<String> holes(Node n, Map<int, DecisionOutput> d) {
-  bool cont(int i) => n.raiseOnly ? d[i]!.action == DecisionAction.betRaise : (d[i]!.action == DecisionAction.call || d[i]!.action == DecisionAction.betRaise);
+  // Monotonía sobre la FRECUENCIA de continuación (estrategias mixtas): la mano superior nunca continúa menos.
+  double cont(int i) {
+    final f = d[i]!.frequencies;
+    return n.raiseOnly ? (f[DecisionAction.betRaise] ?? 0) : (f[DecisionAction.betRaise] ?? 0) + (f[DecisionAction.call] ?? 0);
+  }
+  const eps = 1e-6;
   final out = <String>[];
   for (var r = 12; r > 0; r--) {
     final lower = Matrix169.index(r, r, suited: false), higher = Matrix169.index(r - 1, r - 1, suited: false);
-    if (cont(lower) && !cont(higher)) out.add('${n.name}: fold ${Matrix169.label(higher)} pero continúa ${Matrix169.label(lower)}');
+    if (cont(higher) + eps < cont(lower)) {
+      out.add('${n.name}: ${Matrix169.label(higher)} continúa ${(cont(higher) * 100).round()}% < ${Matrix169.label(lower)} ${(cont(lower) * 100).round()}%');
+    }
   }
   for (final suited in [true, false]) {
     for (var hi = 0; hi < 12; hi++) {
       for (var lo = hi + 2; lo < 13; lo++) {
         final low = Matrix169.index(hi, lo, suited: suited);
-        if (!cont(low) || exempt.contains(Matrix169.label(low))) continue;
+        if (cont(low) <= eps || exempt.contains(Matrix169.label(low))) continue;
         for (var k = hi + 1; k < lo; k++) {
           final up = Matrix169.index(hi, k, suited: suited);
-          if (!cont(up)) out.add('${n.name}: fold ${Matrix169.label(up)} pero continúa ${Matrix169.label(low)}');
+          if (cont(up) + eps < cont(low)) {
+            out.add('${n.name}: ${Matrix169.label(up)} continúa ${(cont(up) * 100).round()}% < ${Matrix169.label(low)} ${(cont(low) * 100).round()}%');
+          }
         }
       }
     }

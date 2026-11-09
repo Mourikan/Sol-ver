@@ -105,7 +105,7 @@ void main() {
       );
       expect(d.toJson().keys, containsAll(
           ['accion', 'sizing_bb_o_pct', 'freq_gto', 'justificacion_gto', 'ajuste_explotativo_read']));
-      expect(d.toJson()['freq_gto'], isNull);
+      expect(d.toJson()['freq_gto'], {'betRaise': 100.0});
     });
 
     test('Rechaza cartas duplicadas entre hero y board', () {

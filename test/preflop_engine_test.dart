@@ -43,10 +43,11 @@ int ev(String s) => HandEvaluator.evaluate([for (final c in Card.parseMany(s)) c
 void main() {
   group('1. Suited vs Offsuit: BTN vs CO open', () {
     for (final st in [Stake.nl10, Stake.nl100]) {
-      test('${st.name}: A5s 3-bet bluff polar, A5o fold', () {
+      test('${st.name}: A5s 3-bet bluff polar (mezcla 75% raise), A5o fold', () {
         final s = vsOpen(st, Position.btn, Position.co, 'Ah5h');
         final o = vsOpen(st, Position.btn, Position.co, 'Ah5d');
-        expect(s.action, DecisionAction.betRaise);
+        expect(s.frequencies[DecisionAction.betRaise], closeTo(0.75, 1e-6));
+        expect(s.majorityAction, DecisionAction.betRaise);
         expect(s.justificacionGto, contains('POLAR'));
         expect(o.action, DecisionAction.fold);
         expect(HandProps.eqr[HandNormalizer.parse('Ah5h').index],
@@ -54,8 +55,8 @@ void main() {
       });
     }
     test('Sizing 3-bet IP: 3.2x high-rake, 3.0x mid-rake', () {
-      expect(vsOpen(Stake.nl10, Position.btn, Position.co, 'Ah5h').sizing!.bb, closeTo(8.0, 1e-9));
-      expect(vsOpen(Stake.nl100, Position.btn, Position.co, 'Ah5h').sizing!.bb, closeTo(7.5, 1e-9));
+      expect(vsOpen(Stake.nl10, Position.btn, Position.co, 'AhKh').sizing!.bb, closeTo(8.0, 1e-9));
+      expect(vsOpen(Stake.nl100, Position.btn, Position.co, 'AhKh').sizing!.bb, closeTo(7.5, 1e-9));
     });
   });
 
@@ -162,10 +163,10 @@ void main() {
           throwsA(isA<MissingInputs>()));
     });
 
-    test('Output contiene claves obligatorias y freq_gto null con rangos semilla', () {
+    test('Output contiene claves obligatorias y freq_gto poblado', () {
       final j = vsOpen(Stake.nl50, Position.btn, Position.co, 'AhKh').toJson();
       expect(j.keys, containsAll(['accion', 'sizing_bb_o_pct', 'freq_gto', 'justificacion_gto', 'ajuste_explotativo_read']));
-      expect(j['freq_gto'], isNull);
+      expect(j['freq_gto'], isNotNull);
     });
   });
 

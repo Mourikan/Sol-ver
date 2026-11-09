@@ -8,6 +8,7 @@ import 'flop_lookup_table.dart';
 import 'geometry.dart';
 import 'hand_tier.dart';
 import '../discipline/blocker_bluff_converter.dart';
+import '../models/action_mixer.dart';
 import '../discipline/board_history.dart';
 import '../discipline/ev_sanity_guard.dart';
 import '../discipline/bluff_catch_auditor.dart';
@@ -237,18 +238,32 @@ class PostflopHeuristicEngine {
       double stack, bool heroIp, List<KeyMetric> m) {
     final flop = s.board.sublist(0, 3);
     final ranges = PostflopRanges.forPot(pfa, defender, s.potType, s.rakeTier);
-    final r = FlopLookupTable.evaluate(flop, node, pfaRange: ranges.$1, defenderRange: ranges.$2);
+    final r = FlopLookupTable.evaluate(flop, node, pfaRange: ranges.$1, defenderRange: ranges.$2, pfa: pfa, defender: defender);
     final tag = '${r.bucket.name} | nodo ${node.name} | ${h.tier.name}';
     final heroIsPfa = s.heroPosition == pfa;
 
     if (heroIsPfa) {
-      final (tiers, size, note) =
-          ExploitModifier.adjustBetting(FlopLookupTable.betTiers[r.strategy]!, r.sizePct, s.villainProfile, players: s.activePlayers);
-      m.add(KeyMetric(MetricType.rangeActionFreq, r.betFreq, 'bet del rango PFA (política ${r.strategy.name})'));
-      final gto = '$tag | ${r.strategy.name} ${r.sizePct.round()}% | bet rango ${(r.betFreq * 100).round()}% / check ${(r.checkFreq * 100).round()}%';
-      return tiers.contains(h.tier)
-          ? _bet(size, pot, stack, m, gto, note ?? 'Sin desviación: ${s.villainProfile.name}.')
-          : _check(m, gto, note ?? 'Sin desviación: ${s.villainProfile.name}.');
+      var row = FlopLookupTable.row(r.strategy, h.tier, trap: r.trapActive);
+      final baseSet = {for (final t in HandTier.values) if (FlopLookupTable.betProbability(r.strategy, t) > 0) t};
+      final (tiers, size, note) = ExploitModifier.adjustBetting(baseSet, r.sizePct, s.villainProfile, players: s.activePlayers);
+      if (!tiers.contains(h.tier)) {
+        row = (1.0, 0.0, 0.0);
+      } else if (row.$2 + row.$3 == 0 || note != null) {
+        row = size >= 60 ? (0.0, 0.0, 1.0) : (0.0, 1.0, 0.0);
+      }
+      m.add(KeyMetric(MetricType.rangeActionFreq, r.betFreq, 'bet del rango PFA (matriz ${r.strategy.name})'));
+      final roll = DeterministicActionMixer.roll([s.hero!.high, s.hero!.low], flop, pot);
+      final big = roll < row.$3 * 100, small = !big && roll < (row.$3 + row.$2) * 100;
+      final freqs = {DecisionAction.check: row.$1, DecisionAction.betRaise: row.$2 + row.$3};
+      final gto = '$tag | ${r.strategy.name} | fila tier [X ${(row.$1 * 100).round()} / B33 ${(row.$2 * 100).round()} / B75 ${(row.$3 * 100).round()}]'
+          '${r.trapActive && h.tier == HandTier.nutsMonster ? ' (trap ${(FlopLookupTable.trapShare * 100).round()}%)' : ''} | '
+          'bet rango ${(r.betFreq * 100).round()}% / check ${(r.checkFreq * 100).round()}% (monsters en check ${(r.monsterShareOfCheck * 100).toStringAsFixed(1)}%)';
+      final read = note ?? 'Sin desviación: ${s.villainProfile.name}.';
+      final src = freqs.values.any((v) => v > 0 && v < 1) ? FreqSource.modelCalibrated : FreqSource.pure;
+      final d = big || small
+          ? _bet(big ? (note != null ? size : 75) : (note != null ? size : FlopLookupTable.sizeOf[StrategyClass.rangeBetSmall]!), pot, stack, m, gto, read)
+          : _check(m, gto, read);
+      return d.copyWith(freqGto: freqs, freqSource: src);
     }
 
     if (!heroIp) {
@@ -311,9 +326,22 @@ class PostflopHeuristicEngine {
     if (!res.continues) {
       return DecisionOutput(action: DecisionAction.fold, metrics: m, justificacionGto: '$tag | fuera del presupuesto', ajusteExplotativoRead: read);
     }
-    if (h.tier == HandTier.nutsMonster) return _raiseTo(potBeforeBet, toCall, stack, streetsLeft, m, '$tag | Monster: raise por valor', read);
-    if (!heroIp && s.street == Street.flop && h.flushDraw && h.oesd) {
-      return _raiseTo(potBeforeBet, toCall, stack, streetsLeft, m, '$tag | combo draw OOP: check-raise semi-bluff', read);
+    final xr = !heroIp && s.street == Street.flop && betFrac <= 0.5 ? checkRaiseShare(s, h) : (h.tier == HandTier.nutsMonster ? 1.0 : 0.0);
+    if (xr > 0) {
+      final roll = DeterministicActionMixer.roll([s.hero!.high, s.hero!.low], s.board, potBeforeBet + toCall);
+      final freqs = {DecisionAction.betRaise: xr, DecisionAction.call: 1 - xr};
+      if (roll < xr * 100) {
+        return _raiseTo(potBeforeBet, toCall, stack, streetsLeft, m, '$tag | ${!heroIp && s.street == Street.flop ? 'check-raise frecuencial ${(xr * 100).round()}%' : 'Monster: raise por valor'}', read)
+            .copyWith(freqGto: freqs, freqSource: xr < 1 ? FreqSource.modelCalibrated : FreqSource.pure);
+      }
+      return DecisionOutput(
+          action: DecisionAction.call,
+          sizing: Sizing(bb: toCall, potPct: betFrac * 100),
+          freqGto: freqs,
+          freqSource: FreqSource.modelCalibrated,
+          metrics: m,
+          justificacionGto: '$tag | call (rama no-raise de la mezcla X/R ${(xr * 100).round()}%)',
+          ajusteExplotativoRead: read);
     }
     final float = h.tier == HandTier.backdoorBlockerBluff || h.tier == HandTier.airGiveUp;
     return DecisionOutput(
@@ -323,6 +351,9 @@ class PostflopHeuristicEngine {
         justificacionGto: '$tag | ${float ? 'float (overcards/backdoors) para completar MDF' : 'dentro del presupuesto'}',
         ajusteExplotativoRead: read);
   }
+
+  static double checkRaiseShare(GameState s, HandTierResult h) => DefenseBudget.checkRaiseShare(
+      h, BoardAnalyzer.analyze(s.board.sublist(0, 3), pfa: s.villainPosition!, defender: s.heroPosition));
 
   /// RIVER: Bluff_Combo_Audit por combos reales + Nut-Raise Gate (L12).
   DecisionOutput _riverFacing(GameState s, ReadProfile rp, HandTierResult h, double potBeforeBet, double toCall,
