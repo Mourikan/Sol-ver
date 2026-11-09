@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 
-void main() {
-  runApp(const MainApp());
-}
+import 'ui/poker_table_screen.dart';
+import 'ui/theme.dart';
 
-class MainApp extends StatelessWidget {
-  const MainApp({super.key});
+void main() => runApp(const SolVerApp());
+
+class SolVerApp extends StatelessWidget {
+  const SolVerApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(
-      home: Scaffold(body: Center(child: Text('Hello World!'))),
-    );
-  }
+  Widget build(BuildContext context) => MaterialApp(
+        title: 'Sol-ver 6-Max',
+        debugShowCheckedModeBanner: false,
+        theme: buildTheme(),
+        home: const PokerTableScreen(),
+      );
 }
