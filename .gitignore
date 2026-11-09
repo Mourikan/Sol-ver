@@ -1,9 +1,7 @@
-.gradle/
+.dart_tool/
 build/
-local.properties
+.flutter-plugins*
+.packages
 .idea/
 *.iml
-.kotlin/
-captures/
-*.apk
-!app/release/*.apk
+local.properties
