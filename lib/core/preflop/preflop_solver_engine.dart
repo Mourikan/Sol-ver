@@ -241,6 +241,9 @@ class PreflopSolverEngine {
     if (allIn) size = s.effectiveStackBb!;
 
     final noFlat = !PreflopRangesDb.flatsAllowed(hero, opener, tier);
+    final setMine = noFlat && a == PreflopAction.fold && hand.isPair && Matrix169.highRank(i) <= 7
+        ? ' | ${_setMiningNote(ctx, s.effectiveStackBb, tier)}'
+        : '';
     return DecisionOutput(
       action: switch (a) {
         PreflopAction.raise => DecisionAction.betRaise,
@@ -263,7 +266,7 @@ class PreflopSolverEngine {
       justificacionGto: '${hand.label} ${hero.name.toUpperCase()} vs open ${opener.name.toUpperCase()} | ${_tierLabel(tier)} | '
           '3-bet ${structure == ThreeBetStructure.polar ? 'POLAR (value + bluffs suited con blocker/jugabilidad)' : 'LINEAL (rango condensado, OOP)'} | '
           'EQR ${hand.eqr.toStringAsFixed(2)} ${hand.isSuited ? 'suited' : hand.isPair ? 'par' : 'offsuit'} | '
-          'blocker ${_p(hand.blockerWeight)} | ${noFlat ? '3-bet o fold (0% cold call por rake)' : 'flats habilitados'} | '
+          'blocker ${_p(hand.blockerWeight)} | ${noFlat ? '3-bet o fold (0% cold call por rake)' : 'flats habilitados'}$setMine | '
           'freq tabla: ${_freqLabel(f)}',
       ajusteExplotativoRead: [
         if (a == PreflopAction.raise)
@@ -399,4 +402,18 @@ class PreflopSolverEngine {
   }
 
   String _p(double x) => '${(x * 100).toStringAsFixed(1)}%';
+
+  /// P(set o mejor en el flop) = 1 - C(48,3)/C(50,3).
+  static const setOnFlop = 1 - 17296 / 19600;
+
+  String _setMiningNote(PreflopContext ctx, double? stack, RakeTier tier) {
+    final call = ctx.callBb;
+    final pot = ctx.potBb + call;
+    final implied = call / setOnFlop - pot;
+    final rate = rake[tier]!.effectiveRate(PotType.srp);
+    final stackTxt = stack == null ? 'stack desconocido' : 'stack ${stack.toStringAsFixed(0)}bb';
+    return 'Set-Mining: P(set)=${_p(setOnFlop)} exige ganar >= ${implied.toStringAsFixed(1)}bb implícitos + rake ${_p(rate)} del bote final; '
+        'con $stackTxt el cold call es bloqueado por la regla 3-Bet o Fold High-Rake (riesgo de squeeze de ciegas y reverse implied) '
+        'y el 3-bet lineal empieza en el par mínimo del rango de valor => fold';
+  }
 }

@@ -137,7 +137,7 @@ class PreflopRangesDb {
     Position.co: '22-99,A9s-ATs,KTs+,QTs+,JTs,T9s,98s,87s,76s,AJo,KQo',
   };
 
-  static const _flatMicroBtn = '66-TT,AQs,KQs';
+  static const _flatMicroBtn = '66-JJ,AQs,KQs';
 
   static const _vs3bet = {
     (Position.utg, false): ('KK+,AKs,A5s,A4s', '77-QQ,AKo,AQs,AJs,KQs,QJs,JTs'),

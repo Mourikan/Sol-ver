@@ -23,21 +23,21 @@ Generado por `docs/audit_scripts/metric_audit.dart` simulando el motor combo a c
 | Range bet 33% BTN vs BB (AsKd2c, aceHighDry) | SRP IP | ≥60% (definición range-bet) | 83.1% | 0.0 | OK |
 | Range bet 33% BTN vs BB (Kd7c2h, kingHighDry) | SRP IP | ≥60% (definición range-bet) | 57.8% | 2.2 | OK |
 | Range bet 33% BTN vs BB (KsQd2h, kingHighDry) | SRP IP | ≥60% (definición range-bet) | 77.0% | 0.0 | OK |
-| Defensa BB vs c-bet 33% (As7d2c) | nl100 Reg | MDF 75.3% | 76.4% | 1.1 | OK |
-| Defensa BB vs c-bet 33% (Qc7h2d) | nl100 Reg | MDF 75.3% | 76.4% | 1.1 | OK |
-| Defensa BB vs c-bet 33% (9h8h4c) | nl100 Reg | MDF 75.3% | 75.4% | 0.1 | OK |
-| Defensa BB vs c-bet 33% (As7d2c) | nl10 Reg | MDF 75.3% | 75.4% | 0.1 | OK |
-| Defensa BB vs c-bet 33% (Qc7h2d) | nl10 Reg | MDF 75.3% | 75.6% | 0.3 | OK |
-| Defensa BB vs c-bet 33% (9h8h4c) | nl10 Reg | MDF 75.3% | 75.6% | 0.3 | OK |
-| Defensa BB vs c-bet 33% (As7d2c) | nl25 Scared | MDF 75.3% | 68.7% | 6.6 | OK (Scared ≤NL50 factor 0.90) · ALERTA <70% |
-| Defensa BB vs c-bet 33% (Qc7h2d) | nl25 Scared | MDF 75.3% | 70.2% | 5.1 | OK (Scared ≤NL50 factor 0.90) |
-| Defensa BB vs c-bet 33% (9h8h4c) | nl25 Scared | MDF 75.3% | 69.1% | 6.2 | OK (Scared ≤NL50 factor 0.90) · ALERTA <70% |
-| Defensa BB vs c-bet 33% (As7d2c) | nl25 Fish | MDF 75.3% | 62.3% | 13.0 | Justificado: Regla Fish (factor 0.82) · ALERTA <70% |
-| Defensa BB vs c-bet 33% (Qc7h2d) | nl25 Fish | MDF 75.3% | 61.9% | 13.4 | Justificado: Regla Fish (factor 0.82) · ALERTA <70% |
-| Defensa BB vs c-bet 33% (9h8h4c) | nl25 Fish | MDF 75.3% | 62.0% | 13.3 | Justificado: Regla Fish (factor 0.82) · ALERTA <70% |
-| Defensa BB vs c-bet 33% (As7d2c) | nl100 Maniac | MDF 75.3% | 87.2% | 11.9 | Justificado: Regla Maniac (factor 1.15) |
-| Defensa BB vs c-bet 33% (Qc7h2d) | nl100 Maniac | MDF 75.3% | 86.8% | 11.5 | Justificado: Regla Maniac (factor 1.15) |
-| Defensa BB vs c-bet 33% (9h8h4c) | nl100 Maniac | MDF 75.3% | 86.9% | 11.6 | Justificado: Regla Maniac (factor 1.15) |
+| Defensa BB vs c-bet 33% (As7d2c) | nl100 Reg | MDF 75.3% | 79.6% | 4.3 | OK |
+| Defensa BB vs c-bet 33% (Qc7h2d) | nl100 Reg | MDF 75.3% | 82.4% | 7.1 | OK |
+| Defensa BB vs c-bet 33% (9h8h4c) | nl100 Reg | MDF 75.3% | 85.0% | 9.7 | Justificado: Invariante Equity_Real ≥ Pot Odds: +9.5% de calls +EV directos sobre el presupuesto MDF (75.4%) |
+| Defensa BB vs c-bet 33% (As7d2c) | nl10 Reg | MDF 75.3% | 77.5% | 2.2 | OK |
+| Defensa BB vs c-bet 33% (Qc7h2d) | nl10 Reg | MDF 75.3% | 86.3% | 11.0 | Justificado: Invariante Equity_Real ≥ Pot Odds: +10.8% de calls +EV directos sobre el presupuesto MDF (75.6%) |
+| Defensa BB vs c-bet 33% (9h8h4c) | nl10 Reg | MDF 75.3% | 88.0% | 12.7 | Justificado: Invariante Equity_Real ≥ Pot Odds: +12.4% de calls +EV directos sobre el presupuesto MDF (75.6%) |
+| Defensa BB vs c-bet 33% (As7d2c) | nl25 Scared | MDF 75.3% | 72.0% | 3.3 | OK (Scared ≤NL50 factor 0.90) |
+| Defensa BB vs c-bet 33% (Qc7h2d) | nl25 Scared | MDF 75.3% | 86.1% | 10.8 | Justificado: Scared ≤NL50 factor 0.90; Invariante Equity_Real ≥ Pot Odds: +15.9% de calls +EV directos sobre el presupuesto MDF (70.2%) |
+| Defensa BB vs c-bet 33% (9h8h4c) | nl25 Scared | MDF 75.3% | 88.0% | 12.7 | Justificado: Scared ≤NL50 factor 0.90; Invariante Equity_Real ≥ Pot Odds: +18.9% de calls +EV directos sobre el presupuesto MDF (69.1%) |
+| Defensa BB vs c-bet 33% (As7d2c) | nl25 Fish | MDF 75.3% | 70.8% | 4.5 | OK (Regla Fish (factor 0.82)) |
+| Defensa BB vs c-bet 33% (Qc7h2d) | nl25 Fish | MDF 75.3% | 86.1% | 10.8 | Justificado: Regla Fish (factor 0.82) |
+| Defensa BB vs c-bet 33% (9h8h4c) | nl25 Fish | MDF 75.3% | 88.0% | 12.7 | Justificado: Regla Fish (factor 0.82) |
+| Defensa BB vs c-bet 33% (As7d2c) | nl100 Maniac | MDF 75.3% | 87.4% | 12.1 | Justificado: Regla Maniac (factor 1.15) |
+| Defensa BB vs c-bet 33% (Qc7h2d) | nl100 Maniac | MDF 75.3% | 88.6% | 13.3 | Justificado: Regla Maniac (factor 1.15) |
+| Defensa BB vs c-bet 33% (9h8h4c) | nl100 Maniac | MDF 75.3% | 89.9% | 14.6 | Justificado: Regla Maniac (factor 1.15) |
 
 ## Turn
 
@@ -48,13 +48,13 @@ Generado por `docs/audit_scripts/metric_audit.dart` simulando el motor combo a c
 | Double barrel 80% Kd7s2s-4h (semi 15 / puro 0 / valor 81) | Fish | α = 30.8% x 0.5 = 15.4% | 15.6% | 0.2 | OK (Exploit_Bluff_Factor 0.5 (recPassiveFish)) |
 | Fold BB vs barrel 75% (As7d2c5h) | nl100 Reg | 1-MDF = 42.8% | 42.0% | 0.7 | OK |
 | Fold BB vs barrel 75% (Qc7h2dKs) | nl100 Reg | 1-MDF = 42.8% | 42.3% | 0.5 | OK |
-| Fold BB vs barrel 75% (Kd8s3s4c) | nl100 Reg | 1-MDF = 42.8% | 42.7% | 0.1 | OK |
+| Fold BB vs barrel 75% (Kd8s3s4c) | nl100 Reg | 1-MDF = 42.8% | 41.1% | 1.7 | OK |
 | Fold BB vs barrel 75% (As7d2c5h) | nl10 Reg | 1-MDF = 42.8% | 42.8% | 0.0 | OK |
 | Fold BB vs barrel 75% (Qc7h2dKs) | nl10 Reg | 1-MDF = 42.8% | 41.9% | 0.9 | OK |
-| Fold BB vs barrel 75% (Kd8s3s4c) | nl10 Reg | 1-MDF = 42.8% | 40.9% | 1.8 | OK |
-| Fold BB vs barrel 75% (As7d2c5h) | nl25 Scared | 1-MDF = 42.8% | 46.9% | 4.1 | OK (Scared ≤NL50 factor 0.90) |
+| Fold BB vs barrel 75% (Kd8s3s4c) | nl10 Reg | 1-MDF = 42.8% | 40.3% | 2.5 | OK |
+| Fold BB vs barrel 75% (As7d2c5h) | nl25 Scared | 1-MDF = 42.8% | 45.5% | 2.7 | OK (Scared ≤NL50 factor 0.90) |
 | Fold BB vs barrel 75% (Qc7h2dKs) | nl25 Scared | 1-MDF = 42.8% | 46.9% | 4.1 | OK (Scared ≤NL50 factor 0.90) |
-| Fold BB vs barrel 75% (Kd8s3s4c) | nl25 Scared | 1-MDF = 42.8% | 47.6% | 4.8 | OK (Scared ≤NL50 factor 0.90) |
+| Fold BB vs barrel 75% (Kd8s3s4c) | nl25 Scared | 1-MDF = 42.8% | 39.2% | 3.5 | OK (Scared ≤NL50 factor 0.90) |
 | Fold BB vs barrel 75% (As7d2c5h) | nl100 Maniac | 1-MDF = 42.8% | 30.9% | 11.9 | Justificado: Regla Maniac (factor 1.15) |
 | Fold BB vs barrel 75% (Qc7h2dKs) | nl100 Maniac | 1-MDF = 42.8% | 34.0% | 8.8 | Justificado: Regla Maniac (factor 1.15) |
 | Fold BB vs barrel 75% (Kd8s3s4c) | nl100 Maniac | 1-MDF = 42.8% | 34.1% | 8.6 | Justificado: Regla Maniac (factor 1.15) |

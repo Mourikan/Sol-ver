@@ -14,6 +14,7 @@ import '../discipline/bluff_catch_auditor.dart';
 import '../discipline/timing_tells_matrix.dart';
 import '../reads/gg_profiler.dart';
 import 'postflop_ranges.dart';
+import 'range_equity.dart';
 import 'turn_river_solver.dart';
 
 class PostflopHeuristicEngine {
@@ -67,7 +68,41 @@ class PostflopHeuristicEngine {
     final hadInitiative = _initiative(s) == hero;
     final potBeforeBet = pot - villainIn + heroIn;
     final d = _route(s, rp, h, node, pfa, defender, pot, stack, heroIp, metrics, street, heroIn, villainIn, toCall, hadInitiative, limped);
-    return EvSanityGuard.postflop(s, rp, d, h, toCall: toCall, potBeforeBet: potBeforeBet);
+    final guarded = EvSanityGuard.postflop(s, rp, d, h, toCall: toCall, potBeforeBet: potBeforeBet);
+    return _invariants(s, rp, guarded, h, pot: pot, stack: stack, toCall: toCall, potBeforeBet: potBeforeBet);
+  }
+
+  /// Invariantes inquebrantables (monotonía de EV).
+  DecisionOutput _invariants(GameState s, ReadProfile rp, DecisionOutput d, HandTierResult h,
+      {required double pot, required double stack, required double toCall, required double potBeforeBet}) {
+    const tag = EvSanityGuard.tag;
+    DecisionOutput fix(DecisionAction a, String why, Sizing? sz) => DecisionOutput(
+        action: a,
+        sizing: sz,
+        metrics: d.metrics,
+        justificacionGto: d.justificacionGto,
+        ajusteExplotativoRead: '$tag $why | original: ${d.action.name}. ${d.ajusteExplotativoRead}');
+    if (toCall > 0 && d.action == DecisionAction.fold && s.street != Street.river) {
+      final odds = PotGeometry.potOdds(toCall, potBeforeBet + toCall);
+      final nutted = d.justificacionGto.contains('Nutted_Unbalanced_Value');
+      final eq = RangeEquity.realized(s, valuePrior: nutted ? ReadProfile.nuttedDonkPrior : null);
+      if (eq >= odds) {
+        return fix(DecisionAction.call, 'Equity real (realizada) ${(eq * 100).toStringAsFixed(1)}% >= pot odds ${(odds * 100).toStringAsFixed(1)}%: prohibido foldear.',
+            Sizing(bb: toCall, potPct: toCall / potBeforeBet * 100));
+      }
+    }
+    if (s.street == Street.river && toCall == 0 && d.action == DecisionAction.check && RangeEquity.isAbsoluteNuts(s)) {
+      final bb = stack < pot * 0.75 ? stack : pot * 0.75;
+      return fix(DecisionAction.betRaise, 'Nuts absolutas en River: prohibido check behind.', Sizing(bb: bb, potPct: bb / pot * 100));
+    }
+    if (s.street == Street.river && toCall > 0 && d.action == DecisionAction.betRaise) {
+      final ok = RangeEquity.isAbsoluteNuts(s) || (h.tier == HandTier.nutsMonster && DefenseBudget.percentile(s, rp) <= 0.15);
+      if (!ok) {
+        return fix(DecisionAction.call, 'Raise River por debajo del umbral de valor (top 15%) sin blocker-bluff validado: degradado a call.',
+            Sizing(bb: toCall, potPct: toCall / potBeforeBet * 100));
+      }
+    }
+    return d;
   }
 
   DecisionOutput _route(GameState s, ReadProfile rp, HandTierResult h, HuNode node, Position pfa, Position defender,

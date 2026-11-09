@@ -113,16 +113,21 @@ void flop() {
     for (final b in ['As7d2c', 'Qc7h2d', '9h8h4c']) {
       final (_, bbR) = PostflopRanges.forPot(Position.btn, Position.bb, PotType.srp, st.rakeTier);
       final dead = Card.parseMany(b).fold<int>(0, (m, c) => m | c.bit);
-      var tot = 0, cont = 0;
+      var tot = 0, cont = 0, inv = 0;
       for (final (h, _) in combos(bbR, dead)) {
         tot++;
         final d = post.decide(GameState(stake: st, heroPosition: Position.bb, villainPosition: Position.btn, effectiveStackBb: 97.5, potBb: 5.5,
             hero: HoleCards.parse(h), board: Card.parseMany(b), actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8)]), read: rp);
         if (d.action != DecisionAction.fold) cont++;
+        if (d.ajusteExplotativoRead.contains('Equity real (realizada)')) inv++;
       }
       final v = cont / tot;
+      final budgetOnly = (cont - inv) / tot;
+      final invJust = v > 0.753 + 0.08 && (budgetOnly - 0.753).abs() <= 0.08
+          ? 'Invariante Equity_Real ≥ Pot Odds: +${p(inv / tot)} de calls +EV directos sobre el presupuesto MDF (${p(budgetOnly)})'
+          : '';
       rows.add(Row('Flop', 'Defensa BB vs c-bet 33% ($b)', '${st.name} $rn', 'MDF 75.3%', p(v), (v - 0.753).abs(),
-          justified: just, alert: v < 0.70 ? 'ALERTA <70%' : ''));
+          justified: [just, invJust].where((x) => x.isNotEmpty).join('; '), alert: v < 0.70 ? 'ALERTA <70%' : ''));
     }
   }
 }
