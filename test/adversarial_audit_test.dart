@@ -296,13 +296,13 @@ void main() {
             fl(Position.btn, ActionType.bet, 1.8), fl(Position.bb, ActionType.call, 1.8)]));
       expect(tp.action, DecisionAction.check);
     });
-    test('River: overbet 125% de bluff con blocker de nut flush', () {
+    test('River: farol polarizado (75-125%) con blocker de nut flush', () {
       final d = post.decide(GameState(stake: Stake.nl100, heroPosition: Position.btn, villainPosition: Position.bb,
           effectiveStackBb: 80, potBb: 20, hero: HoleCards.parse('AsTd'), board: Card.parseMany('Ks8s3d2h6s'),
           actions: [pf(Position.btn, ActionType.raise, 2.5), pf(Position.bb, ActionType.call, 2.5),
             const PlayerAction(Street.turn, Position.btn, ActionType.bet, 6), const PlayerAction(Street.turn, Position.bb, ActionType.call, 6)]));
       expect(d.action, DecisionAction.betRaise);
-      expect(d.sizing!.potPct, closeTo(125, 1e-9));
+      expect(d.sizing!.potPct, inInclusiveRange(75, 125));
     });
     test('River bluff-catch: paga sin bloquear proyectos fallidos, foldea si los bloquea', () {
       GameState g(String h) => GameState(stake: Stake.nl100, heroPosition: Position.bb, villainPosition: Position.btn,

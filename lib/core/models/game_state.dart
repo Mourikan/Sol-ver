@@ -86,6 +86,18 @@ class GameState {
   final VillainProfile villainProfile;
   late final int deadMask;
 
+  GameState copyWith({VillainProfile? villainProfile, List<PlayerAction>? actions}) => GameState(
+        stake: stake,
+        heroPosition: heroPosition,
+        villainPosition: villainPosition,
+        effectiveStackBb: effectiveStackBb,
+        potBb: potBb,
+        hero: hero,
+        board: board,
+        actions: actions ?? this.actions,
+        villainProfile: villainProfile ?? this.villainProfile,
+      );
+
   RakeTier get rakeTier => stake.rakeTier;
 
   Street get street => switch (board.length) {

@@ -6,8 +6,10 @@ import '../models/game_state.dart';
 import 'flop_lookup_table.dart';
 import 'geometry.dart';
 import 'hand_tier.dart';
+import '../reads/gg_profiler.dart';
 import 'late_streets_heuristic.dart';
 import 'postflop_ranges.dart';
+import 'turn_river_solver.dart';
 
 /// Desviaciones explotativas sobre el set de tiers que apuesta.
 class ExploitModifier {
@@ -50,9 +52,11 @@ class ExploitModifier {
 class PostflopHeuristicEngine {
   const PostflopHeuristicEngine();
 
-  DecisionOutput decide(GameState s) {
-    final missing = s.missingForPostflop();
+  DecisionOutput decide(GameState input, {ReadProfile? read}) {
+    final missing = input.missingForPostflop();
     if (missing.isNotEmpty) throw MissingInputs(missing);
+    final rp = read ?? ReadProfile.fromVillainProfile(input.villainProfile);
+    final s = read == null ? input : input.copyWith(villainProfile: read.engineProfile);
     final hero = s.heroPosition, villain = s.villainPosition!;
     final pfa = s.preflopAggressor!;
     if (pfa != hero && pfa != villain) throw UnsupportedError('PFA fuera del bote HU');
@@ -93,14 +97,56 @@ class PostflopHeuristicEngine {
       ..add(KeyMetric(MetricType.rangeAdvantage, b.rangeAdvantage.index.toDouble(), b.rangeAdvantage.name))
       ..add(KeyMetric(MetricType.nutAdvantage, b.nutAdvantage.index.toDouble(), b.nutAdvantage.name));
 
-    if (toCall > 0) return _facing(s, h, pot - villainIn + heroIn, toCall, stack, heroIp, metrics);
-
     final hadInitiative = _initiative(s) == hero;
-    return switch (s.street) {
-      Street.flop => _flop(s, h, node, pfa, defender, pot, stack, heroIp, metrics),
-      Street.turn => _turn(s, h, pot, stack, hadInitiative, heroIp, metrics),
-      _ => _river(s, h, pot, stack, hadInitiative, heroIp, metrics),
-    };
+    if (toCall > 0) {
+      final firstAgg = street.where((a) => a.isAggressive).firstOrNull;
+      final donk = firstAgg != null && firstAgg.actor == villain && hadInitiative;
+      final potBefore = pot - villainIn + heroIn;
+      if (donk) {
+        final tell = DonkTellDecoder.classify(
+            donkBb: toCall, potBb: potBefore, read: rp, stake: s.stake, donkRaise: heroIn > 0);
+        final adj = _donkAdjust(tell, h, potBefore, toCall, stack, metrics);
+        if (adj != null) return adj;
+      }
+      return _facing(s, h, potBefore, toCall, stack, heroIp, metrics);
+    }
+
+    if (s.street == Street.flop) return _flop(s, h, node, pfa, defender, pot, stack, heroIp, metrics);
+    const solver = TurnRiverSolver();
+    final plan = solver.plan(s, rp, heroHadInitiative: hadInitiative, pot: pot, stack: stack);
+    return solver.toDecision(plan, pot, stack, metrics, rp);
+  }
+
+  DecisionOutput? _donkAdjust(DonkTell tell, HandTierResult h, double pot, double bet, double stack, List<KeyMetric> m) {
+    switch (tell) {
+      case DonkTell.blockingBetWeakOrDraw:
+        const raiseTiers = {HandTier.nutsMonster, HandTier.strongTopPairOverpair, HandTier.highEquityComboDraw};
+        if (!raiseTiers.contains(h.tier)) return null;
+        final after = pot + 2 * bet;
+        var to = bet + after / 3;
+        if (to >= stack * 0.9) to = stack;
+        return DecisionOutput(
+          action: DecisionAction.betRaise,
+          sizing: Sizing(bb: to, potPct: to / (pot + bet) * 100),
+          metrics: m,
+          justificacionGto: 'Min-donk (${(bet / pot * 100).round()}% bote) de recreativo = Blocking_Bet_Weak_Or_Draw | ${h.tier.name} | '
+              'raise = apuesta + 1/3 del bote tras call (${to.toStringAsFixed(2)}bb)',
+          ajusteExplotativoRead: h.tier == HandTier.highEquityComboDraw
+              ? 'Raise semi-bluff: alta equidad + su rango débil no aguanta presión.'
+              : 'Raise por valor/protección: su rango (TP débil, 2do par, draws) paga e iguala.',
+        );
+      case DonkTell.nuttedUnbalancedValue:
+        final overpairNoRedraw = h.tier == HandTier.strongTopPairOverpair && !h.flushDraw && !h.oesd;
+        if (!overpairNoRedraw) return null;
+        return DecisionOutput(
+          action: DecisionAction.fold,
+          metrics: m,
+          justificacionGto: 'Pot-donk / donk-raise en NL2-NL50 = Nutted_Unbalanced_Value (prior ${(ReadProfile.nuttedDonkPrior * 100).round()}% 2P+/sets).',
+          ajusteExplotativoRead: 'Over-fold de overpair/top pair sin redraws: rango del rival no contiene bluffs suficientes.',
+        );
+      case DonkTell.standard:
+        return null;
+    }
   }
 
   Position? _initiative(GameState s) {
@@ -160,35 +206,6 @@ class PostflopHeuristicEngine {
     const probe = {HandTier.nutsMonster, HandTier.strongTopPairOverpair, HandTier.highEquityComboDraw};
     final gto = '$tag | defensor IP tras check del PFA: stab 50% con value/draws (rango del PFA capado al checkear).';
     return probe.contains(h.tier) ? _bet(50, pot, stack, m, gto, 'Stab IP.') : _check(m, gto, 'Check behind.');
-  }
-
-  DecisionOutput _turn(GameState s, HandTierResult h, double pot, double stack, bool init, bool heroIp, List<KeyMetric> m) {
-    final c = TurnEngine.classify(s.board.sublist(0, 3), s.board[3]);
-    if (!init) {
-      const probe = {HandTier.nutsMonster, HandTier.strongTopPairOverpair, HandTier.highEquityComboDraw};
-      final gto = 'Turn ${c.name} sin iniciativa | ${h.tier.name}';
-      return heroIp && probe.contains(h.tier)
-          ? _bet(50, pot, stack, m, '$gto | probe IP 50%.', 'Probe.')
-          : _check(m, '$gto | check.', 'Sin iniciativa.');
-    }
-    final p = TurnEngine.withInitiative(c, h, pot: pot, stack: stack);
-    final gto = 'Turn ${c.name} | ${h.tier.name} | ${p.reason}';
-    final vp = s.villainProfile;
-    if (p.action == LateAction.check && vp == VillainProfile.callingStation && h.tier == HandTier.strongTopPairOverpair) {
-      return _bet(66, pot, stack, m, gto, 'Station: value bet con top pair (paga con peor).');
-    }
-    if (p.action == LateAction.bet && vp == VillainProfile.callingStation && h.tier != HandTier.nutsMonster && h.tier != HandTier.strongTopPairOverpair) {
-      return _check(m, gto, 'Station: sin semi-bluffs (fold equity ~0).');
-    }
-    return p.action == LateAction.bet ? _bet(p.sizePct, pot, stack, m, gto, 'Sin desviación: ${vp.name}.') : _check(m, gto, 'Sin desviación: ${vp.name}.');
-  }
-
-  DecisionOutput _river(GameState s, HandTierResult h, double pot, double stack, bool init, bool heroIp, List<KeyMetric> m) {
-    final p = RiverEngine.act(h, s.board, pot: pot, stack: stack, hadInitiative: init, inPosition: heroIp, vp: s.villainProfile);
-    final gto = 'River | ${h.tier.name} | SPR ${(stack / pot).toStringAsFixed(2)} | ${p.reason}';
-    return p.action == LateAction.bet
-        ? _bet(p.sizePct, pot, stack, m, gto, 'Sin desviación: ${s.villainProfile.name}.', allIn: p.allIn)
-        : _check(m, gto, 'Sin desviación: ${s.villainProfile.name}.');
   }
 
   DecisionOutput _facing(GameState s, HandTierResult h, double potBeforeBet, double toCall, double stack, bool heroIp, List<KeyMetric> m) {

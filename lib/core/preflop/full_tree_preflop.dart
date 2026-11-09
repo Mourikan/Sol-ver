@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../models/decision_output.dart';
 import '../models/game_state.dart';
+import '../reads/gg_profiler.dart';
 import 'hand_normalizer.dart';
 import 'preflop_ranges_db.dart';
 import 'preflop_solver_engine.dart';
@@ -75,10 +76,39 @@ class FullTreePreflop {
     throw UnsupportedError('Nodo preflop no soportado (5-bet+ / limp-raise)');
   }
 
-  DecisionOutput decide(GameState s) {
+  static bool isLimpReraise(GameState s) {
+    final pre = s.actions.where((a) => a.street == Street.preflop).toList();
+    final firstRaise = pre.indexWhere((a) => a.isAggressive);
+    if (firstRaise < 0 || pre[firstRaise].actor != s.heroPosition) return false;
+    final limpers = {for (final a in pre.take(firstRaise)) if (a.type == ActionType.call) a.actor};
+    return pre.skip(firstRaise + 1).any((a) => a.isAggressive && limpers.contains(a.actor));
+  }
+
+  DecisionOutput decide(GameState s, {ReadProfile? read}) {
     if (s.hero == null) throw const MissingInputs(['hero']);
     final spot = classify(s);
     final hand = HandNormalizer.normalize(s.hero!);
+    if (spot.scenario == TreeScenario.standard4Bet &&
+        (isLimpReraise(s) || read?.archetype == GgArchetype.trapperLimpReraiser)) {
+      if (s.effectiveStackBb == null) throw const MissingInputs(['effectiveStackBb']);
+      final (r, why) = TrapperDecoder.respond(hand.label,
+          raiseToBb: spot.threeBetBb, heroRaiseBb: spot.openBb, effStackBb: s.effectiveStackBb!);
+      final call = spot.threeBetBb - spot.openBb;
+      return DecisionOutput(
+        action: switch (r) {
+          TrapperResponse.fourBetJam => DecisionAction.betRaise,
+          TrapperResponse.call || TrapperResponse.setMineCall => DecisionAction.call,
+          TrapperResponse.fold => DecisionAction.fold,
+        },
+        sizing: switch (r) {
+          TrapperResponse.fourBetJam => Sizing(bb: s.effectiveStackBb!, potPct: s.effectiveStackBb! / spot.potBb * 100),
+          TrapperResponse.call || TrapperResponse.setMineCall => Sizing(bb: call, potPct: call / spot.potBb * 100),
+          TrapperResponse.fold => null,
+        },
+        justificacionGto: 'Limp-reraise: poda del 95% del rango; ${hand.label} vs AA/KK/AKs.',
+        ajusteExplotativoRead: why,
+      );
+    }
     return switch (spot.scenario) {
       TreeScenario.isoVsLimpers => _iso(s, spot, hand),
       TreeScenario.squeeze => _squeeze(s, spot, hand),

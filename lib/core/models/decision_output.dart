@@ -8,7 +8,7 @@ class Sizing {
   Map<String, Object> toJson() => {'bb': bb, 'pot_pct': potPct};
 }
 
-enum MetricType { spr, potOdds, requiredEquity, equity, eqr, blocker, mdf, alpha, rangeActionFreq, rangeAdvantage, nutAdvantage }
+enum MetricType { spr, potOdds, requiredEquity, equity, eqr, blocker, mdf, alpha, bluffShare, valueShare, rangeActionFreq, rangeAdvantage, nutAdvantage }
 
 class KeyMetric {
   const KeyMetric(this.type, this.value, [this.label]);
