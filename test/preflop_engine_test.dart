@@ -129,10 +129,10 @@ void main() {
       expect(g.action, DecisionAction.fold);
     });
 
-    test('Nit 3-bet: A5s pierde el 4-bet bluff', () {
+    test('Nit 3-bet: A5s pierde el 4-bet bluff (degrada a call por nut-flush mining si call <= 10% stack)', () {
       expect(vs3b(Stake.nl100, Position.co, Position.btn, 'Ah5h').action, DecisionAction.betRaise);
-      expect(vs3b(Stake.nl100, Position.co, Position.btn, 'Ah5h', vp: VillainProfile.nit).action,
-          DecisionAction.fold);
+      expect(vs3b(Stake.nl100, Position.co, Position.btn, 'Ah5h', vp: VillainProfile.nit).action, DecisionAction.call);
+      expect(vs3b(Stake.nl100, Position.co, Position.btn, 'Ah5h', vp: VillainProfile.nit, threeBet: 14).action, DecisionAction.fold);
     });
 
     test('Reg agro: TT 4-bet por valor', () {

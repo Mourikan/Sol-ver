@@ -105,7 +105,8 @@ void main() {
       final p = solver.plan(turn('KhKs'), scared, heroHadInitiative: true, pot: 35.5, stack: 82.5);
       expect(p.exploitFactor, 2.0);
       expect(p.sizePct, inInclusiveRange(75, 85));
-      expect(p.bluffShare, closeTo(TurnRiverSolver.bluffShareGto(p.sizePct) * 2, 1e-12));
+      expect(p.targetBluffShare, closeTo(TurnRiverSolver.bluffShareGto(p.sizePct) * 2, 1e-12));
+      expect(p.bluffShare, closeTo(p.targetBluffShare, 0.05));
       final v = post.decide(turn('KhKs'), read: scared);
       final b = post.decide(turn('AsQd'), read: scared);
       expect(v.action, DecisionAction.betRaise);

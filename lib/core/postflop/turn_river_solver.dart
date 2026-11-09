@@ -7,6 +7,7 @@ import '../models/game_state.dart';
 import '../reads/gg_profiler.dart';
 import '../reads/range_funnel.dart';
 import 'geometry.dart';
+import 'defense_budget.dart';
 import 'hand_tier.dart';
 
 enum CardShift { brickTotal, rankShift, flushOrStraightCompletes }
@@ -26,6 +27,9 @@ class LateStreetPlan {
     required this.line,
     required this.roleReason,
     this.allIn = false,
+    this.executedBluffShare = 0,
+    this.valueCombos = 0,
+    this.bluffCombos = 0,
   });
 
   final LateNode node;
@@ -38,7 +42,14 @@ class LateStreetPlan {
   final String roleReason;
   final bool allIn;
 
-  double get bluffShare => math.min(bluffShareGto * exploitFactor, 1.0);
+  /// Share objetivo = GTO x factor (acotado a 1).
+  double get targetBluffShare => math.min(bluffShareGto * exploitFactor, 1.0);
+
+  /// Share EJECUTADO por el rango de Hero en el nodo (lo que se reporta).
+  final double executedBluffShare;
+  final double valueCombos;
+  final double bluffCombos;
+  double get bluffShare => executedBluffShare;
   double get valueShare => 1 - bluffShare;
 }
 
@@ -139,7 +150,27 @@ class TurnRiverSolver {
     if (allIn) size = stack / pot * 100;
 
     final gtoShare = bluffShareGto(size);
-    final (role, why) = _role(s, h, read, funnel, shift, factor, street, heroHadInitiative, node);
+    final target = math.min(gtoShare * factor, 1.0);
+    final rangeBet = shift == CardShift.rankShift && street == Street.turn && heroHadInitiative;
+    final sel = _selection(s, read, funnel, shift, factor, street, heroHadInitiative, target, rangeBet);
+    final heroKey = _key(s.hero!);
+    final vr = _valueRole(s, h, read, funnel, shift, street, heroHadInitiative);
+    final HandRole role;
+    final String why;
+    if (vr != null) {
+      (role, why) = vr;
+    } else if (sel.selected.contains(heroKey)) {
+      role = HandRole.bluff;
+      why = rangeBet
+          ? 'Rank_Shift: barrel de rango (incluye manos sin equidad).'
+          : 'Farol seleccionado (${_why(s, h, street)}); ${sel.bluff.toStringAsFixed(0)} combos de farol para ${sel.value.toStringAsFixed(0)} de valor.';
+    } else {
+      role = HandRole.check;
+      why = factor == 0
+          ? 'Exploit_Bluff_Factor 0.0: sin faroles vs ${read.archetype.name}.'
+          : 'Fuera del cupo de faroles (${(target * 100).toStringAsFixed(1)}%): check.';
+    }
+    final executed = (sel.value + sel.bluff) == 0 ? 0.0 : sel.bluff / (sel.value + sel.bluff);
     return LateStreetPlan(
       node: node,
       shift: shift,
@@ -150,7 +181,89 @@ class TurnRiverSolver {
       line: line,
       roleReason: why,
       allIn: allIn,
+      executedBluffShare: executed,
+      valueCombos: sel.value,
+      bluffCombos: sel.bluff,
     );
+  }
+
+  static int _key(HoleCards h) {
+    final a = h.high.id, b = h.low.id;
+    return a < b ? a * 52 + b : b * 52 + a;
+  }
+
+  static final _selCache = <String, ({Set<int> selected, double value, double bluff})>{};
+
+  /// L9: cuenta combos de valor del rango de Hero y selecciona exactamente Value x share/(1-share) faroles
+  /// por prioridad Retained_Equity -> Nut_Blocker -> Unblockers_To_Folds.
+  ({Set<int> selected, double value, double bluff}) _selection(GameState s, ReadProfile read, FunnelResult f, CardShift shift,
+      double factor, Street street, bool init, double target, bool rangeBet) {
+    final key = [
+      s.board.join(),
+      s.heroPosition.name,
+      s.villainPosition?.name,
+      s.stake.name,
+      read.archetype.name,
+      target.toStringAsFixed(4),
+      rangeBet,
+      for (final a in s.actions) '${a.street.index}${a.actor.index}${a.type.index}${a.amountBb}${a.timing.index}',
+    ].join('|');
+    return _selCache.putIfAbsent(key, () {
+      if (_selCache.length > 256) _selCache.clear();
+      final range = DefenseBudget.heroRangeAtStreet(s, read);
+      final ids = [for (final c in s.board) c.id];
+      var value = 0.0;
+      final cands = <(int, double, double)>[];
+      for (final e in range.entries) {
+        final a = e.key ~/ 52, b = e.key % 52;
+        final hc = HoleCards(_card(a), _card(b));
+        final gs = s.copyWith(hero: hc);
+        final h = HandTierClassifier.classify(a, b, ids);
+        final vr = _valueRole(gs, h, read, f, shift, street, init);
+        if (vr != null) {
+          if (vr.$1 == HandRole.value || vr.$1 == HandRole.thinValue) value += e.value;
+          continue;
+        }
+        if (factor == 0 && !rangeBet) continue;
+        final p = _priority(gs, h, street, factor);
+        if (p == null) continue;
+        cands.add((e.key, e.value, p + ((e.key * 2654435761) & 0xFFFF) / 1e7));
+      }
+      cands.sort((x, y) => y.$3.compareTo(x.$3));
+      final want = rangeBet ? double.infinity : (target >= 1 ? double.infinity : value * target / (1 - target));
+      final sel = <int>{};
+      var acc = 0.0;
+      for (final (k, w, _) in cands) {
+        if (acc >= want) break;
+        sel.add(k);
+        acc += w;
+      }
+      return (selected: sel, value: value, bluff: acc);
+    });
+  }
+
+  static Card _card(int id) => Card(Rank.values[id >> 2], Suit.values[id & 3]);
+
+  /// Prioridad de farol; null = no elegible.
+  double? _priority(GameState s, HandTierResult h, Street street, double factor) {
+    const eligible = {HandTier.highEquityComboDraw, HandTier.backdoorBlockerBluff, HandTier.airGiveUp};
+    final marginalOk = factor >= 2 && street == Street.turn && h.tier == HandTier.marginalMadeShowdown;
+    if (!eligible.contains(h.tier) && !marginalOk) return null;
+    final outs = street == Street.river
+        ? 0.0
+        : (h.flushDraw ? 9 : 0) + (h.oesd ? 8 : (h.gutshot ? 4 : 0)) + (h.overcards ? 3 : 0) + (h.backdoorFlush ? 1.5 : 0);
+    final kb = street == Street.river ? keyBlockers(s, h) : (h.flushSuitBlocker, false, '');
+    return outs * 10 + (kb.$1 ? 5 : 0) + (kb.$2 ? 0 : 2);
+  }
+
+  String _why(GameState s, HandTierResult h, Street street) {
+    final d = _draws(h);
+    if (street == Street.turn && d.isNotEmpty) return 'Equity_Retained: $d';
+    if (street == Street.river) {
+      final kb = keyBlockers(s, h);
+      if (kb.$1) return kb.$3;
+    }
+    return h.flushSuitBlocker ? 'nut blocker' : 'unblocker de folds';
   }
 
   bool _betEveryStreet(GameState s) {
@@ -160,8 +273,9 @@ class TurnRiverSolver {
     return true;
   }
 
-  (HandRole, String) _role(GameState s, HandTierResult h, ReadProfile read, FunnelResult f, CardShift shift,
-      double factor, Street street, bool init, LateNode node) {
+  /// Rol de valor (value/thinValue/check forzado) o null si la mano es candidata a farol / check.
+  (HandRole, String)? _valueRole(GameState s, HandTierResult h, ReadProfile read, FunnelResult f, CardShift shift,
+      Street street, bool init) {
     final tier = h.tier;
     final fish = read.archetype == GgArchetype.recPassiveFish;
     if (tier == HandTier.nutsMonster) return (HandRole.value, 'Nuts_Monster: valor.');
@@ -176,27 +290,9 @@ class TurnRiverSolver {
       if (fish && street == Street.river && _pairPos(s) <= 1) {
         return (HandRole.thinValue, 'Fish inelástico: thin value con top pair débil / 2do par.');
       }
-      if (factor >= 2 && street == Street.turn) return (HandRole.bluff, 'Par bajo convertido en farol vs rango capado (factor 2.0).');
-      return (HandRole.check, 'Showdown marginal: check.');
+      return null;
     }
-    if (factor == 0) return (HandRole.check, 'Exploit_Bluff_Factor 0.0: sin faroles vs ${read.archetype.name}.');
-    if (read.archetype == GgArchetype.agroSpewy) return (HandRole.check, 'Agro: no farolear; inducir.');
-
-    if (street == Street.turn) {
-      final equity = tier == HandTier.highEquityComboDraw || h.gutshot && h.overcards || h.oesd || h.flushDraw;
-      if (equity) return (HandRole.bluff, 'Semi-bluff con Equity_Retained (${_draws(h)}).');
-      if (shift == CardShift.rankShift && init) return (HandRole.bluff, 'Rank_Shift: barrel de alta frecuencia sin equidad (presión a pares medios).');
-      if (factor >= 2 && (tier == HandTier.backdoorBlockerBluff)) return (HandRole.bluff, 'Capado + factor 2.0: barrel con backdoors/blockers.');
-      if (shift == CardShift.flushOrStraightCompletes && h.flushSuitBlocker && (f.isCapped || read.archetype == GgArchetype.scaredMoneyReg)) {
-        return (HandRole.bluff, 'Nut blocker en carta que completa vs rango débil: farol polarizado.');
-      }
-      return (HandRole.check, 'Sin equidad ni blockers: give up.');
-    }
-
-    final kb = keyBlockers(s, h);
-    if (kb.$1 && !kb.$2) return (HandRole.bluff, 'Farol river: ${kb.$3}; no bloquea su rango de fold.');
-    if (factor >= 2 && !kb.$2) return (HandRole.bluff, 'Factor 2.0 vs capado: bottom del rango sin bloquear sus folds.');
-    return (HandRole.check, kb.$2 ? 'Bloqueamos su rango de fold (proyecto fallido): no farol.' : 'Sin key blockers: give up.');
+    return null;
   }
 
   /// (bloquea su rango de call, bloquea su rango de fold, descripción).

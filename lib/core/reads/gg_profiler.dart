@@ -5,7 +5,8 @@ enum ActionTag { openLimp, limpReraisePreflop, checkCallFlopCheckTurn, barrelOff
 enum GgArchetype { recPassiveFish, trapperLimpReraiser, scaredMoneyReg, agroSpewy, unknownReg }
 
 class SmartHudInput {
-  const SmartHudInput({this.vpip, this.pfr, this.threeBet, required this.stackBb, this.autoRebuy = true});
+  const SmartHudInput({this.vpip, this.pfr, this.threeBet, this.foldTo4Bet, required this.stackBb, this.autoRebuy = true});
+  final double? foldTo4Bet;
   final double? vpip;
   final double? pfr;
   final double? threeBet;
@@ -15,10 +16,20 @@ class SmartHudInput {
 
 /// Read resultante. Los priors (85%, 70%) son lecturas poblacionales especificadas por el usuario, no frecuencias de solver.
 class ReadProfile {
-  const ReadProfile(this.archetype, this.reasons);
+  const ReadProfile(this.archetype, this.reasons, {this.threeBet, this.foldTo4Bet});
 
   final GgArchetype archetype;
   final List<String> reasons;
+  final double? threeBet;
+  final double? foldTo4Bet;
+
+  /// 4-bet bluff habilitado: reg/GTO con fold-to-4bet >= 45% (o desconocido); nunca vs fish/station/trapper/3-bettor < 4%.
+  bool get allows4BetBluff {
+    if (archetype == GgArchetype.recPassiveFish || archetype == GgArchetype.trapperLimpReraiser) return false;
+    if (threeBet != null && threeBet! < 4) return false;
+    if (foldTo4Bet != null && foldTo4Bet! < 45) return false;
+    return true;
+  }
 
   static const trapperPremiumPrior = 0.85;
   static const scaredMoneyFoldPrior = 0.70;
@@ -27,7 +38,7 @@ class ReadProfile {
 
   VillainProfile get engineProfile => switch (archetype) {
         GgArchetype.recPassiveFish => VillainProfile.callingStation,
-        GgArchetype.trapperLimpReraiser => VillainProfile.nit,
+        GgArchetype.trapperLimpReraiser => VillainProfile.trapperPremium,
         GgArchetype.scaredMoneyReg => VillainProfile.regAbc,
         GgArchetype.agroSpewy => VillainProfile.maniac,
         GgArchetype.unknownReg => VillainProfile.gtoBase,
@@ -40,6 +51,7 @@ class ReadProfile {
         VillainProfile.maniac || VillainProfile.regAgro => const ReadProfile(GgArchetype.agroSpewy, ['perfil manual: agro']),
         VillainProfile.nit || VillainProfile.regAbc => const ReadProfile(GgArchetype.scaredMoneyReg, ['perfil manual: tight']),
         VillainProfile.gtoBase => const ReadProfile(GgArchetype.unknownReg, ['perfil manual: GTO']),
+        VillainProfile.trapperPremium => const ReadProfile(GgArchetype.trapperLimpReraiser, ['perfil manual: trapper']),
       };
 }
 
@@ -47,6 +59,11 @@ class GgProfiler {
   GgProfiler._();
 
   static ReadProfile classify(SmartHudInput h, [Set<ActionTag> tags = const {}]) {
+    final r = _classify(h, tags);
+    return ReadProfile(r.archetype, r.reasons, threeBet: h.threeBet, foldTo4Bet: h.foldTo4Bet);
+  }
+
+  static ReadProfile _classify(SmartHudInput h, Set<ActionTag> tags) {
     final v = h.vpip, p = h.pfr, t = h.threeBet;
     if (tags.contains(ActionTag.limpReraisePreflop)) {
       return ReadProfile(GgArchetype.trapperLimpReraiser,
@@ -80,7 +97,8 @@ class DonkTellDecoder {
   static DonkTell classify({required double donkBb, required double potBb, required ReadProfile read, required Stake stake, bool donkRaise = false}) {
     final frac = donkBb / potBb;
     if (read.isRec && (donkBb <= 1.0 || frac <= 0.20) && !donkRaise) return DonkTell.blockingBetWeakOrDraw;
-    if ((frac >= 0.75 || donkRaise) && stake.index <= Stake.nl50.index) return DonkTell.nuttedUnbalancedValue;
+    final big = frac >= 0.75 || donkRaise;
+    if (big && (read.isRec || (stake.index <= Stake.nl25.index && frac >= 0.80))) return DonkTell.nuttedUnbalancedValue;
     return DonkTell.standard;
   }
 }

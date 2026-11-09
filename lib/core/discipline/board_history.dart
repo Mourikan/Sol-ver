@@ -1,13 +1,22 @@
 import 'dart:math' as math;
 
+import 'dart:typed_data';
+
 import '../evaluators/hand_evaluator.dart';
 import '../models/game_state.dart';
+import '../postflop/hand_tier.dart';
+import '../preflop/range_notation.dart';
 
 /// Historia de texturas flop -> river: qué proyectos existían y cuáles se completaron.
 class BoardHistory {
-  BoardHistory(List<Card> board)
+  BoardHistory(List<Card> board, {this.villainRange})
       : flop = board.sublist(0, 3),
         finalBoard = board;
+
+  /// Rango del villano (pesos 169) para medir proyectos reales; null = todas las manos.
+  final Float32List? villainRange;
+  static final _straightCache = <String, bool>{};
+  static const completionThreshold = 0.02;
 
   final List<Card> flop;
   final List<Card> finalBoard;
@@ -54,9 +63,31 @@ class BoardHistory {
     return s2 > 0 || s3 > 0;
   }
 
+  /// True solo si la última carta completa escalera para combos del villano que en la calle previa eran OESD/gutshot
+  /// (>= 2% del rango vivo).
   bool get straightCompleted {
-    final pre = finalBoard.length >= 4 ? finalBoard.sublist(0, finalBoard.length - 1) : flop;
-    return _stats(finalBoard).$2 > _stats(flop).$2 || _stats(finalBoard).$2 > _stats(pre).$2;
+    if (finalBoard.length < 4) return false;
+    final key = '${finalBoard.join()}|${villainRange == null ? 'all' : Object.hashAll(villainRange!)}';
+    return _straightCache.putIfAbsent(key, () {
+      if (_straightCache.length > 1024) _straightCache.clear();
+      final prev = [for (final c in finalBoard.sublist(0, finalBoard.length - 1)) c.id];
+      final cur = [for (final c in finalBoard) c.id];
+      final dead = cur.fold<int>(0, (m, c) => m | (1 << c));
+      var total = 0.0, completed = 0.0;
+      for (var i = 0; i < 169; i++) {
+        final w = villainRange == null ? 1.0 : villainRange![i].toDouble();
+        if (w <= 0) continue;
+        for (final (a, b) in Matrix169.concreteCombos(i)) {
+          if (dead & ((1 << a) | (1 << b)) != 0) continue;
+          total += w;
+          final before = HandTierClassifier.classify(a, b, prev);
+          if (!before.oesd && !before.gutshot) continue;
+          final cat = HandEvaluator.category(HandEvaluator.evaluate([a, b, ...cur]));
+          if (cat == HandEvaluator.straight || cat == HandEvaluator.straightFlush) completed += w;
+        }
+      }
+      return total > 0 && completed / total >= completionThreshold;
+    });
   }
 
   bool get missedStraightDraw => straightDrawExisted && !straightCompleted;

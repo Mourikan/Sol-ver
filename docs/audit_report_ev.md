@@ -173,3 +173,45 @@ Continuación BB vs 33% pot: 54–70% en boards A/K/Q-high (MDF 75%, α del riva
 - Sin frecuencias > 100% ni overlaps de rangos.
 - Estructura preflop high-rake (0% cold call fuera de BTN/BB, sizings 3.2x/4–4.5x) coherente con la especificación.
 - Detección de limp-reraise, thin value vs fish en River y blockers de nut flush funcionan como se especificó.
+
+---
+
+## 7. Post-Fix Verification (Fase 6)
+
+Medido con los mismos scripts (`docs/audit_scripts/*.dart`) tras la refactorización Bounded-EV.
+
+### 7.1 Tabla comparativa
+
+| Fuga | Métrica | Antes | Después |
+|------|---------|-------|---------|
+| L1 | Continuación Turn vs barrel 75% (MDF 57%), Unknown Reg | 1.4–33.2% | **57.1–62.7%** |
+| L1 | idem, Scared/Passive ≤NL50 (factor 0.82) | 1.6–32.9% | **47.6–56.9%** |
+| L1 | idem, Agro (factor 1.15) | 1.4–82.5% | **66.2–71.2%** |
+| L10 | Continuación Flop vs c-bet 33% (MDF 75%), Reg | 54–89% | **75.2–77.9%** |
+| L2 | `straightCompleted` en runouts aleatorios | 69.7% | **27.5%** |
+| L2 | `brickOut` en runouts aleatorios | 19.6% | **45.9%** |
+| L2/L3 | Hero-fold forzado XC-XC-donk vs AGRO (runouts aleatorios) | 60.0% | **0.0%** |
+| L3 | Set 33 vs Maniac NL100 (donk 47%) | Fold | **Call** (faroles efectivos 34.4% vs pot odds 24.1%) |
+| L4 | BB vs open CO + call BTN | 5.9% | **30.9% (NL10) / 34.2% (NL100)** |
+| L5 | BTN iso vs 1 limper fish | 7.4% | **28.8%** |
+| L6 | C-bet aire vs Trapper | Bet | **Check** (`trapperPremium`) |
+| L7 | QQ vs pot-donk de reg desconocido NL50 | Fold | **Call** |
+| L8 | Insta-call turn + brick vs Fish con aire | Bet 85% | **Check** |
+| L9 | Bluff share ejecutado / reportado (Scared) | 75.7% / 61.5% | **61.6% / 61.6%** |
+| L9 | idem (Agro) | 0.0% / 15.4% | **15.6% / 15.6%** |
+| L11 | BB vs BTN 2.5x: K5o | Call en NL10 y NL100 | **Fold NL10 / Call NL100** (suited intactas) |
+| L12 | Raise de valor con set en board 4-flush | Raise | **Call/Fold** (Nut-Raise Gate) |
+| L13 | Bote limpeado / multiway | `UnsupportedError` / tratado HU | **Soportado** (`Limped_Pot`, MDF por jugador `1-(1-MDF)^(1/N)`, c-bet bluff -50%) |
+
+### 7.2 Cambios arquitectónicos aplicados
+- `DefenseBudget` (Flop/Turn) reemplaza al auditor fuera del River; rango de Hero reconstruido calle a calle por MDF.
+- `Bluff_Combo_Audit` reescrito: combos reales del rango del villano filtrados por su línea, card removal de Hero, selección de faroles por prioridad (FD fallido → OESD/gutshot fallido → backdoor → aire), ajustes MDA/timing con piso 50%.
+- `straightCompleted` = la última carta completa escalera para combos que eran OESD/gutshot (≥2% del rango).
+- Rake sobre bote final esperado (`SRP 22bb`, `3BP 55bb`, `4BP+ 100bb`).
+- Candado A5s: nodos `facing4Bet`/`facing5Bet`; 4-bet bluff solo con `fold_to_4bet ≥ 45%` (o desconocido) y nunca vs Fish/Station/Trapper/3-bettor <4%.
+- `EV_Sanity_Guard` como interceptor final de preflop y postflop (`[SANITY_GUARD_APPLIED]`).
+
+### 7.3 Residuales conocidos
+- La continuación de River vs Reg en ≤NL50 queda en 31.7–54.9% (MDF 50%) por diseño: aplica el sub-farol MDA declarado (−15% sobre combos de farol, con piso).
+- Los pesos de supervivencia por línea en el auditor (p. ej. aire que paga = 0, monsters que pagan = 0.6) y `multiwayOffsuitEqr = 0.80` son parámetros del modelo, no frecuencias de solver.
+- Unknown Reg en turn llega a 62.7% (> 60%) en algunos boards por la granularidad del ranking de combos (empates de score).

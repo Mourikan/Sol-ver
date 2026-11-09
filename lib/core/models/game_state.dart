@@ -39,7 +39,7 @@ enum ActionType { fold, check, call, bet, raise, allIn }
 
 enum PotType { limped, srp, threeBet, fourBetPlus }
 
-enum VillainProfile { gtoBase, nit, callingStation, maniac, regAbc, regAgro }
+enum VillainProfile { gtoBase, nit, callingStation, maniac, regAbc, regAgro, trapperPremium }
 
 /// Insta < 1.5s, normal 2-5s, long tank > 8s.
 enum TimingTell { none, instaAction, normalTiming, longTank }
@@ -67,6 +67,7 @@ class GameState {
     List<Card> board = const [],
     List<PlayerAction> actions = const [],
     this.villainProfile = VillainProfile.gtoBase,
+    this.activePlayers = 2,
   })  : board = List.unmodifiable(board),
         actions = List.unmodifiable(actions) {
     if (board.length > 5 || board.length == 1 || board.length == 2) {
@@ -88,18 +89,22 @@ class GameState {
   final List<Card> board;
   final List<PlayerAction> actions;
   final VillainProfile villainProfile;
+
+  /// Jugadores activos en el bote (>=3 => multiway).
+  final int activePlayers;
   late final int deadMask;
 
-  GameState copyWith({VillainProfile? villainProfile, List<PlayerAction>? actions}) => GameState(
+  GameState copyWith({VillainProfile? villainProfile, List<PlayerAction>? actions, HoleCards? hero}) => GameState(
         stake: stake,
         heroPosition: heroPosition,
         villainPosition: villainPosition,
         effectiveStackBb: effectiveStackBb,
         potBb: potBb,
-        hero: hero,
+        hero: hero ?? this.hero,
         board: board,
         actions: actions ?? this.actions,
         villainProfile: villainProfile ?? this.villainProfile,
+        activePlayers: activePlayers,
       );
 
   RakeTier get rakeTier => stake.rakeTier;
@@ -140,7 +145,7 @@ class GameState {
         if (effectiveStackBb == null) 'effectiveStackBb',
         if (potBb == null) 'potBb',
         if (board.length < 3) 'board',
-        if (preflopAggressor == null) 'actions(preflop aggressor)',
+        if (preflopAggressor == null && potType != PotType.limped) 'actions(preflop aggressor)',
       ];
 
   List<String> missingForPreflop() => [if (hero == null) 'hero'];

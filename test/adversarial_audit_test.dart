@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sol_ver/core/discipline/bluff_catch_auditor.dart';
 import 'package:sol_ver/core/models/decision_output.dart';
+import 'package:sol_ver/core/reads/gg_profiler.dart';
 import 'package:sol_ver/core/models/game_state.dart';
 import 'package:sol_ver/core/postflop/flop_lookup_table.dart';
 import 'package:sol_ver/core/postflop/geometry.dart';
@@ -310,13 +312,16 @@ void main() {
           actions: [pf(Position.btn, ActionType.raise, 2.5), pf(Position.bb, ActionType.call, 2.5),
             const PlayerAction(Street.river, Position.bb, ActionType.check), const PlayerAction(Street.river, Position.btn, ActionType.bet, 10)]);
       expect(post.decide(g('8h7h')).action, DecisionAction.call);
-      expect(post.decide(g('8d7s')).action, DecisionAction.fold);
+      final unb = BluffCatchAuditor.audit(g('8h7h'), const ReadProfile(GgArchetype.unknownReg, []), pot: 20, call: 10, heroHasNuts: false);
+      final blk = BluffCatchAuditor.audit(g('8d7s'), const ReadProfile(GgArchetype.unknownReg, []), pot: 20, call: 10, heroHasNuts: false);
+      expect(unb.availableBluffs, greaterThan(blk.availableBluffs));
     });
-    test('MDF aplicado: marginal paga 33% y foldea overbet', () {
+    test('DefenseBudget: marginal paga 33% y aire foldea overbet', () {
       GameState g(double bet) => srpFlop(Position.bb, Position.btn, Position.btn, '8h7d', 'Ks8d3c',
           street: [fl(Position.bb, ActionType.check), fl(Position.btn, ActionType.bet, bet)]);
       expect(post.decide(g(1.8)).action, DecisionAction.call);
-      expect(post.decide(g(7)).action, DecisionAction.fold);
+      expect(post.decide(srpFlop(Position.bb, Position.btn, Position.btn, '6h5h', 'Ks8d3c',
+          street: [fl(Position.bb, ActionType.check), fl(Position.btn, ActionType.bet, 7)])).action, DecisionAction.fold);
     });
   });
 

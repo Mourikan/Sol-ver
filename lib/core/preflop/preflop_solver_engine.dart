@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import '../models/decision_output.dart';
 import '../models/game_state.dart';
+import '../reads/gg_profiler.dart';
 import 'hand_normalizer.dart';
 import 'preflop_ranges_db.dart';
 import 'range_notation.dart';
@@ -68,7 +69,7 @@ class PreflopSolverEngine {
   static const ipMultiplier = 1.10;
   static const oopMultiplier = 0.85;
 
-  DecisionOutput decide(GameState s) {
+  DecisionOutput decide(GameState s, {ReadProfile? read}) {
     final missing = s.missingForPreflop();
     if (missing.isNotEmpty) throw MissingInputs(missing);
     final ctx = PreflopContext.from(s);
@@ -76,7 +77,7 @@ class PreflopSolverEngine {
     return switch (ctx.scenario) {
       PreflopScenario.rfi => _rfi(s, ctx, hand),
       PreflopScenario.vsRfi => _vsRfi(s, ctx, hand),
-      PreflopScenario.vs3Bet => _vs3Bet(s, ctx, hand),
+      PreflopScenario.vs3Bet => _vs3Bet(s, ctx, hand, read),
     };
   }
 
@@ -85,10 +86,9 @@ class PreflopSolverEngine {
 
   double potOddsRequired(double call, double pot) => call / (pot + call);
 
-  double rakedPotOdds(double call, double pot, RakeTier tier) {
-    final finalPot = pot + call;
-    return call / (finalPot - rake[tier]!.rakeOn(finalPot));
-  }
+  /// Pot odds con rake sobre el bote final esperado: (call / (pot + call)) / (1 - rake_efectivo[PotType]).
+  double rakedPotOdds(double call, double pot, RakeTier tier, {PotType potType = PotType.srp}) =>
+      call / (pot + call) / (1 - rake[tier]!.effectiveRate(potType));
 
   double requiredEquity(double rakedOdds, double eqr, bool ip) =>
       rakedOdds / (eqr * (ip ? ipMultiplier : oopMultiplier));
@@ -274,7 +274,7 @@ class PreflopSolverEngine {
     );
   }
 
-  DecisionOutput _vs3Bet(GameState s, PreflopContext ctx, CanonicalHand hand) {
+  DecisionOutput _vs3Bet(GameState s, PreflopContext ctx, CanonicalHand hand, ReadProfile? read) {
     if (s.effectiveStackBb == null) throw const MissingInputs(['effectiveStackBb']);
     final hero = s.heroPosition, villain = ctx.villain!, tier = s.rakeTier;
     final ip = hero.isInPositionVs(villain);
@@ -289,7 +289,7 @@ class PreflopSolverEngine {
     final eq = HandProps.equity(eqKey, i) ?? HandProps.equity('MR_RFI_utg', i)!;
 
     final odds = potOddsRequired(ctx.callBb, ctx.potBb);
-    final raked = rakedPotOdds(ctx.callBb, ctx.potBb, tier);
+    final raked = rakedPotOdds(ctx.callBb, ctx.potBb, tier, potType: PotType.threeBet);
     final req = requiredEquity(raked, hand.eqr, ip);
 
     final micro = tier == RakeTier.microHighRake;
@@ -297,11 +297,19 @@ class PreflopSolverEngine {
     final std3b = ctx.heroOpenBb * (villainIp ? (micro ? 3.2 : 3.0) : (micro ? 4.25 : 3.75));
     final ratio = ctx.raiseSizeBb / std3b;
 
+    final noBluff = profile == VillainProfile.nit ||
+        profile == VillainProfile.callingStation ||
+        profile == VillainProfile.trapperPremium ||
+        (read != null && !read.allows4BetBluff);
+    if (noBluff && f4 > 0 && PreflopRangesDb.isBluff4Bet(i) && f4 < 1.01 &&
+        RangeNotation.parse(PreflopRangesDb.vsNitAgroExtra4BetValue)[i] == 0) {
+      f4 = 0;
+      final mining = Matrix169.highRank(i) == 12 && Matrix169.isSuited(i) && ctx.callBb <= 0.10 * s.effectiveStackBb!;
+      fc = mining ? 1 : 0;
+      notes.add('4-bet bluff anulado vs ${read?.archetype.name ?? profile.name} (no foldea al 4-bet)'
+          '${mining ? '; degradado a call (nut-flush mining, call <= 10% stack)' : '; fold'}.');
+    }
     if (profile == VillainProfile.nit) {
-      if (f4 > 0 && PreflopRangesDb.isBluff4Bet(i)) {
-        f4 = 0;
-        notes.add('Nit: 4-bet bluff anulado (su rango de 3-bet no foldea al 4-bet).');
-      }
       if ((f4 > 0 || fc > 0) && _bottomOfDefense(node, eqKey, i, 0.30)) {
         f4 = 0;
         fc = 0;

@@ -19,6 +19,20 @@ class RakeConfig {
     return r < capBb ? r : capBb;
   }
 
+  /// Bote final esperado por tipo de bote (bb): base del rake efectivo.
+  static const expectedFinalPot = {
+    PotType.limped: 8.0,
+    PotType.srp: 22.0,
+    PotType.threeBet: 55.0,
+    PotType.fourBetPlus: 100.0,
+  };
+
+  /// Expected_Final_Pot_Rake / E_Final_Pot.
+  double effectiveRate(PotType t) {
+    final e = expectedFinalPot[t]!;
+    return rakeOn(e) / e;
+  }
+
   /// Valores por defecto editables: verificar contra la estructura real de la sala.
   static const defaults = {
     RakeTier.microHighRake: RakeConfig(0.05, 4.0),

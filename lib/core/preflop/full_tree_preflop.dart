@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../discipline/ev_sanity_guard.dart';
 import '../models/decision_output.dart';
 import '../models/game_state.dart';
 import '../reads/gg_profiler.dart';
@@ -8,10 +9,12 @@ import 'preflop_ranges_db.dart';
 import 'preflop_solver_engine.dart';
 import 'range_notation.dart';
 
-enum TreeScenario { rfi, isoVsLimpers, threeBetHu, squeeze, standard4Bet, cold4Bet }
+enum TreeScenario { rfi, isoVsLimpers, threeBetHu, squeeze, standard4Bet, cold4Bet, facing4Bet, facing5Bet }
 
 class TreeSpot {
-  const TreeSpot(this.scenario, {this.opener, this.threeBettor, this.openBb = 0, this.threeBetBb = 0, this.limpers = 0, this.callers = 0, this.potBb = 1.5});
+  const TreeSpot(this.scenario, {this.opener, this.threeBettor, this.openBb = 0, this.threeBetBb = 0, this.limpers = 0, this.callers = 0, this.potBb = 1.5, this.callBb = 0, this.lastRaiseBb = 0});
+  final double callBb;
+  final double lastRaiseBb;
   final TreeScenario scenario;
   final Position? opener;
   final Position? threeBettor;
@@ -33,6 +36,20 @@ class FullTreePreflop {
   static const cold4BetIp = 2.2, cold4BetOop = 2.5;
 
   static const squeezeExtra = 'TT+,AQs+,AKo,A5s,A4s,KQs';
+
+  /// Overcall multiway (L4): pares, Ax suited, broadways suited y suited connectors 54s+.
+  static const multiwayWhitelist = '22-TT,A2s-AJs,KTs+,QTs+,JTs,T9s,98s,87s,76s,65s,54s';
+
+  /// Penalización de realización multiway para manos fuera de la whitelist (parámetro de modelo).
+  static const multiwayOffsuitEqr = 0.80;
+
+  /// Iso vs Rec_Passive_Fish (L5): lineal top ~29% en CO/BTN/ciegas.
+  static const fishIsoRange = '22+,A2s+,K5s+,Q8s+,J8s+,T8s+,97s+,87s,76s,65s,A7o+,K9o+,QTo+,JTo';
+
+  static const callOff = 'QQ+,AKs,AKo';
+  static const callOffVsNit = 'KK+,AKs';
+  static const fiveBetJam = 'QQ+,AKs,AKo';
+  static const call4BetIp = 'TT-JJ,AQs';
   static const cold4Bet = 'QQ+,AKs,AKo';
 
   /// "Baja frecuencia" según especificación del usuario: parámetro explícito, no frecuencia de solver.
@@ -73,6 +90,15 @@ class FullTreePreflop {
       return TreeSpot(raises[0].actor == hero ? TreeScenario.standard4Bet : TreeScenario.cold4Bet,
           opener: raises[0].actor, threeBettor: raises[1].actor, openBb: raises[0].amountBb, threeBetBb: raises[1].amountBb, potBb: pot);
     }
+    final heroIn = committed[hero] ?? 0;
+    if (raises.length == 3 && raises[1].actor == hero) {
+      return TreeSpot(TreeScenario.facing4Bet, opener: raises[0].actor, threeBettor: hero, potBb: pot,
+          callBb: current - heroIn, lastRaiseBb: current);
+    }
+    if (raises.length == 4 && raises[2].actor == hero) {
+      return TreeSpot(TreeScenario.facing5Bet, opener: raises[0].actor, threeBettor: raises[1].actor, potBb: pot,
+          callBb: current - heroIn, lastRaiseBb: current);
+    }
     throw UnsupportedError('Nodo preflop no soportado (5-bet+ / limp-raise)');
   }
 
@@ -109,12 +135,53 @@ class FullTreePreflop {
         ajusteExplotativoRead: why,
       );
     }
-    return switch (spot.scenario) {
-      TreeScenario.isoVsLimpers => _iso(s, spot, hand),
+    final vp = read?.engineProfile ?? s.villainProfile;
+    final d = switch (spot.scenario) {
+      TreeScenario.isoVsLimpers => _iso(s, spot, hand, vp),
       TreeScenario.squeeze => _squeeze(s, spot, hand),
       TreeScenario.cold4Bet => _cold4Bet(s, spot, hand),
-      _ => engine.decide(s),
+      TreeScenario.facing4Bet || TreeScenario.facing5Bet => _facingBig(s, spot, hand, vp),
+      _ => engine.decide(read == null ? s : s.copyWith(villainProfile: vp), read: read),
     };
+    final call = switch (spot.scenario) {
+      TreeScenario.facing4Bet || TreeScenario.facing5Bet => spot.callBb,
+      _ => d.sizing?.bb ?? 0,
+    };
+    return EvSanityGuard.preflop(s, d, hand.label, callBb: call, potBb: spot.potBb);
+  }
+
+  /// Hero enfrenta 4-bet (tras su 3-bet) o 5-bet (tras su 4-bet). Blocker-bluffs: 100% fold salvo pot odds <= 28%.
+  DecisionOutput _facingBig(GameState s, TreeSpot spot, CanonicalHand hand, VillainProfile vp) {
+    if (s.effectiveStackBb == null) throw const MissingInputs(['effectiveStackBb']);
+    final i = hand.index;
+    final stack = s.effectiveStackBb!;
+    final allIn = spot.lastRaiseBb >= stack * 0.9 || spot.scenario == TreeScenario.facing5Bet;
+    final tight = vp == VillainProfile.nit || vp == VillainProfile.trapperPremium;
+    final odds = spot.callBb / (spot.potBb + spot.callBb);
+    final callOffR = RangeNotation.parse(tight ? callOffVsNit : callOff);
+    final ip = s.heroPosition.isInPositionVs(spot.opener!);
+    final label = spot.scenario == TreeScenario.facing5Bet ? '5-bet' : '4-bet';
+    DecisionOutput out(DecisionAction a, String why, {Sizing? sz}) => DecisionOutput(
+          action: a,
+          sizing: sz,
+          metrics: [KeyMetric(MetricType.potOdds, odds), KeyMetric(MetricType.blocker, hand.blockerWeight)],
+          justificacionGto: '${hand.label} vs $label ${allIn ? 'all-in' : '${spot.lastRaiseBb}bb'} | pot odds ${(odds * 100).round()}%',
+          ajusteExplotativoRead: why,
+        );
+    if (allIn) {
+      if (callOffR[i] > 0) return out(DecisionAction.call, 'Call-off: ${tight ? 'KK+/AKs vs nit' : 'QQ+/AK'}.', sz: Sizing(bb: spot.callBb, potPct: spot.callBb / spot.potBb * 100));
+      if (odds <= EvSanityGuard.allInDirectOddsMax) {
+        return out(DecisionAction.call, 'Stacks cortos: pot odds directas ${(odds * 100).round()}% <= 28%.', sz: Sizing(bb: spot.callBb, potPct: spot.callBb / spot.potBb * 100));
+      }
+      return out(DecisionAction.fold, PreflopRangesDb.isBluff4Bet(i) ? '${hand.label} es farol/blocker: 100% fold vs $label all-in.' : 'Fuera del rango de call-off.');
+    }
+    if (RangeNotation.parse(tight ? callOffVsNit : fiveBetJam)[i] > 0) {
+      return out(DecisionAction.betRaise, '5-bet jam por valor.', sz: Sizing(bb: stack, potPct: stack / spot.potBb * 100));
+    }
+    if (ip && !tight && RangeNotation.parse(call4BetIp)[i] > 0) {
+      return out(DecisionAction.call, 'Call IP vs 4-bet no all-in.', sz: Sizing(bb: spot.callBb, potPct: spot.callBb / spot.potBb * 100));
+    }
+    return out(DecisionAction.fold, PreflopRangesDb.isBluff4Bet(i) ? '${hand.label}: blocker-bluff, fold vs 4-bet grande.' : 'Fold vs 4-bet.');
   }
 
   static bool _lowNoEqr(int i) {
@@ -125,7 +192,12 @@ class FullTreePreflop {
   }
 
   static Float32List isoRange(Position hero, RakeTier tier, {required bool station}) {
-    if (station) return RangeNotation.parse(PreflopRangesDb.stationValue3Bet);
+    if (station) {
+      if (hero == Position.utg || hero == Position.mp) {
+        return RangeNotation.union([PreflopRangesDb.stationValue3Bet, PreflopRangesDb.rfiNotation(Position.utg, tier)]);
+      }
+      return RangeNotation.parse(fishIsoRange);
+    }
     final tighter = switch (hero) {
       Position.utg || Position.mp => Position.utg,
       Position.sb || Position.bb => Position.co,
@@ -144,9 +216,9 @@ class FullTreePreflop {
   static double squeezeSize(double open, int callers, {required bool ip}) =>
       open * (ip ? squeezeIp : squeezeOop) + open * callers;
 
-  DecisionOutput _iso(GameState s, TreeSpot spot, CanonicalHand hand) {
+  DecisionOutput _iso(GameState s, TreeSpot spot, CanonicalHand hand, VillainProfile vp) {
     final hero = s.heroPosition;
-    final station = s.villainProfile == VillainProfile.callingStation;
+    final station = vp == VillainProfile.callingStation;
     final r = isoRange(hero, s.rakeTier, station: station);
     final size = isoSize(hero, spot.limpers);
     final raise = r[hand.index] > 0;
@@ -157,7 +229,9 @@ class FullTreePreflop {
       metrics: [KeyMetric(MetricType.eqr, hand.eqr)],
       justificacionGto: '${hand.label} iso vs ${spot.limpers} limper(s) | ${ip ? 'IP' : 'OOP'} | rango lineal depurado '
           '(${Matrix169.percent(r).toStringAsFixed(1)}%, sin bluffs bajos sin EQR) | sizing ${ip ? isoIp : isoOop}bb + ${spot.limpers}bb',
-      ajusteExplotativoRead: station ? 'Station limper: iso solo por valor lineal.' : 'Limpers = rango capado; iso para jugar HU con iniciativa.',
+      ajusteExplotativoRead: station
+          ? 'Fish limper: iso lineal ancho (rango del limper capado e inelástico) con sizing punitivo.'
+          : 'Limpers = rango capado; iso para jugar HU con iniciativa.',
     );
   }
 
@@ -166,6 +240,10 @@ class FullTreePreflop {
     final ip = hero.isInPositionVs(opener) && hero != Position.sb && hero != Position.bb;
     final value = RangeNotation.union([PreflopRangesDb.threeBetValue[opener] ?? '', squeezeExtra]);
     final raise = value[hand.index] > 0 && !_lowNoEqr(hand.index);
+    if (!raise && (hero == Position.bb || hero == Position.btn)) {
+      final oc = overcall(s, spot, hand);
+      if (oc != null) return oc;
+    }
     var size = squeezeSize(spot.openBb, spot.callers, ip: ip);
     final allIn = s.effectiveStackBb != null && size >= s.effectiveStackBb!;
     if (allIn) size = s.effectiveStackBb!;
@@ -177,6 +255,34 @@ class FullTreePreflop {
           'rango condensado valor + blockers Ax/Kx suited (${Matrix169.percent(value).toStringAsFixed(1)}%) | '
           'especulativas bajas fuera (pierden EQR multiway) | 0% cold call',
       ajusteExplotativoRead: 'Sizing ${ip ? squeezeIp : squeezeOop}x open + ${spot.callers}x open por caller = ${size.toStringAsFixed(2)}bb${allIn ? ' (all-in)' : ''}.',
+    );
+  }
+
+  /// L4: overcall multiway en BB/BTN. eq_MW = eq_HU(vs opener) x 2/N x EQR_MW >= pot odds con rake final esperado.
+  DecisionOutput? overcall(GameState s, TreeSpot spot, CanonicalHand hand) {
+    final hero = s.heroPosition, opener = spot.opener!;
+    final tk = s.rakeTier == RakeTier.microHighRake ? 'HR' : 'MR';
+    final eqHu = HandProps.equity('${tk}_RFI_${opener.name}', hand.index);
+    if (eqHu == null) return null;
+    final white = RangeNotation.parse(multiwayWhitelist)[hand.index] > 0;
+    if (hero == Position.btn && !white) return null;
+    final n = spot.callers + 2;
+    final committed = hero == Position.bb ? 1.0 : 0.0;
+    final call = spot.openBb - committed;
+    final req = engine.rakedPotOdds(call, spot.potBb, s.rakeTier);
+    final eqr = white ? hand.eqr : hand.eqr * multiwayOffsuitEqr;
+    final eqMw = eqHu * 2 / n * eqr;
+    if (eqMw < req) return null;
+    return DecisionOutput(
+      action: DecisionAction.call,
+      sizing: Sizing(bb: call, potPct: call / spot.potBb * 100),
+      metrics: [
+        KeyMetric(MetricType.equity, eqMw, 'eq multiway estimada (eq_HU x 2/N x EQR_MW)'),
+        KeyMetric(MetricType.requiredEquity, req, 'pot odds con rake final esperado'),
+      ],
+      justificacionGto: '${hand.label} overcall multiway ${hero.name.toUpperCase()} vs open ${opener.name.toUpperCase()} + ${spot.callers} caller(s) | '
+          '${white ? 'whitelist multiway (pares/suited)' : 'offsuit con EQR_MW x$multiwayOffsuitEqr'} | eq ${(eqMw * 100).toStringAsFixed(1)}% >= ${(req * 100).toStringAsFixed(1)}%',
+      ajusteExplotativoRead: hero == Position.bb ? 'BB cierra la acción con odds directas.' : 'BTN IP: overcall con manos de alta realización multiway.',
     );
   }
 

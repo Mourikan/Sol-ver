@@ -45,16 +45,19 @@ void main() {
       expect(d.ajusteExplotativoRead, contains('FOLD DISCIPLINADO'));
       expect(d.justificacionGto, contains('colapsa'));
     });
-    test('Pot donk river tras long tank: AA, KK, top two y set bajo => fold', () {
-      for (final h in ['AhAd', 'KhKd', 'Th7h', '3h3c']) {
+    test('Pot donk river tras long tank: AA, KK, top two => fold; set bajo => call por EV_Sanity_Guard (pot odds 33% < 35%)', () {
+      for (final h in ['AhAd', 'KhKd', 'Th7h']) {
         expect(post.decide(potDonk(h), read: regAbc).action, DecisionAction.fold, reason: h);
       }
+      final set = post.decide(potDonk('3h3c'), read: regAbc);
+      expect(set.action, DecisionAction.call);
+      expect(set.ajusteExplotativoRead, contains('[SANITY_GUARD_APPLIED]'));
     });
-    test('Auditoría: 0 categorías de farol y timing x0.5', () {
+    test('Auditoría por combos reales: faroles efectivos < 60% de pot odds y timing x0.5 con piso', () {
       final s = potDonk('AhAd');
       final r = BluffCatchAuditor.audit(s, regAbc, pot: 21.5, call: 21.5, heroHasNuts: false);
       expect(r.node, VillainLineNode.xcXcThenAggressionRiver);
-      expect(r.categories, isEmpty);
+      expect(r.valueCombos, greaterThan(r.bluffCombos));
       expect(r.availableBluffs, lessThan(r.potOddsReq * 0.6));
       expect(r.verdict, AuditVerdict.heroFoldDisciplined);
       expect(TimingTellsMatrix.lastVillain(s).villainBluffMultiplier, 0.5);
@@ -85,9 +88,11 @@ void main() {
       expect(d.ajusteExplotativoRead, contains('HERO CALL'));
       expect(BluffCatchAuditor.audit(g('KdJd'), agro, pot: 30, call: 22, heroHasNuts: false).verdict, AuditVerdict.heroCallApproved);
     });
-    test('As Js: fold (bloquea sus faroles de picas)', () {
+    test('As Js: fold (bloquea sus faroles de picas => menor ratio real que Kd Jd)', () {
       expect(post.decide(g('AsJs'), read: agro).action, DecisionAction.fold);
-      expect(BluffCatchAuditor.audit(g('AsJs'), agro, pot: 30, call: 22, heroHasNuts: false).verdict, AuditVerdict.foldNegativeEv);
+      final bad = BluffCatchAuditor.audit(g('AsJs'), agro, pot: 30, call: 22, heroHasNuts: false);
+      final good = BluffCatchAuditor.audit(g('KdJd'), agro, pot: 30, call: 22, heroHasNuts: false);
+      expect(bad.realBluffRatio, lessThan(good.realBluffRatio));
     });
     test('Kd Jd vs reg no-agro en triple barrel overbet NL50: MDA => fold', () {
       final s = GameState(stake: Stake.nl50, heroPosition: Position.bb, villainPosition: Position.btn,

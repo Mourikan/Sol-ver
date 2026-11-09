@@ -1,57 +1,20 @@
-import 'dart:math' as math;
-
 import '../evaluators/board_analyzer.dart';
 import '../evaluators/hand_evaluator.dart';
 import '../models/decision_output.dart';
 import '../models/game_state.dart';
+import 'exploit_modifier.dart';
+import 'defense_budget.dart';
 import 'flop_lookup_table.dart';
 import 'geometry.dart';
 import 'hand_tier.dart';
 import '../discipline/blocker_bluff_converter.dart';
+import '../discipline/board_history.dart';
+import '../discipline/ev_sanity_guard.dart';
 import '../discipline/bluff_catch_auditor.dart';
 import '../discipline/timing_tells_matrix.dart';
 import '../reads/gg_profiler.dart';
-import 'late_streets_heuristic.dart';
 import 'postflop_ranges.dart';
 import 'turn_river_solver.dart';
-
-/// Desviaciones explotativas sobre el set de tiers que apuesta.
-class ExploitModifier {
-  ExploitModifier._();
-
-  static (Set<HandTier>, double, String?) adjustBetting(Set<HandTier> tiers, double sizePct, VillainProfile vp) {
-    switch (vp) {
-      case VillainProfile.nit:
-        return (
-          {...tiers, HandTier.backdoorBlockerBluff, HandTier.airGiveUp},
-          math.min(sizePct, 33),
-          'Nit: fold-to-cbet > alpha(33%) = 25% => bluff con todo el rango a sizing bajo.'
-        );
-      case VillainProfile.callingStation:
-        return (
-          {...tiers.difference({HandTier.backdoorBlockerBluff, HandTier.airGiveUp}), HandTier.marginalMadeShowdown}
-            ..remove(HandTier.highEquityComboDraw),
-          math.max(sizePct, 75),
-          'Station: fold equity ~0 => sin bluffs; value más fino y sizing grande.'
-        );
-      case VillainProfile.maniac:
-        return (
-          tiers.difference({HandTier.backdoorBlockerBluff, HandTier.airGiveUp}),
-          sizePct,
-          'Maniac: no bluffear a quien no foldea; dejar que él apueste.'
-        );
-      default:
-        return (tiers, sizePct, null);
-    }
-  }
-
-  /// Umbral de tamaño (fracción de bote) hasta el que pagamos con showdown marginal.
-  static double marginalCallMax(VillainProfile vp) => switch (vp) {
-        VillainProfile.maniac || VillainProfile.regAgro => 1.0,
-        VillainProfile.nit || VillainProfile.regAbc => 0.33,
-        _ => 0.5,
-      };
-}
 
 class PostflopHeuristicEngine {
   const PostflopHeuristicEngine();
@@ -62,9 +25,9 @@ class PostflopHeuristicEngine {
     final rp = read ?? ReadProfile.fromVillainProfile(input.villainProfile);
     final s = read == null ? input : input.copyWith(villainProfile: read.engineProfile);
     final hero = s.heroPosition, villain = s.villainPosition!;
-    final pfa = s.preflopAggressor!;
-    if (pfa != hero && pfa != villain) throw UnsupportedError('PFA fuera del bote HU');
-    if (s.potType == PotType.limped) throw UnsupportedError('Bote limpeado no soportado');
+    final limped = s.potType == PotType.limped;
+    final pfa = s.preflopAggressor ?? villain;
+    if (!limped && pfa != hero && pfa != villain) throw UnsupportedError('PFA fuera del bote HU');
 
     final defender = pfa == hero ? villain : hero;
     final pfaIp = pfa.isInPositionVs(defender);
@@ -102,6 +65,15 @@ class PostflopHeuristicEngine {
       ..add(KeyMetric(MetricType.nutAdvantage, b.nutAdvantage.index.toDouble(), b.nutAdvantage.name));
 
     final hadInitiative = _initiative(s) == hero;
+    final potBeforeBet = pot - villainIn + heroIn;
+    final d = _route(s, rp, h, node, pfa, defender, pot, stack, heroIp, metrics, street, heroIn, villainIn, toCall, hadInitiative, limped);
+    return EvSanityGuard.postflop(s, rp, d, h, toCall: toCall, potBeforeBet: potBeforeBet);
+  }
+
+  DecisionOutput _route(GameState s, ReadProfile rp, HandTierResult h, HuNode node, Position pfa, Position defender,
+      double pot, double stack, bool heroIp, List<KeyMetric> metrics, List<PlayerAction> street, double heroIn,
+      double villainIn, double toCall, bool hadInitiative, bool limped) {
+    final villain = s.villainPosition!;
     if (toCall > 0) {
       final firstAgg = street.where((a) => a.isAggressive).firstOrNull;
       final donk = firstAgg != null && firstAgg.actor == villain && hadInitiative;
@@ -112,11 +84,24 @@ class PostflopHeuristicEngine {
         final adj = _donkAdjust(tell, h, potBefore, toCall, stack, metrics);
         if (adj != null) return adj;
       }
-      final base = _facing(s, h, potBefore, toCall, stack, heroIp, metrics);
-      return s.street == Street.flop ? base : _discipline(s, rp, h, base, potBefore, toCall, metrics);
+      if (s.villainProfile == VillainProfile.trapperPremium &&
+          h.tier != HandTier.nutsMonster && h.tier != HandTier.highEquityComboDraw) {
+        return DecisionOutput(
+            action: DecisionAction.fold,
+            metrics: metrics,
+            justificacionGto: '${h.tier.name} no supera AA/KK/AKs del trapper.',
+            ajusteExplotativoRead: 'Trapper premium: check/fold todo lo que no gane a AA/KK.');
+      }
+      return s.street == Street.river
+          ? _riverFacing(s, rp, h, potBefore, toCall, stack, metrics)
+          : _budgetFacing(s, rp, h, potBefore, toCall, stack, heroIp, metrics);
     }
 
-    if (s.street == Street.flop) return _flop(s, h, node, pfa, defender, pot, stack, heroIp, metrics);
+    if (s.street == Street.flop) {
+      return limped
+          ? _limpedFlop(s, h, pot, stack, heroIp, metrics, street.any((a) => a.actor == villain && a.type == ActionType.check))
+          : _flop(s, h, node, pfa, defender, pot, stack, heroIp, metrics);
+    }
     final villainChecked = street.any((a) => a.actor == villain && a.type == ActionType.check);
 
     final (instaCall, riverBrick) = TimingTellsMatrix.instaCallTurnIntoRiver(s);
@@ -127,6 +112,11 @@ class PostflopHeuristicEngine {
         if (!villainChecked && !heroIp) {
           return _check(metrics, 'River brick tras insta-call en turn: rango cargado de draws rotos.',
               '${t.note} OOP: check para inducir faroles de proyectos fallidos.');
+        }
+        final fishGate = rp.archetype == GgArchetype.recPassiveFish || s.villainProfile == VillainProfile.callingStation;
+        if (fishGate && h.tier != HandTier.nutsMonster && h.tier != HandTier.strongTopPairOverpair) {
+          return _check(metrics, 'River brick tras insta-call: gate de perfil aplicado antes del timing.',
+              'Fish/Station: multiplicador de farol River = 0.0 (ignora el insta-call).');
         }
         if (h.tier != HandTier.marginalMadeShowdown) {
           return _bet(85, pot, stack, metrics, 'River brick tras insta-call en turn: alta densidad de draws fallidos => River Barrel Grande 75-100%.',
@@ -152,33 +142,6 @@ class PostflopHeuristicEngine {
     const solver = TurnRiverSolver();
     final plan = solver.plan(s, rp, heroHadInitiative: hadInitiative, pot: pot, stack: stack);
     return solver.toDecision(plan, pot, stack, metrics, rp);
-  }
-
-  DecisionOutput _discipline(GameState s, ReadProfile rp, HandTierResult h, DecisionOutput base, double pot, double call, List<KeyMetric> m) {
-    if (base.action == DecisionAction.fold) return base;
-    final cat = HandEvaluator.category(HandEvaluator.evaluate([s.hero!.high.id, s.hero!.low.id, for (final c in s.board) c.id]));
-    final nuts = h.tier == HandTier.nutsMonster && cat >= HandEvaluator.straight;
-    if (base.action == DecisionAction.betRaise && h.tier == HandTier.nutsMonster && nuts) return base;
-    final a = BluffCatchAuditor.audit(s, rp, pot: pot, call: call, heroHasNuts: nuts);
-    final metrics = [...m, KeyMetric(MetricType.bluffShare, a.availableBluffs, 'faroles disponibles (${a.categories.join(', ')})')];
-    final txt = 'Bluff_Combo_Audit: ${a.reasons.join(' | ')}';
-    final mustFold = a.verdict == AuditVerdict.heroFoldDisciplined ||
-        (a.verdict == AuditVerdict.foldNegativeEv && base.action == DecisionAction.call);
-    if (mustFold) {
-      return DecisionOutput(
-          action: DecisionAction.fold,
-          metrics: metrics,
-          justificacionGto: '${base.justificacionGto} | $txt',
-          ajusteExplotativoRead: a.verdict == AuditVerdict.heroFoldDisciplined
-              ? '100% FOLD DISCIPLINADO: colapso de faroles del pool; la fuerza absoluta de la mano no justifica el call.'
-              : 'Fold: bluff-catcher -EV en este nodo/combos.');
-    }
-    return DecisionOutput(
-        action: base.action,
-        sizing: base.sizing,
-        metrics: metrics,
-        justificacionGto: '${base.justificacionGto} | $txt',
-        ajusteExplotativoRead: a.verdict == AuditVerdict.heroCallApproved ? 'HERO CALL quirúrgico aprobado.' : base.ajusteExplotativoRead);
   }
 
   DecisionOutput? _donkAdjust(DonkTell tell, HandTierResult h, double pot, double bet, double stack, List<KeyMetric> m) {
@@ -245,7 +208,7 @@ class PostflopHeuristicEngine {
 
     if (heroIsPfa) {
       final (tiers, size, note) =
-          ExploitModifier.adjustBetting(FlopLookupTable.betTiers[r.strategy]!, r.sizePct, s.villainProfile);
+          ExploitModifier.adjustBetting(FlopLookupTable.betTiers[r.strategy]!, r.sizePct, s.villainProfile, players: s.activePlayers);
       m.add(KeyMetric(MetricType.rangeActionFreq, r.betFreq, 'bet del rango PFA (política ${r.strategy.name})'));
       final gto = '$tag | ${r.strategy.name} ${r.sizePct.round()}% | bet rango ${(r.betFreq * 100).round()}% / check ${(r.checkFreq * 100).round()}%';
       return tiers.contains(h.tier)
@@ -272,74 +235,105 @@ class PostflopHeuristicEngine {
     return probe.contains(h.tier) ? _bet(50, pot, stack, m, gto, 'Stab IP.') : _check(m, gto, 'Check behind.');
   }
 
-  DecisionOutput _facing(GameState s, HandTierResult h, double potBeforeBet, double toCall, double stack, bool heroIp, List<KeyMetric> m) {
-    final mdf = PotGeometry.mdf(potBeforeBet, toCall);
+  DecisionOutput _limpedFlop(GameState s, HandTierResult h, double pot, double stack, bool heroIp, List<KeyMetric> m, bool villainChecked) {
+    final multi = s.activePlayers >= 3;
+    final tiers = multi
+        ? {HandTier.nutsMonster, HandTier.strongTopPairOverpair}
+        : {HandTier.nutsMonster, HandTier.strongTopPairOverpair, HandTier.highEquityComboDraw,
+            if (heroIp && villainChecked) HandTier.backdoorBlockerBluff};
+    final gto = 'Limped_Pot (${s.activePlayers} jugadores) | ${h.tier.name} | sin iniciativa: stab 50% con valor${multi ? ' TPGK+ (multiway)' : '/draws'}';
+    return tiers.contains(h.tier) ? _bet(50, pot, stack, m, gto, 'Limped pot.') : _check(m, gto, 'Check.');
+  }
+
+  DecisionOutput _raiseTo(double potBeforeBet, double toCall, double stack, int streetsLeft, List<KeyMetric> m, String gto, String read) {
+    final after = potBeforeBet + 2 * toCall;
+    final f = PotGeometry.geometricFraction(after, stack - toCall, streetsLeft);
+    var to = toCall + f * after;
+    if (stack - to < after + 2 * f * after) to = stack;
+    return DecisionOutput(
+        action: DecisionAction.betRaise,
+        sizing: Sizing(bb: to, potPct: to / (potBeforeBet + toCall) * 100),
+        metrics: m,
+        justificacionGto: '$gto | raise geométrico ${streetsLeft}c (f=${(f * 100).round()}%)',
+        ajusteExplotativoRead: read);
+  }
+
+  /// FLOP/TURN: DefenseBudget (top MDF x factor del rango que llega al nodo).
+  DecisionOutput _budgetFacing(GameState s, ReadProfile rp, HandTierResult h, double potBeforeBet, double toCall,
+      double stack, bool heroIp, List<KeyMetric> m) {
+    final res = DefenseBudget.evaluate(s, rp, potBeforeBet: potBeforeBet, call: toCall);
     final odds = PotGeometry.potOdds(toCall, potBeforeBet + toCall);
     final betFrac = toCall / potBeforeBet;
-    final vp = s.villainProfile;
-    m
-      ..add(KeyMetric(MetricType.mdf, mdf))
-      ..add(KeyMetric(MetricType.potOdds, odds));
-
-    final river = s.street == Street.river;
     final streetsLeft = 3 - (s.street.index - 1);
-    final eq = river ? 0.0 : _drawEquity(s, h);
-    if (!river) m.add(KeyMetric(MetricType.equity, eq, 'equity de mejorar a monster (outs exactos)'));
-
-    DecisionOutput call(String gto, String read) => DecisionOutput(
+    m
+      ..add(KeyMetric(MetricType.mdf, res.mdf))
+      ..add(KeyMetric(MetricType.potOdds, odds))
+      ..add(KeyMetric(MetricType.rangeActionFreq, res.target, 'presupuesto de defensa (MDF x ${DefenseBudget.factor(rp, s.stake)})'));
+    m.add(KeyMetric(MetricType.equity, _drawEquity(s, h), 'equity de mejorar a monster (outs exactos)'));
+    final tag = '${s.street.name} | ${h.tier.name} | bet ${(betFrac * 100).round()}% | MDF ${(res.mdf * 100).round()}% | '
+        'DefenseBudget top ${(res.target * 100).round()}% (mano en percentil ${(res.percentile * 100).round()}%)';
+    final read = 'Perfil ${rp.archetype.name}: factor ${DefenseBudget.factor(rp, s.stake)}.';
+    if (!res.continues) {
+      return DecisionOutput(action: DecisionAction.fold, metrics: m, justificacionGto: '$tag | fuera del presupuesto', ajusteExplotativoRead: read);
+    }
+    if (h.tier == HandTier.nutsMonster) return _raiseTo(potBeforeBet, toCall, stack, streetsLeft, m, '$tag | Monster: raise por valor', read);
+    if (!heroIp && s.street == Street.flop && h.flushDraw && h.oesd) {
+      return _raiseTo(potBeforeBet, toCall, stack, streetsLeft, m, '$tag | combo draw OOP: check-raise semi-bluff', read);
+    }
+    final float = h.tier == HandTier.backdoorBlockerBluff || h.tier == HandTier.airGiveUp;
+    return DecisionOutput(
         action: DecisionAction.call,
         sizing: Sizing(bb: toCall, potPct: betFrac * 100),
         metrics: m,
-        justificacionGto: gto,
+        justificacionGto: '$tag | ${float ? 'float (overcards/backdoors) para completar MDF' : 'dentro del presupuesto'}',
         ajusteExplotativoRead: read);
-    DecisionOutput fold(String gto, String read) =>
-        DecisionOutput(action: DecisionAction.fold, metrics: m, justificacionGto: gto, ajusteExplotativoRead: read);
-    DecisionOutput raise(String gto, String read) {
-      final after = potBeforeBet + 2 * toCall;
-      final f = PotGeometry.geometricFraction(after, stack - toCall, streetsLeft);
-      var to = toCall + f * after;
-      if (stack - to < after + 2 * f * after) to = stack;
-      return DecisionOutput(
-          action: DecisionAction.betRaise,
-          sizing: Sizing(bb: to, potPct: to / (potBeforeBet + toCall) * 100),
-          metrics: m,
-          justificacionGto: '$gto | raise geométrico ${streetsLeft}c (f=${(f * 100).round()}%)',
-          ajusteExplotativoRead: read);
-    }
+  }
 
-    final tag = '${s.street.name} | ${h.tier.name} | bet ${(betFrac * 100).round()}% | MDF ${(mdf * 100).round()}% | pot odds ${(odds * 100).round()}%';
-    final read = 'Perfil ${vp.name}.';
-    switch (h.tier) {
-      case HandTier.nutsMonster:
-        return raise('$tag | Monster: raise por valor', read);
-      case HandTier.strongTopPairOverpair:
-        if (river && RiverEngine.blocksVillainBluffs(h, s.board) && betFrac > 1 && vp != VillainProfile.maniac) {
-          return fold('$tag | overbet + bloqueamos sus bluffs (proyectos fallidos)', read);
-        }
-        return call('$tag | Top pair/overpair: dentro de MDF', read);
-      case HandTier.highEquityComboDraw:
-        if (river) return fold('$tag | draw fallido sin showdown', read);
-        if (!heroIp && s.street == Street.flop && h.flushDraw && h.oesd) {
-          return raise('$tag | combo draw OOP: check-raise semi-bluff (equity + fold equity)', read);
-        }
-        return eq >= odds || stack / potBeforeBet > 3
-            ? call('$tag | equity ${(eq * 100).round()}% vs pot odds ${(odds * 100).round()}% (+ implícitas con SPR alto)', read)
-            : fold('$tag | equity < pot odds y SPR bajo', read);
-      case HandTier.marginalMadeShowdown:
-        final max = ExploitModifier.marginalCallMax(vp);
-        if (river && RiverEngine.blocksVillainBluffs(h, s.board)) {
-          return fold('$tag | bloqueamos sus proyectos fallidos => menos bluffs en su rango', read);
-        }
-        return betFrac <= max
-            ? call('$tag | showdown marginal defiende MDF vs sizing <= ${(max * 100).round()}%', '$read Umbral ${(max * 100).round()}% bote.')
-            : fold('$tag | sizing > ${(max * 100).round()}%: rango del rival polarizado', '$read Umbral ${(max * 100).round()}% bote.');
-      case HandTier.backdoorBlockerBluff:
-        return !river && s.street == Street.flop && betFrac <= 0.34
-            ? call('$tag | float vs sizing pequeño (backdoors)', read)
-            : fold('$tag | sin equity suficiente', read);
-      case HandTier.airGiveUp:
-        return fold('$tag | air', read);
+  /// RIVER: Bluff_Combo_Audit por combos reales + Nut-Raise Gate (L12).
+  DecisionOutput _riverFacing(GameState s, ReadProfile rp, HandTierResult h, double potBeforeBet, double toCall,
+      double stack, List<KeyMetric> m) {
+    final odds = PotGeometry.potOdds(toCall, potBeforeBet + toCall);
+    m
+      ..add(KeyMetric(MetricType.mdf, PotGeometry.mdf(potBeforeBet, toCall)))
+      ..add(KeyMetric(MetricType.potOdds, odds));
+    final betFrac = toCall / potBeforeBet;
+    final tag = 'river | ${h.tier.name} | bet ${(betFrac * 100).round()}% | pot odds ${(odds * 100).round()}%';
+    const catchers = {HandTier.nutsMonster, HandTier.strongTopPairOverpair, HandTier.marginalMadeShowdown};
+    if (!catchers.contains(h.tier)) {
+      return DecisionOutput(action: DecisionAction.fold, metrics: m, justificacionGto: '$tag | sin showdown', ajusteExplotativoRead: 'Draw fallido / aire.');
     }
+    final cat = HandEvaluator.category(HandEvaluator.evaluate([s.hero!.high.id, s.hero!.low.id, for (final c in s.board) c.id]));
+    final danger = EvSanityGuard.board4Flush(s.board) || EvSanityGuard.board4Straight(s.board);
+    final hist = BoardHistory(s.board);
+    final raiseDanger = danger || hist.flushCompleted || BoardAnalyzer.analyze(s.board.sublist(0, 3), pfa: s.villainPosition!, defender: s.heroPosition).straightWindows > 0 && cat < HandEvaluator.straight;
+    final nuts = h.tier == HandTier.nutsMonster && cat >= HandEvaluator.straight && (!danger || cat >= HandEvaluator.flush && h.flushSuitBlocker || cat >= HandEvaluator.fullHouse);
+    final a = BluffCatchAuditor.audit(s, rp, pot: potBeforeBet, call: toCall, heroHasNuts: nuts);
+    final metrics = [...m, KeyMetric(MetricType.bluffShare, a.availableBluffs, 'faroles efectivos por combos (${a.categories.join(', ')})')];
+    final txt = 'Bluff_Combo_Audit: ${a.reasons.join(' | ')}';
+
+    if (h.tier == HandTier.nutsMonster) {
+      final pct = DefenseBudget.percentile(s, rp);
+      if (pct <= 0.15 && (!raiseDanger || nuts)) {
+        return _raiseTo(potBeforeBet, toCall, stack, 1, metrics, '$tag | Nut-Raise Gate OK (top ${(pct * 100).round()}% del rango)', 'Raise por valor.');
+      }
+    }
+    final agroSafe = rp.archetype == GgArchetype.agroSpewy &&
+        (cat >= HandEvaluator.twoPair || h.tier == HandTier.strongTopPairOverpair);
+    if (a.allowsCall || agroSafe || nuts) {
+      return DecisionOutput(
+          action: DecisionAction.call,
+          sizing: Sizing(bb: toCall, potPct: betFrac * 100),
+          metrics: metrics,
+          justificacionGto: '$tag | $txt${h.tier == HandTier.nutsMonster ? ' | Nut-Raise Gate: degradado a call' : ''}',
+          ajusteExplotativoRead: a.verdict == AuditVerdict.heroCallApproved ? 'HERO CALL quirúrgico aprobado.' : 'Call dentro de umbral.');
+    }
+    return DecisionOutput(
+        action: DecisionAction.fold,
+        metrics: metrics,
+        justificacionGto: '$tag | $txt',
+        ajusteExplotativoRead: a.verdict == AuditVerdict.heroFoldDisciplined
+            ? '100% FOLD DISCIPLINADO: colapso de faroles; la fuerza absoluta de la mano no justifica el call.'
+            : 'Fold: bluff-catcher -EV en este nodo/combos.');
   }
 
   /// Probabilidad exacta (por enumeración de cartas restantes) de mejorar a nutsMonster.
