@@ -10,6 +10,7 @@ import 'package:sol_ver/core/postflop/flop_lookup_table.dart';
 import 'package:sol_ver/core/postflop/hand_tier.dart';
 import 'package:sol_ver/core/postflop/postflop_heuristic_engine.dart';
 import 'package:sol_ver/core/postflop/postflop_ranges.dart';
+import 'package:sol_ver/core/postflop/turn_river_solver.dart';
 import 'package:sol_ver/core/preflop/full_tree_preflop.dart';
 import 'package:sol_ver/core/preflop/preflop_ranges_db.dart';
 import 'package:sol_ver/core/preflop/range_notation.dart';
@@ -158,11 +159,12 @@ void turn() {
       }
     }
     final s = (size ?? 80) / 100;
-    final alpha = s / (1 + 2 * s);
+    // Turn: presupuesto geométrico de 2 calles (CLAUDE.md [NASH_DELTA_AND_POOL_EDGE_HUNTER]).
+    final alpha = TurnRiverSolver.twoStreetTurnShare(s * 100);
     final share = (semi + pure) / max(1e-9, val + semi + pure);
     final factor = rp == scared ? 2.0 : (rp == fish ? 0.5 : 1.0);
     rows.add(Row('Turn', 'Double barrel ${(s * 100).round()}% Kd7s2s-4h (semi ${semi.round()} / puro ${pure.round()} / valor ${val.round()})', rn,
-        'α = ${p(alpha)}${factor != 1 ? ' x $factor = ${p(min(1, alpha * factor))}' : ''}', p(share), (share - min(1, alpha * factor)).abs(),
+        'geo2 = ${p(alpha)}${factor != 1 ? ' x $factor = ${p(min(1, alpha * factor))}' : ''}', p(share), (share - min(1, alpha * factor)).abs(),
         justified: factor != 1 ? 'Exploit_Bluff_Factor $factor (${rp.archetype.name})' : ''));
   }
   // Fold de Hero vs double barrel 75% (proyectos no completan)

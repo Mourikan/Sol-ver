@@ -169,7 +169,8 @@ class PreflopRangesDb {
   /// Mezclas de frontera explícitas (raise weight; el resto va al call si el nodo permite flat, si no a fold).
   /// Valores del usuario: BTN vs CO A5s 75/25/0; CO vs MP 88 35/65/0 (mid) y 35/0/65 (micro); 99 micro 50% por monotonía.
   static const mixOverrides = {
-    (Position.btn, Position.co): ('A5s:0.75', 'A5s:0.75', 'A5s'),
+    // BTN vs CO: farol/total calibrado a ~35.5% (α del 3-bet IP) añadiendo suited con jugabilidad/blockers.
+    (Position.btn, Position.co): ('A5s:0.75,Q9s,J9s,T8s,65s', 'A5s:0.75,Q9s,J9s,T8s,65s', 'A5s'),
     (Position.co, Position.mp): ('88:0.35', '88:0.35,99:0.5', ''),
   };
 

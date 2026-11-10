@@ -50,3 +50,15 @@ Actúa integrando dos roles simultáneos:
 - **Protocolo Zero-Break:** prohibido alterar firmas públicas o romper los checks de `docs/deep_engine_ev_audit.md`
   (Preflop_Tree 11/11, Flop_Buckets 7/7, Turn_River_Solver 7/7, Range_Funnel 5/5, Discipline_Auditor 1/1, EV_Calculator 3/3, Coverage 10/10).
   Antes de cerrar cualquier cambio: `flutter test` + todos los scripts de `docs/audit_scripts/`.
+
+## 8. SKILL INTERNA: [NASH_DELTA_AND_POOL_EDGE_HUNTER]
+**Targets teóricos (`F_GTO`) usados por `docs/audit_scripts/cold_numbers_benchmark.dart`:**
+1. `Preflop BB Defense`: prohibido comparar contra MDF bruto (37.5%). Target = `GTO_Solver_Benchmark` declarado por el usuario
+   (vs BTN 2.5x: 53.0% Mid / 48.0% High; vs CO 2.5x: 44.0%). No verificado contra exports de solver en este repo.
+2. `Preflop 3-Bet Polar Bluff Share`: α del 3-bet (B/(P+2B)); BTN vs CO ≈ 34.5-36.5%.
+3. `Turn Barrel Bluff Share`: presupuesto geométrico de 2 calles `1 - (1 - α_turn)(1 - α_river)` (≈51% con 75%/75%).
+   Nota: la variante `α_t + (1-α_t)·α_r·0.65` da ≈43.7%, no 48%; se usa la forma geométrica.
+4. `River Bluff Share por sizing`: estricto `α = B/(P+2B)`; 33% (thin/block) => 19.9% (cuota propia sobre TODO el valor fino, nunca > 22%); 125% => 35.7%.
+**Protocolo Dual:** Modo GTO (vs Reg_GTO) exige `Δ Nash <= 3.5%` por calle. Modo Exploit: `Δ Exploit = |Freq_Motor - Freq_GTO|` y
+demostración `EV_Exploit(bb) > EV_GTO(bb)` por spot con `ActionEVCalculator` bajo el perfil asumido.
+**Prohibido** publicar winrates bb/100 o $/manos sin datos reales de frecuencia de spots y del pool: solo métricas derivables (rake por bote, EV por spot).

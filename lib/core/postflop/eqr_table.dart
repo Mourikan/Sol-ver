@@ -15,7 +15,7 @@ class EqrTable {
     EqrCategory.suitedConnector: ([0.90, 0.97, 1.00], [0.75, 0.80, 0.85]),
     EqrCategory.suitedOther: ([0.85, 0.90, 0.92], [0.70, 0.74, 0.76]),
     EqrCategory.offsuitBroadway: ([0.90, 0.90, 0.88], [0.68, 0.72, 0.70]),
-    EqrCategory.offsuitOther: ([0.80, 0.80, 0.78], [0.62, 0.62, 0.60]),
+    EqrCategory.offsuitOther: ([0.80, 0.80, 0.78], [0.55, 0.52, 0.50]),
   };
 
   static EqrCategory categoryOf(int i) {

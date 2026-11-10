@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sol_ver/core/models/decision_output.dart';
 import 'package:sol_ver/core/models/game_state.dart';
@@ -105,8 +107,10 @@ void main() {
       final p = solver.plan(turn('KhKs'), scared, heroHadInitiative: true, pot: 35.5, stack: 82.5);
       expect(p.exploitFactor, 2.0);
       expect(p.sizePct, inInclusiveRange(75, 85));
-      expect(p.targetBluffShare, closeTo(TurnRiverSolver.bluffShareGto(p.sizePct) * 2, 1e-12));
-      expect(p.bluffShare, closeTo(p.targetBluffShare, 0.05));
+      // Turn: presupuesto geométrico de 2 calles x factor 2.0 (acotado a 100%: se usan todos los candidatos disponibles).
+      expect(p.targetBluffShare, closeTo(min(1.0, TurnRiverSolver.twoStreetTurnShare(p.sizePct) * 2), 1e-12));
+      expect(p.bluffShare, lessThanOrEqualTo(p.targetBluffShare + 0.05));
+      expect(p.bluffShare, greaterThan(TurnRiverSolver.bluffShareGto(p.sizePct)));
       final v = post.decide(turn('KhKs'), read: scared);
       final b = post.decide(turn('AsQd'), read: scared);
       expect(v.action, DecisionAction.betRaise);

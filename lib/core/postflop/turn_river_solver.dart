@@ -14,7 +14,7 @@ enum CardShift { brickTotal, rankShift, flushOrStraightCompletes }
 
 enum LateNode { barrel, tripleBarrel, probeBet, delayedCbet, checkedTo }
 
-enum HandRole { value, thinValue, bluff, check }
+enum HandRole { value, thinValue, bluff, thinBluff, check }
 
 class LateStreetPlan {
   const LateStreetPlan({
@@ -31,12 +31,16 @@ class LateStreetPlan {
     this.valueCombos = 0,
     this.bluffCombos = 0,
     this.heroTier = HandTier.airGiveUp,
+    this.thinBluffShare = 0,
     this.villainState = VillainRangeState.uncapped,
     this.street = Street.turn,
     this.fishRead = false,
   });
 
   final HandTier heroTier;
+
+  /// Cuota de faroles del grupo thin/block 33% (<= α_33 x factor).
+  final double thinBluffShare;
   final VillainRangeState villainState;
   final Street street;
   final bool fishRead;
@@ -111,6 +115,14 @@ class CardShiftMatrix {
 class TurnRiverSolver {
   const TurnRiverSolver();
 
+  /// TwoStreetGeometricBudget: farol en Turn = 1 - (1 - α_turn)(1 - α_river), α_river con sizing polar de river 75%.
+  /// (Modelo geométrico polarizado: tras abandonar faroles en River, el rango llega con α_river de faroles.)
+  static double twoStreetTurnShare(double turnSizePct, {double riverSizePct = 75}) =>
+      1 - (1 - bluffShareGto(turnSizePct)) * (1 - bluffShareGto(riverSizePct));
+
+  /// Sizing de River thin/block y su cuota de faroles estricta α_33.
+  static const thinRiverPct = 33.0;
+
   /// Bluff_Share_GTO = B / (P + 2B), con B como fracción del bote.
   static double bluffShareGto(double sizePct) {
     final b = sizePct / 100;
@@ -151,7 +163,7 @@ class TurnRiverSolver {
     var line = '';
     final capped = funnel.isCapped;
     if (shift == CardShift.flushOrStraightCompletes) {
-      size = h.flushSuitBlocker || h.tier == HandTier.nutsMonster ? 100 : 75;
+      size = 100; // sizing único del nodo polar (valor y faroles comparten tamaño => ratio α balanceado por sizing)
       line = 'Flush_Or_Straight_Completes: línea polarizada 75-120% (nut blocker / nuts)';
     } else if (shift == CardShift.rankShift && street == Street.turn && heroHadInitiative) {
       size = 33;
@@ -168,7 +180,7 @@ class TurnRiverSolver {
     final allIn = pot * size / 100 >= stack * 0.9 || (street == Street.river && spr <= 1.25);
     if (allIn) size = stack / pot * 100;
 
-    final gtoShare = bluffShareGto(size);
+    final gtoShare = street == Street.turn ? twoStreetTurnShare(size) : bluffShareGto(size);
     final target = math.min(gtoShare * factor, 1.0);
     final rangeBet = shift == CardShift.rankShift && street == Street.turn && heroHadInitiative;
     final sel = _selection(s, read, funnel, shift, factor, street, heroHadInitiative, target, rangeBet);
@@ -179,7 +191,7 @@ class TurnRiverSolver {
     if (vr != null) {
       (role, why) = vr;
     } else if (sel.selected.contains(heroKey)) {
-      role = HandRole.bluff;
+      role = sel.thinGroup.contains(heroKey) ? HandRole.thinBluff : HandRole.bluff;
       why = rangeBet
           ? 'Rank_Shift: barrel de rango (incluye manos sin equidad).'
           : 'Farol seleccionado (${_why(s, h, street)}); ${sel.bluff.toStringAsFixed(0)} combos de farol para ${sel.value.toStringAsFixed(0)} de valor.';
@@ -201,6 +213,7 @@ class TurnRiverSolver {
       roleReason: why,
       allIn: allIn,
       executedBluffShare: executed,
+      thinBluffShare: (sel.thinValue + sel.thinBluff) == 0 ? 0 : sel.thinBluff / (sel.thinValue + sel.thinBluff),
       valueCombos: sel.value,
       bluffCombos: sel.bluff,
       heroTier: h.tier,
@@ -215,12 +228,12 @@ class TurnRiverSolver {
     return a < b ? a * 52 + b : b * 52 + a;
   }
 
-  static final _selCache = <String, ({Set<int> selected, double value, double bluff})>{};
+  static final _selCache = <String, ({Set<int> selected, double value, double bluff, Set<int> thinGroup, double thinValue, double thinBluff})>{};
 
   /// L9: cuenta combos de valor del rango de Hero y selecciona exactamente Value x share/(1-share) faroles
   /// por prioridad Retained_Equity -> Nut_Blocker -> Unblockers_To_Folds.
-  ({Set<int> selected, double value, double bluff}) _selection(GameState s, ReadProfile read, FunnelResult f, CardShift shift,
-      double factor, Street street, bool init, double target, bool rangeBet) {
+  ({Set<int> selected, double value, double bluff, Set<int> thinGroup, double thinValue, double thinBluff}) _selection(GameState s,
+      ReadProfile read, FunnelResult f, CardShift shift, double factor, Street street, bool init, double target, bool rangeBet) {
     final key = [
       s.board.join(),
       s.heroPosition.name,
@@ -235,7 +248,8 @@ class TurnRiverSolver {
       if (_selCache.length > 256) _selCache.clear();
       final range = DefenseBudget.heroRangeAtStreet(s, read);
       final ids = [for (final c in s.board) c.id];
-      var value = 0.0;
+      var value = 0.0, thinValue = 0.0;
+      final thinNode = street == Street.river && read.archetype != GgArchetype.recPassiveFish && LateStreetPlan.condensed.contains(f.state);
       final cands = <(int, double, double)>[];
       for (final e in range.entries) {
         final a = e.key ~/ 52, b = e.key % 52;
@@ -244,7 +258,13 @@ class TurnRiverSolver {
         final h = HandTierClassifier.classify(a, b, ids);
         final vr = _valueRole(gs, h, read, f, shift, street, init);
         if (vr != null) {
-          if (vr.$1 == HandRole.value || vr.$1 == HandRole.thinValue) value += e.value;
+          if (vr.$1 == HandRole.value || vr.$1 == HandRole.thinValue) {
+            if (thinNode && h.tier != HandTier.nutsMonster) {
+              thinValue += e.value;
+            } else {
+              value += e.value;
+            }
+          }
           continue;
         }
         if (factor == 0 && !rangeBet) continue;
@@ -255,13 +275,27 @@ class TurnRiverSolver {
       cands.sort((x, y) => y.$3.compareTo(x.$3));
       final want = rangeBet ? double.infinity : (target >= 1 ? double.infinity : value * target / (1 - target));
       final sel = <int>{};
+      final thinGroup = <int>{};
       var acc = 0.0;
-      for (final (k, w, _) in cands) {
+      var i = 0;
+      for (; i < cands.length; i++) {
         if (acc >= want) break;
-        sel.add(k);
-        acc += w;
+        sel.add(cands[i].$1);
+        acc += cands[i].$2;
       }
-      return (selected: sel, value: value, bluff: acc);
+      // Grupo thin/block 33%: cuota estricta α_33 x factor sobre todo el valor fino (Strong_TopPair + Marginal).
+      var thinAcc = 0.0;
+      if (thinNode && factor > 0) {
+        final a33 = math.min(bluffShareGto(thinRiverPct) * factor, 1.0);
+        final thinWant = thinValue * a33 / (1 - a33);
+        for (; i < cands.length; i++) {
+          if (thinAcc + cands[i].$2 > thinWant + 1e-9) break;
+          sel.add(cands[i].$1);
+          thinGroup.add(cands[i].$1);
+          thinAcc += cands[i].$2;
+        }
+      }
+      return (selected: sel, value: value + thinValue, bluff: acc + thinAcc, thinGroup: thinGroup, thinValue: thinValue, thinBluff: thinAcc);
     });
   }
 
@@ -391,7 +425,8 @@ class TurnRiverSolver {
     var pct = p.sizePct;
     final thin = p.role == HandRole.thinValue || (p.street == Street.river && p.role == HandRole.value && p.heroTier != HandTier.nutsMonster);
     if (thin) pct = p.thinValuePct(pct);
-    final bb = p.allIn && !thin ? stack : math.min(stack, pot * pct / 100);
+    if (p.role == HandRole.thinBluff) pct = thinRiverPct;
+    final bb = p.allIn && !thin && p.role != HandRole.thinBluff ? stack : math.min(stack, pot * pct / 100);
     return DecisionOutput(
       action: DecisionAction.betRaise,
       sizing: Sizing(bb: bb, potPct: bb / pot * 100),
