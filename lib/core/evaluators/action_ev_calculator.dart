@@ -6,6 +6,7 @@ import '../postflop/hand_tier.dart';
 import '../postflop/range_equity.dart';
 import '../preflop/preflop_ranges_db.dart';
 import '../reads/gg_profiler.dart';
+import '../reads/mda_consensus_db.dart';
 import '../reads/range_funnel.dart';
 
 /// EV aproximado (bb) de cada acción legal. Modelo de una calle (showdown con EQR calibrado), no árbol completo.
@@ -65,8 +66,15 @@ class ActionEvCalculator {
       };
 
   /// Fold_Equity_Real: combos que foldean en el rango real del villano, modulado por perfil.
-  static double foldEquity(double rawFe, double alpha, ReadProfile read, VillainProfile vp, {required bool river, required bool capped}) {
+  static double foldEquity(double rawFe, double alpha, ReadProfile read, VillainProfile vp,
+      {required bool river, required bool capped, bool secondBarrel = false, double betFraction = 0.5}) {
     if ((read.archetype == GgArchetype.recPassiveFish || vp == VillainProfile.callingStation) && river) return 0.05;
+    if (read.archetype == GgArchetype.poolDefault || vp == VillainProfile.poolDefault) {
+      // Pool paga de más vs apuestas pequeñas de River => techo de FE; foldea de más vs double barrel => suelo de FE.
+      if (river && betFraction <= MDAParameters.smallBetMaxFraction) return math.min(rawFe, 1 - MDAParameters.riverCallEfficiencyVsSmallBet);
+      if (secondBarrel) return math.max(rawFe, MDAParameters.turnOverfoldVsDoubleBarrel);
+      return rawFe;
+    }
     if (read.archetype == GgArchetype.scaredMoneyReg && capped) return math.min(0.85, alpha * 1.35);
     return switch (vp) {
       VillainProfile.callingStation => rawFe * 0.5,
@@ -113,7 +121,11 @@ class ActionEvCalculator {
   /// [toCall] = lo que Hero debe pagar; [betSizeBb] = tamaño de nuestra apuesta (o raise-to) candidata.
   static ActionEVs postflop(GameState s, ReadProfile read, {required double potBefore, required double toCall, required double betSizeBb}) {
     final river = s.street == Street.river;
-    final vc = RangeEquity.villainCombos(s);
+    final pool = read.archetype == GgArchetype.poolDefault || s.villainProfile == VillainProfile.poolDefault;
+    final multiwayCbet = pool && toCall > 0 && s.street == Street.flop && s.activePlayers >= 3;
+    final vc = RangeEquity.villainCombos(s, valuePrior: multiwayCbet ? MDAParameters.flopCbetHonestyMultiway : null);
+    final secondBarrel = s.street == Street.turn && toCall == 0 &&
+        s.actions.any((a) => a.street == Street.flop && a.actor == s.heroPosition && a.isAggressive);
     final shots = RangeEquity.sampleShowdowns(s, vc.combos, vc.weights, samples);
     final ip = s.heroPosition.isInPositionVs(s.villainPosition!);
     final spr = (s.effectiveStackBb ?? 100) / (s.potBb ?? 1);
@@ -137,7 +149,7 @@ class ActionEvCalculator {
       }
       final rawFe = tot == 0 ? 0.0 : folds / tot;
       final alpha = size / (potNow + size);
-      final fe = foldEquity(rawFe, alpha, read, vp, river: river, capped: capped);
+      final fe = foldEquity(rawFe, alpha, read, vp, river: river, capped: capped, secondBarrel: secondBarrel, betFraction: f);
       // Retira el FE% más débil del rango (orden por tier) y mide la equity contra lo que paga.
       final foldW = List<double>.filled(vc.combos.length, 0);
       var acc = 0.0;

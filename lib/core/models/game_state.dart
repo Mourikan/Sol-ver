@@ -39,7 +39,7 @@ enum ActionType { fold, check, call, bet, raise, allIn }
 
 enum PotType { limped, srp, threeBet, fourBetPlus }
 
-enum VillainProfile { gtoBase, nit, callingStation, maniac, regAbc, regAgro, trapperPremium }
+enum VillainProfile { gtoBase, nit, callingStation, maniac, regAbc, regAgro, trapperPremium, poolDefault }
 
 /// Insta < 1.5s, normal 2-5s, long tank > 8s.
 enum TimingTell { none, instaAction, normalTiming, longTank }

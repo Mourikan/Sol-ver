@@ -6,7 +6,7 @@ import 'range_notation.dart';
 enum PreflopAction { fold, call, raise }
 
 /// seedApprox: charts puros; modelCalibrated: mezclas de frontera derivadas por modelo (NO solver); solverImport: exports reales.
-enum RangeSource { seedApprox, modelCalibrated, solverImport }
+enum RangeSource { seedApprox, modelCalibrated, solverImport, bootstrapGTO }
 
 enum ThreeBetStructure { polar, linear }
 
@@ -71,6 +71,9 @@ class RangeNode {
   RangeNode(this.id, Map<PreflopAction, String> notation, {RangeSource? source})
       : weights = _compile(notation),
         source = source ?? (_hasMix(notation) ? RangeSource.modelCalibrated : RangeSource.seedApprox);
+
+  /// Nodo construido desde pesos ya resueltos (p.ej. bootstrap de solver open-source).
+  RangeNode.fromWeights(this.id, Map<PreflopAction, Float32List> w, {required this.source}) : weights = Map.unmodifiable(w);
 
   static bool _hasMix(Map<PreflopAction, String> n) => n.values.any((v) => v.contains(':'));
 
@@ -198,8 +201,17 @@ class PreflopRangesDb {
 
   static String _tierKey(RakeTier t) => t == RakeTier.microHighRake ? 'HR' : 'MR';
 
+  static final Map<String, RangeNode> _overrides = {};
+
+  /// Registra un nodo importado (bootstrap/solver) que sustituye al nodo semilla del mismo id.
+  static void registerOverride(RangeNode node) => _overrides[node.id] = node;
+  static void clearOverrides() => _overrides.clear();
+  static String rfiId(Position p, RakeTier tier) => '${_tierKey(tier)}_RFI_${p.name}';
+
   static RangeNode rfi(Position p, RakeTier tier) {
     if (p == Position.bb) throw ArgumentError('BB no tiene RFI');
+    final o = _overrides[rfiId(p, tier)];
+    if (o != null) return o;
     return _cache.putIfAbsent('${_tierKey(tier)}_RFI_${p.name}', () {
       final r = tier == RakeTier.microHighRake ? _rfiMicro[p]! : '${_rfiMicro[p]},${_rfiMidExtra[p]}';
       return RangeNode('${_tierKey(tier)}_RFI_${p.name}', {PreflopAction.raise: r});

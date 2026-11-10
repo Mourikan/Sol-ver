@@ -21,7 +21,7 @@ class KeyMetric {
 }
 
 /// Origen de la distribución de frecuencias.
-enum FreqSource { pure, modelCalibrated, solverImport }
+enum FreqSource { pure, modelCalibrated, solverImport, bootstrapGTO }
 
 class DecisionOutput {
   const DecisionOutput({

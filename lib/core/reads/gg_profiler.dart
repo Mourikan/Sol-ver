@@ -2,7 +2,7 @@ import '../models/game_state.dart';
 
 enum ActionTag { openLimp, limpReraisePreflop, checkCallFlopCheckTurn, barrelOffOnBricks }
 
-enum GgArchetype { recPassiveFish, trapperLimpReraiser, scaredMoneyReg, agroSpewy, unknownReg }
+enum GgArchetype { recPassiveFish, trapperLimpReraiser, scaredMoneyReg, agroSpewy, unknownReg, poolDefault }
 
 class SmartHudInput {
   const SmartHudInput({this.vpip, this.pfr, this.threeBet, this.foldTo4Bet, required this.stackBb, this.autoRebuy = true});
@@ -42,6 +42,7 @@ class ReadProfile {
         GgArchetype.scaredMoneyReg => VillainProfile.regAbc,
         GgArchetype.agroSpewy => VillainProfile.maniac,
         GgArchetype.unknownReg => VillainProfile.gtoBase,
+        GgArchetype.poolDefault => VillainProfile.poolDefault,
       };
 
   bool get isRec => archetype == GgArchetype.recPassiveFish || archetype == GgArchetype.trapperLimpReraiser;
@@ -52,6 +53,7 @@ class ReadProfile {
         VillainProfile.nit || VillainProfile.regAbc => const ReadProfile(GgArchetype.scaredMoneyReg, ['perfil manual: tight']),
         VillainProfile.gtoBase => const ReadProfile(GgArchetype.unknownReg, ['perfil manual: GTO']),
         VillainProfile.trapperPremium => const ReadProfile(GgArchetype.trapperLimpReraiser, ['perfil manual: trapper']),
+        VillainProfile.poolDefault => const ReadProfile(GgArchetype.poolDefault, ['pool por defecto: priors MDA de consenso']),
       };
 }
 

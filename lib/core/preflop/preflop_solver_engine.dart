@@ -176,6 +176,7 @@ class PreflopSolverEngine {
 
   static FreqSource _src(RangeNode? n, Map<DecisionAction, double> norm) {
     if (n?.source == RangeSource.solverImport) return FreqSource.solverImport;
+    if (n?.source == RangeSource.bootstrapGTO) return FreqSource.bootstrapGTO;
     return norm.length > 1 ? FreqSource.modelCalibrated : FreqSource.pure;
   }
 
@@ -295,7 +296,7 @@ class PreflopSolverEngine {
       action: raise ? DecisionAction.betRaise : (checkOption ? DecisionAction.check : DecisionAction.fold),
       sizing: raise ? Sizing(bb: base, potPct: base / ctx.potBb * 100) : null,
       freqGto: norm,
-      freqSource: _src(null, norm),
+      freqSource: _src(ctx.limpers == 0 ? PreflopRangesDb.rfi(hero, tier) : null, norm),
       roll: norm.length > 1 ? roll : null,
       metrics: [
         KeyMetric(MetricType.eqr, hand.eqr),

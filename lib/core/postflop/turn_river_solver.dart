@@ -8,6 +8,7 @@ import '../reads/gg_profiler.dart';
 import '../reads/range_funnel.dart';
 import 'geometry.dart';
 import 'defense_budget.dart';
+import 'exploit_modifier.dart';
 import 'hand_tier.dart';
 
 enum CardShift { brickTotal, rankShift, flushOrStraightCompletes }
@@ -141,6 +142,8 @@ class TurnRiverSolver {
         return 0.5;
       case GgArchetype.unknownReg:
         return 1.0;
+      case GgArchetype.poolDefault:
+        return street == Street.turn ? ExploitModifier.poolTurnBluffFactor() : 1.0;
     }
   }
 
@@ -285,8 +288,9 @@ class TurnRiverSolver {
       }
       // Grupo thin/block 33%: cuota estricta α_33 x factor sobre todo el valor fino (Strong_TopPair + Marginal).
       var thinAcc = 0.0;
-      if (thinNode && factor > 0) {
-        final a33 = math.min(bluffShareGto(thinRiverPct) * factor, 1.0);
+      final thinFactor = read.archetype == GgArchetype.poolDefault ? ExploitModifier.poolRiverSmallBetBluffFactor() * factor : factor;
+      if (thinNode && thinFactor > 0) {
+        final a33 = math.min(bluffShareGto(thinRiverPct) * thinFactor, 1.0);
         final thinWant = thinValue * a33 / (1 - a33);
         for (; i < cands.length; i++) {
           if (thinAcc + cands[i].$2 > thinWant + 1e-9) break;

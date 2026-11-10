@@ -1,0 +1,776 @@
+{
+ "source": "TexasSolver (simulado)",
+ "node": "BTN_RFI_100bb",
+ "combos": [
+  {
+   "combo": "AA",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "KK",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "QQ",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "JJ",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "TT",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "AKs",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "99",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "AKo",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "AQs",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "88",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "AQo",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "77",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "AJs",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "66",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "AJo",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "ATs",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "55",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "ATo",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A9s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "KQs",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A8s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "44",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A7s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "KJs",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A9o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "KTs",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "KQo",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "QJs",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "33",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A6s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A4s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A5s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "QTs",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A8o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "JTs",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "T9s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "KJo",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A7o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A2s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A3s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "K9s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "Q9s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "QJo",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "J9s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "K8s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A5o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "J8s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "KTo",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "22",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A6o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "Q8s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "QTo",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "JTo",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "T8s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "98s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "K7s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "K6s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A4o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "87s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "97s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "T7s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "K5s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "J7s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "T9o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A3o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "K9o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "76s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "J9o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "K4s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "Q7s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "Q9o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "Q6s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "96s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "K3s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "T6s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "86s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "98o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "A2o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "65s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "T8o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "Q5s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "K8o",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "J8o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "J6s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "54s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "75s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "J5s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "85s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "87o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "Q4s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "K2s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "Q8o",
+   "rfi": 70,
+   "fold": 30
+  },
+  {
+   "combo": "T5s",
+   "rfi": 70,
+   "fold": 30
+  },
+  {
+   "combo": "K7o",
+   "rfi": 70,
+   "fold": 30
+  },
+  {
+   "combo": "K6o",
+   "rfi": 70,
+   "fold": 30
+  },
+  {
+   "combo": "Q3s",
+   "rfi": 70,
+   "fold": 30
+  },
+  {
+   "combo": "J3s",
+   "rfi": 30,
+   "fold": 70
+  },
+  {
+   "combo": "J7o",
+   "rfi": 30,
+   "fold": 70
+  },
+  {
+   "combo": "65o",
+   "rfi": 30,
+   "fold": 70
+  },
+  {
+   "combo": "76o",
+   "rfi": 30,
+   "fold": 70
+  },
+  {
+   "combo": "T4s",
+   "rfi": 30,
+   "fold": 70
+  },
+  {
+   "combo": "84s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "Q6o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "Q7o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "K4o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "96o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "43s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "Q5o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "94s",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "63s",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "75o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "73s",
+   "rfi": 100,
+   "fold": 0
+  },
+  {
+   "combo": "J6o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "T6o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "K2o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "93s",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "K3o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "54o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "J2s",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "62s",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "52s",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "T2s",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "83s",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "85o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "92s",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "64o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "T5o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "95o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "Q4o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "J5o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "Q3o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "82s",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "42s",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "74o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "J4o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "53o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "72s",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "T4o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "J3o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "84o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "43o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "94o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "T3o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "32s",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "Q2o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "63o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "J2o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "93o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "T2o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "73o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "92o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "83o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "82o",
+   "rfi": 0,
+   "fold": 100
+  },
+  {
+   "combo": "72o",
+   "rfi": 0,
+   "fold": 100
+  }
+ ]
+}

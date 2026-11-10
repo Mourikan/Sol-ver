@@ -6,6 +6,7 @@ import '../postflop/geometry.dart';
 import '../postflop/hand_tier.dart';
 import '../preflop/range_notation.dart';
 import '../reads/gg_profiler.dart';
+import '../reads/mda_consensus_db.dart';
 import 'board_history.dart';
 import 'timing_tells_matrix.dart';
 
@@ -48,7 +49,7 @@ class BluffCatchAuditor {
   BluffCatchAuditor._();
 
   /// Sub-farol MDA del pool NL2-NL50 en nodos agresivos (12-18% => punto medio), aplicado a combos de farol.
-  static const mdaUnderBluff = 0.15;
+  static const mdaUnderBluff = MDAParameters.riverRaiseBluffDeficit;
   static const adjustmentFloor = 0.5;
   static const collapseThreshold = 0.6;
   static const agroRatioMultiplier = 1.4;

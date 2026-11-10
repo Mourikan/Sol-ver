@@ -25,7 +25,7 @@ class BlockerBluffConverter {
   static bool gate(ReadProfile r, Stake stake) => switch (r.archetype) {
         GgArchetype.recPassiveFish || GgArchetype.trapperLimpReraiser || GgArchetype.agroSpewy => false,
         GgArchetype.scaredMoneyReg => true,
-        GgArchetype.unknownReg => stake.index >= Stake.nl25.index,
+        GgArchetype.unknownReg || GgArchetype.poolDefault => stake.index >= Stake.nl25.index,
       };
 
   static ConversionResult evaluate(GameState s, ReadProfile read, {required bool heroCanBet}) {
