@@ -30,6 +30,58 @@ class PostflopHeuristicEngine {
     if (missing.isNotEmpty) throw MissingInputs(missing);
     final rp = read ?? ReadProfile.fromVillainProfile(input.villainProfile);
     final s = read == null ? input : input.copyWith(villainProfile: read.engineProfile);
+    final d = _decideHu(s, rp);
+    if (rp.archetype == GgArchetype.unknownReg) return d;
+    // CAPA 1 — Ancla Nash: decisión vs Reg_GTO en segundo plano; ambas líneas evaluadas bajo el perfil asumido.
+    final base = _decideHu(s.copyWith(villainProfile: VillainProfile.gtoBase), _anchor);
+    final (potBefore, toCall) = _potAndCall(s);
+    final delta = evOfDecision(s, rp, d, potBefore: potBefore, toCall: toCall) -
+        evOfDecision(s, rp, base, potBefore: potBefore, toCall: toCall);
+    // Regla explotativa con Δ < 0 en apuesta propia => no se aplica (vuelve al ancla Nash). Los calls quedan bajo MDF.
+    if (delta < 0 && d.action == DecisionAction.betRaise) {
+      return base.copyWith(
+          exploitDeltaEV: 0,
+          ajusteExplotativoRead: '[EV_ANCHOR] desviación ${d.action.name} vs ${rp.archetype.name} con Δ EV '
+              '${delta.toStringAsFixed(2)}bb <= 0: no aplicada (línea Reg_GTO). ${d.ajusteExplotativoRead}');
+    }
+    return d.copyWith(exploitDeltaEV: delta);
+  }
+
+  static const _anchor = ReadProfile(GgArchetype.unknownReg, ['ancla Nash (Reg_GTO)']);
+
+  (double, double) _potAndCall(GameState s) {
+    double heroIn = 0, villainIn = 0;
+    for (final a in s.actions.where((a) => a.street == s.street)) {
+      final mine = a.actor == s.heroPosition;
+      if (a.type == ActionType.call) {
+        if (mine) {
+          heroIn = villainIn;
+        } else {
+          villainIn = heroIn;
+        }
+      } else if (a.isAggressive) {
+        if (mine) {
+          heroIn = a.amountBb;
+        } else {
+          villainIn = a.amountBb;
+        }
+      }
+    }
+    return (s.potBb! + 2 * heroIn, villainIn - heroIn);
+  }
+
+  /// EV (bb) de la acción de una decisión con `ActionEvCalculator` bajo el read dado (mismo modelo para exploit y GTO).
+  static double evOfDecision(GameState s, ReadProfile rp, DecisionOutput d, {required double potBefore, required double toCall}) {
+    final size = d.action == DecisionAction.betRaise && d.sizing != null ? d.sizing!.bb : (toCall > 0 ? toCall * 3 : potBefore * 0.5);
+    final ev = ActionEvCalculator.postflop(s, rp, potBefore: potBefore, toCall: toCall, betSizeBb: size, exactSize: true);
+    return switch (d.action) {
+      DecisionAction.fold => toCall > 0 ? ev.fold : ev.checkCall,
+      DecisionAction.check || DecisionAction.call => ev.checkCall,
+      DecisionAction.betRaise => ev.betRaise,
+    };
+  }
+
+  DecisionOutput _decideHu(GameState s, ReadProfile rp) {
     final hero = s.heroPosition, villain = s.villainPosition!;
     final limped = s.potType == PotType.limped;
     final pfa = s.preflopAggressor ?? villain;
@@ -358,7 +410,8 @@ class PostflopHeuristicEngine {
     if (heroIsPfa) {
       var row = FlopLookupTable.row(r.strategy, h.tier, trap: r.trapActive);
       final baseSet = {for (final t in HandTier.values) if (FlopLookupTable.betProbability(r.strategy, t) > 0) t};
-      final (tiers, size, note) = ExploitModifier.adjustBetting(baseSet, r.sizePct, s.villainProfile, players: s.activePlayers);
+      final (tiers, size, note) = ExploitModifier.adjustBetting(baseSet, r.sizePct, s.villainProfile,
+          players: s.activePlayers, dryBoard: r.strategy == StrategyClass.rangeBetSmall);
       if (!tiers.contains(h.tier)) {
         row = (1.0, 0.0, 0.0);
       } else if (row.$2 + row.$3 == 0 || note != null) {

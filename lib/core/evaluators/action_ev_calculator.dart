@@ -119,7 +119,8 @@ class ActionEvCalculator {
 
   /// [potBefore] = bote antes de la apuesta del villano (incluye lo ya comprometido por ambos en la calle);
   /// [toCall] = lo que Hero debe pagar; [betSizeBb] = tamaño de nuestra apuesta (o raise-to) candidata.
-  static ActionEVs postflop(GameState s, ReadProfile read, {required double potBefore, required double toCall, required double betSizeBb}) {
+  static ActionEVs postflop(GameState s, ReadProfile read,
+      {required double potBefore, required double toCall, required double betSizeBb, bool exactSize = false}) {
     final river = s.street == Street.river;
     final pool = read.archetype == GgArchetype.poolDefault || s.villainProfile == VillainProfile.poolDefault;
     final multiwayCbet = pool && toCall > 0 && s.street == Street.flop && s.activePlayers >= 3;
@@ -179,9 +180,12 @@ class ActionEvCalculator {
       cc = eqAll * eqr * (potNow - _rake(s, potNow));
     }
     final stack = s.effectiveStackBb ?? double.infinity;
-    final sizes = facing
-        ? {betSizeBb, toCall * 2.5, toCall * 3}
-        : {betSizeBb, potNow * 0.33, potNow * 0.66, potNow};
+    // exactSize: EV del tamaño pedido (auditoría Δ EV por sizing); por defecto argmax sobre sizings candidatos.
+    final sizes = exactSize
+        ? {betSizeBb}
+        : facing
+            ? {betSizeBb, toCall * 2.5, toCall * 3}
+            : {betSizeBb, potNow * 0.33, potNow * 0.66, potNow};
     var best = betEv(betSizeBb);
     var bestSize = betSizeBb;
     for (final sz in sizes) {

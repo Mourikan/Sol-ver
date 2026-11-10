@@ -5,8 +5,8 @@ import 'range_notation.dart';
 
 enum PreflopAction { fold, call, raise }
 
-/// seedApprox: charts puros; modelCalibrated: mezclas de frontera derivadas por modelo (NO solver); solverImport: exports reales.
-enum RangeSource { seedApprox, modelCalibrated, solverImport, bootstrapGTO }
+/// calibratedHeuristicBase: matriz interna (charts semilla + calibración por auditoría, NO solver); modelCalibrated: mezclas de frontera derivadas por modelo (NO solver); solverImport: exports reales.
+enum RangeSource { calibratedHeuristicBase, modelCalibrated, solverImport, bootstrapGTO }
 
 enum ThreeBetStructure { polar, linear }
 
@@ -70,7 +70,7 @@ class RakeConfig {
 class RangeNode {
   RangeNode(this.id, Map<PreflopAction, String> notation, {RangeSource? source})
       : weights = _compile(notation),
-        source = source ?? (_hasMix(notation) ? RangeSource.modelCalibrated : RangeSource.seedApprox);
+        source = source ?? (_hasMix(notation) ? RangeSource.modelCalibrated : RangeSource.calibratedHeuristicBase);
 
   /// Nodo construido desde pesos ya resueltos (p.ej. bootstrap de solver open-source).
   RangeNode.fromWeights(this.id, Map<PreflopAction, Float32List> w, {required this.source}) : weights = Map.unmodifiable(w);

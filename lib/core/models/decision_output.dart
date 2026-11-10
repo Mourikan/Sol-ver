@@ -32,6 +32,7 @@ class DecisionOutput {
     this.roll,
     this.actionEVs,
     this.heuristicAction,
+    this.exploitDeltaEV,
     this.metrics = const [],
     required this.justificacionGto,
     required this.ajusteExplotativoRead,
@@ -52,6 +53,10 @@ class DecisionOutput {
 
   /// Acción de la heurística antes de la puerta de EV (null si no hubo corrección).
   final DecisionAction? heuristicAction;
+
+  /// EV_Exploit - EV_GTO (bb) de la línea elegida frente a la línea base Reg_GTO, ambas bajo el perfil asumido.
+  /// null en modo Reg_GTO (sin desviación posible).
+  final double? exploitDeltaEV;
   final List<KeyMetric> metrics;
   final String justificacionGto;
   final String ajusteExplotativoRead;
@@ -63,7 +68,7 @@ class DecisionOutput {
 
   DecisionOutput copyWith({DecisionAction? action, Sizing? sizing, String? ajusteExplotativoRead, List<KeyMetric>? metrics,
           Map<DecisionAction, double>? freqGto, FreqSource? freqSource, Map<String, double>? actionEVs, DecisionAction? heuristicAction,
-          bool clearSizing = false}) =>
+          bool clearSizing = false, double? exploitDeltaEV}) =>
       DecisionOutput(
         action: action ?? this.action,
         sizing: clearSizing ? null : (sizing ?? this.sizing),
@@ -72,6 +77,7 @@ class DecisionOutput {
         roll: roll,
         actionEVs: actionEVs ?? this.actionEVs,
         heuristicAction: heuristicAction ?? this.heuristicAction,
+        exploitDeltaEV: exploitDeltaEV ?? this.exploitDeltaEV,
         metrics: metrics ?? this.metrics,
         justificacionGto: justificacionGto,
         ajusteExplotativoRead: ajusteExplotativoRead ?? this.ajusteExplotativoRead,
@@ -84,6 +90,7 @@ class DecisionOutput {
         'accion_mayoritaria': majorityAction.name,
         'freq_source': freqSource.name,
         if (actionEVs != null) 'action_evs_bb': actionEVs,
+        if (exploitDeltaEV != null) 'exploit_delta_ev_bb': exploitDeltaEV,
         'metricas': [for (final m in metrics) m.toJson()],
         'justificacion_gto': justificacionGto,
         'ajuste_explotativo_read': ajusteExplotativoRead,

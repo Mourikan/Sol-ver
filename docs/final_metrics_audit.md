@@ -37,14 +37,14 @@ Generado por `docs/audit_scripts/metric_audit.dart` simulando el motor combo a c
 | Defensa BB vs c-bet 33% (9h8h4c) | nl25 Fish | MDF 75.3% | 77.8% | 2.5 | OK (Regla Fish (factor 0.82)) |
 | Defensa BB vs c-bet 33% (As7d2c) | nl100 Maniac | MDF 75.3% | 86.7% | 11.4 | Justificado: Regla Maniac (factor 1.15) |
 | Defensa BB vs c-bet 33% (Qc7h2d) | nl100 Maniac | MDF 75.3% | 87.0% | 11.7 | Justificado: Regla Maniac (factor 1.15) |
-| Defensa BB vs c-bet 33% (9h8h4c) | nl100 Maniac | MDF 75.3% | 87.5% | 12.2 | Justificado: Regla Maniac (factor 1.15) |
+| Defensa BB vs c-bet 33% (9h8h4c) | nl100 Maniac | MDF 75.3% | 86.4% | 11.1 | Justificado: Regla Maniac (factor 1.15) |
 
 ## Turn
 
 | Spot/Nodo | Stake/Perfil | Métrica Teórica (MDF/α) | Métrica del Motor | Explotabilidad (Δ Nash %) | Estado |
 |---|---|---|---|---|---|
 | Double barrel 80% Kd7s2s-4h (semi 36 / puro 48 / valor 79) | Reg | geo2 = 51.5% | 51.5% | 0.0 | OK |
-| Double barrel 80% Kd7s2s-4h (semi 36 / puro 283 / valor 79) | Scared (pot>35bb, capado) | geo2 = 51.5% x 2.0 = 100.0% | 80.1% | 19.9 | Justificado: Exploit_Bluff_Factor 2.0 (scaredMoneyReg) |
+| Double barrel 80% Kd7s2s-4h (semi 36 / puro 276 / valor 79) | Scared (pot>35bb, capado) | geo2 = 51.5% x 2.0 = 100.0% | 79.7% | 20.3 | Justificado: Exploit_Bluff_Factor 2.0 (scaredMoneyReg) |
 | Double barrel 80% Kd7s2s-4h (semi 28 / puro 0 / valor 79) | Fish | geo2 = 51.5% x 0.5 = 25.8% | 26.1% | 0.3 | OK (Exploit_Bluff_Factor 0.5 (recPassiveFish)) |
 | Fold BB vs barrel 75% (As7d2c5h) | nl100 Reg | 1-MDF = 42.8% | 42.3% | 0.5 | OK |
 | Fold BB vs barrel 75% (Qc7h2dKs) | nl100 Reg | 1-MDF = 42.8% | 42.4% | 0.4 | OK |

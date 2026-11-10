@@ -56,7 +56,7 @@ void main() {
       expect(repo.rfi(Position.btn, RakeTier.midRake, i), closeTo(table.raise[i], 1 / 255));
     }
     expect(repo.sourceOf(RakeTier.midRake, PackedLayout.rfiNode(Position.btn)), RangeSource.bootstrapGTO);
-    expect(repo.sourceOf(RakeTier.midRake, PackedLayout.rfiNode(Position.co)), RangeSource.seedApprox);
+    expect(repo.sourceOf(RakeTier.midRake, PackedLayout.rfiNode(Position.co)), RangeSource.calibratedHeuristicBase);
   });
 
   test('Motor preflop usa la tabla bootstrap (freq_source bootstrapGTO)', () {

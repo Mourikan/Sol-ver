@@ -143,9 +143,13 @@ class TurnRiverSolver {
       case GgArchetype.unknownReg:
         return 1.0;
       case GgArchetype.poolDefault:
-        return street == Street.turn ? ExploitModifier.poolTurnBluffFactor() : 1.0;
+        return street == Street.turn ? overFolderFactor(ExploitModifier.poolTurnBluffFactor()) : 1.0;
     }
   }
+
+  /// Over-Folder: Exploit_Bluff_Factor acotado a [1.6, 2.2] (CLAUDE.md §9).
+  static const overFolderMin = 1.6, overFolderMax = 2.2;
+  static double overFolderFactor(double raw) => raw.clamp(overFolderMin, overFolderMax).toDouble();
 
   LateStreetPlan plan(GameState s, ReadProfile read, {required bool heroHadInitiative, required double pot, required double stack}) {
     final street = s.street;
@@ -155,12 +159,16 @@ class TurnRiverSolver {
     final h = HandTierClassifier.classify(s.hero!.high.id, s.hero!.low.id, [for (final c in s.board) c.id]);
     final heroIp = s.heroPosition.isInPositionVs(s.villainPosition!);
     final heroIsPfa = s.preflopAggressor == s.heroPosition;
-    final factor = exploitBluffFactor(read, funnel, street, pot);
+    var factor = exploitBluffFactor(read, funnel, street, pot);
     final spr = PotGeometry.spr(stack, pot);
 
     final node = heroHadInitiative
         ? (street == Street.river && _betEveryStreet(s) ? LateNode.tripleBarrel : LateNode.barrel)
         : (heroIsPfa ? LateNode.delayedCbet : (heroIp ? LateNode.checkedTo : LateNode.probeBet));
+    // Delayed_Turn_Probe: vs tight/scared (over-folder) el farol se traslada del flop húmedo al turn tras check-check.
+    final delayedProbe = read.archetype == GgArchetype.scaredMoneyReg && street == Street.turn &&
+        (node == LateNode.delayedCbet || node == LateNode.probeBet) && factor < overFolderMin;
+    if (delayedProbe) factor = overFolderMin;
 
     var size = 0.0;
     var line = '';
@@ -180,6 +188,13 @@ class TurnRiverSolver {
           : 75;
       line = 'Brick vs rango ${funnel.state.name}: barrel geométrico';
     }
+    final greedy = read.archetype == GgArchetype.recPassiveFish && street == Street.river &&
+        (h.tier == HandTier.nutsMonster || h.tier == HandTier.strongTopPairOverpair);
+    if (greedy) {
+      size = size.clamp(80, 125).toDouble();
+      line = '$line | Greedy_Value_Sizing vs Inelastic-Caller (80-125%, TPGK+)';
+    }
+    if (delayedProbe) line = '$line | Delayed_Turn_Probe vs Over-Folder (factor ${overFolderMin}x)';
     final allIn = pot * size / 100 >= stack * 0.9 || (street == Street.river && spr <= 1.25);
     if (allIn) size = stack / pot * 100;
 

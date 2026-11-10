@@ -24,8 +24,8 @@ class PackedLookupRepository {
   final Uint8List _flop;
   final Map<int, RangeSource> _sources;
 
-  /// Origen del nodo empaquetado (seedApprox por defecto; bootstrapGTO si se compiló desde JSON open-source).
-  RangeSource sourceOf(RakeTier t, int node) => _sources[t.index * PackedLayout.nodesPerTier + node] ?? RangeSource.seedApprox;
+  /// Origen del nodo empaquetado (calibratedHeuristicBase por defecto; bootstrapGTO si se compiló desde JSON open-source).
+  RangeSource sourceOf(RakeTier t, int node) => _sources[t.index * PackedLayout.nodesPerTier + node] ?? RangeSource.calibratedHeuristicBase;
 
   static int _q(double w) => (w.clamp(0.0, 1.0) * 255).round();
 

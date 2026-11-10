@@ -1,7 +1,7 @@
 # Sol-ver vs Solver CFR+ (PioSOLVER / GTO Wizard / MonkerSolver) — Evaluación técnica
 
 ## 0. Advertencia metodológica (leer primero)
-- **No existe medición directa.** En este entorno no hay ningún solver ni exports de solver; todos los rangos preflop son **semillas aproximadas** de charts públicos (`RangeSource.seedApprox`) y `freq_gto` es `null` en todas las decisiones.
+- **No existe medición directa.** En este entorno no hay ningún solver ni exports de solver; todos los rangos preflop son **semillas aproximadas** de charts públicos (`RangeSource.calibratedHeuristicBase`) y `freq_gto` es `null` en todas las decisiones.
 - Los porcentajes de este documento son **estimaciones razonadas** a partir de la arquitectura y de las métricas internas medidas (`docs/final_metrics_audit.md`), **no** resultados de un benchmark. Pueden desviarse ±10–15 pp.
 - Métrica de referencia propuesta: *acuerdo de acción por combo* (misma acción principal que la acción de mayor frecuencia del solver) y, sobre todo, *pérdida de EV en mbb/mano* frente a la estrategia del solver. La segunda es la que importa y **no la podemos calcular** sin el solver.
 

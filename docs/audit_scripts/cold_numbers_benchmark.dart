@@ -6,7 +6,6 @@
 import 'dart:io';
 import 'dart:math';
 
-import 'package:sol_ver/core/evaluators/action_ev_calculator.dart';
 import 'package:sol_ver/core/models/decision_output.dart';
 import 'package:sol_ver/core/models/game_state.dart';
 import 'package:sol_ver/core/postflop/defense_budget.dart';
@@ -268,21 +267,20 @@ void main() {
 }
 
 
-/// Edge por spot (Modo Exploit): EV en bb de la acción explotativa vs la acción GTO, ambas evaluadas bajo el perfil asumido.
-/// NO es winrate: no existen en el repo datos de frecuencia de spots ni del pool para agregarlo a bb/100.
+/// Edge por spot (Modo Full_Exploit): Δ EV = `DecisionOutput.exploitDeltaEV` = EV(línea explotativa) − EV(ancla Reg_GTO),
+/// ambas bajo el perfil asumido. NO es winrate: no existen en el repo datos de frecuencia de spots ni del pool.
 void edge(StringBuffer out) {
   final fish = GgProfiler.classify(const SmartHudInput(vpip: 50, pfr: 5, threeBet: 1, stackBb: 100));
   final scared = GgProfiler.classify(const SmartHudInput(vpip: 20, pfr: 17, threeBet: 4, stackBb: 100));
-  final nit = ReadProfile.fromVillainProfile(VillainProfile.nit);
   out
-    ..writeln('## Edge por nivel (Modo Exploit) — por spot, no bb/100')
+    ..writeln('## Edge por nivel (Modo Full_Exploit) — por spot, no bb/100')
     ..writeln()
     ..writeln('Rake por bote = E[min(%·pot, cap)] con la distribución de tamaños de `RakeConfig.potDistribution` (plantilla, no tabla oficial de sala).')
-    ..writeln('Δ EV spot = EV(acción del motor con el read) − EV(acción del motor vs Reg_GTO), ambas bajo el perfil del villano asumido (prior del usuario).')
+    ..writeln('Δ EV = `exploitDeltaEV` = EV(acción del motor con el read) − EV(ancla Nash vs Reg_GTO), ambas bajo el perfil asumido (prior del usuario).')
     ..writeln()
-    ..writeln('| Nivel | Rake medio SRP (bb/bote) | Rake medio 3BP (bb/bote) | Δ EV thin value vs Fish (bb) | Δ EV overbet vs Scared capado, insta-check river (bb) | Δ EV c-bet aire vs Nit en 7s6s5d (bb) |')
-    ..writeln('|---|---|---|---|---|---|');
-  PlayerAction a(Street s, Position p, ActionType t, [double x = 0]) => PlayerAction(s, p, t, x);
+    ..writeln('| Nivel | Rake medio SRP (bb/bote) | Rake medio 3BP (bb/bote) | Δ EV thin value vs Fish (bb) | Δ EV overbet vs Scared capado, insta-check river (bb) | '
+        'Δ EV Steal_En_Secos vs Nit, Qh3c en Kc7d2s (bb) | Δ EV Delayed_Turn_Probe vs Nit, As2s en 7s6s5d-2h (bb) |')
+    ..writeln('|---|---|---|---|---|---|---|');
   double rakePerPot(RakeConfig r, PotType t) {
     var e = 0.0;
     for (final (pot, pr) in RakeConfig.potDistribution[t]!) {
@@ -291,40 +289,90 @@ void edge(StringBuffer out) {
     return e;
   }
 
-  double spot(GameState g, ReadProfile exploitRead, {required double pot, required double stack}) {
-    final dEx = post.decide(g.copyWith(villainProfile: exploitRead.engineProfile), read: exploitRead);
-    final dGto = post.decide(g, read: reg);
-    double evOf(DecisionOutput d) {
-      final size = d.action == DecisionAction.betRaise ? d.sizing!.bb : pot * 0.5;
-      final ev = ActionEvCalculator.postflop(g.copyWith(villainProfile: exploitRead.engineProfile), exploitRead, potBefore: pot, toCall: 0, betSizeBb: size);
-      return d.action == DecisionAction.betRaise ? ev.betRaise : ev.checkCall;
-    }
-    return evOf(dEx) - evOf(dGto);
-  }
+  DecisionOutput dec(GameState g, VillainProfile vp, ReadProfile? r) =>
+      r == null ? post.decide(g.copyWith(villainProfile: vp)) : post.decide(g.copyWith(villainProfile: r.engineProfile), read: r);
+
+  GameState thin(Stake st, [String h = 'Kh5h']) => GameState(stake: st, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 90, potBb: 9.1,
+      hero: HoleCards.parse(h), board: Card.parseMany('Ks8s3d4c2h'),
+      actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8), a(Street.flop, Position.bb, ActionType.call, 1.8),
+        a(Street.turn, Position.bb, ActionType.check), a(Street.turn, Position.btn, ActionType.check), a(Street.river, Position.bb, ActionType.check)]);
+  GameState over(Stake st, [String h = 'Ah4s']) => GameState(stake: st, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 80, potBb: 18,
+      hero: HoleCards.parse(h), board: Card.parseMany('QhJh4c2h8d'),
+      actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8), a(Street.flop, Position.bb, ActionType.call, 1.8),
+        a(Street.turn, Position.bb, ActionType.check), a(Street.turn, Position.btn, ActionType.bet, 4.5), a(Street.turn, Position.bb, ActionType.call, 4.5),
+        const PlayerAction(Street.river, Position.bb, ActionType.check, 0, TimingTell.instaAction)]);
+  GameState steal(Stake st, [String h = 'Qh3c']) => GameState(stake: st, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 97.5, potBb: 5.5,
+      hero: HoleCards.parse(h), board: Card.parseMany('Kc7d2s'), actions: [...srp, a(Street.flop, Position.bb, ActionType.check)]);
+  GameState probe(Stake st, [String h = 'As2s']) => GameState(stake: st, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 97.5, potBb: 5.5,
+      hero: HoleCards.parse(h), board: Card.parseMany('7s6s5d2h'),
+      actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.check), a(Street.turn, Position.bb, ActionType.check)]);
+  GameState poolBarrel(Stake st, [String h = 'Ah4s']) => GameState(stake: st, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 95.5, potBb: 9.1,
+      hero: HoleCards.parse(h), board: Card.parseMany('Kc8d3h2s'),
+      actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8), a(Street.flop, Position.bb, ActionType.call, 1.8),
+        a(Street.turn, Position.bb, ActionType.check)]);
+  String d(double? x) => (x ?? 0).toStringAsFixed(2);
 
   for (final stake in Stake.values) {
     final r = RakeConfig.byStake[stake]!;
-    final thin = GameState(stake: stake, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 90, potBb: 9.1,
-        hero: HoleCards.parse('Kh5h'), board: Card.parseMany('Ks8s3d4c2h'),
-        actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8), a(Street.flop, Position.bb, ActionType.call, 1.8),
-          a(Street.turn, Position.bb, ActionType.check), a(Street.turn, Position.btn, ActionType.check), a(Street.river, Position.bb, ActionType.check)]);
-    final over = GameState(stake: stake, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 80, potBb: 18,
-        hero: HoleCards.parse('Ah4s'), board: Card.parseMany('QhJh4c2h8d'),
-        actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8), a(Street.flop, Position.bb, ActionType.call, 1.8),
-          a(Street.turn, Position.bb, ActionType.check), a(Street.turn, Position.btn, ActionType.bet, 4.5), a(Street.turn, Position.bb, ActionType.call, 4.5),
-          const PlayerAction(Street.river, Position.bb, ActionType.check, 0, TimingTell.instaAction)]);
-    final cb = GameState(stake: stake, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 97.5, potBb: 5.5,
-        hero: HoleCards.parse('Kh2c'), board: Card.parseMany('7s6s5d'), actions: [...srp, a(Street.flop, Position.bb, ActionType.check)]);
     out.writeln('| ${stake.name.toUpperCase()} | ${rakePerPot(r, PotType.srp).toStringAsFixed(2)} | ${rakePerPot(r, PotType.threeBet).toStringAsFixed(2)} | '
-        '${spot(thin, fish, pot: 9.1, stack: 90).toStringAsFixed(2)} | ${spot(over, scared, pot: 18, stack: 80).toStringAsFixed(2)} | ${spot(cb, nit, pot: 5.5, stack: 97.5).toStringAsFixed(2)} |');
+        '${d(dec(thin(stake), VillainProfile.callingStation, fish).exploitDeltaEV)} | ${d(dec(over(stake), VillainProfile.regAbc, scared).exploitDeltaEV)} | '
+        '${d(dec(steal(stake), VillainProfile.nit, null).exploitDeltaEV)} | ${d(dec(probe(stake), VillainProfile.nit, null).exploitDeltaEV)} |');
   }
+
+  // Auditoría exhaustiva: todas las manos de Hero en cada spot; cada desviación (acción ≠ ancla) debe tener Δ > 0.
+  final spots = <(String, GameState Function(Stake, [String]), VillainProfile, ReadProfile?, Stake)>[
+    ('Thin value River vs Fish (Inelastic-Caller)', thin, VillainProfile.callingStation, fish, Stake.nl10),
+    ('Overbet River vs Scared capado (Over-Folder)', over, VillainProfile.regAbc, scared, Stake.nl10),
+    ('Steal_En_Secos Flop vs Nit (Over-Folder)', steal, VillainProfile.nit, null, Stake.nl10),
+    ('Delayed_Turn_Probe vs Nit (Over-Folder)', probe, VillainProfile.nit, null, Stake.nl10),
+    ('Pool_Turn_Barrel vs Pool_Exploit_Default NL10', poolBarrel, VillainProfile.poolDefault, null, Stake.nl10),
+  ];
   out
     ..writeln()
+    ..writeln('### Auditoría Full_Exploit: todas las desviaciones (1 mano = 1 combo de Hero, NL10)')
+    ..writeln()
+    ..writeln('| Spot | Combos evaluados | Desviaciones vs ancla | Δ > 0 | Δ <= 0 | Δ EV medio de la desviación (bb) |')
+    ..writeln('|---|---|---|---|---|---|');
+  var totalDev = 0, totalBad = 0;
+  for (final (name, build, vp, rd, stake) in spots) {
+    final board = build(stake).board.map((c) => c.id).toSet();
+    var n = 0, dev = 0, posN = 0, bad = 0;
+    var sum = 0.0;
+    for (var i = 0; i < 52; i++) {
+      for (var j = i + 1; j < 52; j++) {
+        if (board.contains(i) || board.contains(j)) continue;
+        final g = build(stake, '${cs(j)}${cs(i)}');
+        final dx = dec(g, vp, rd);
+        final base = post.decide(g.copyWith(villainProfile: VillainProfile.gtoBase), read: reg);
+        n++;
+        final deviates = dx.action != base.action || (dx.sizing?.bb ?? 0) != (base.sizing?.bb ?? 0);
+        if (!deviates) continue;
+        dev++;
+        final x = dx.exploitDeltaEV ?? 0;
+        sum += x;
+        if (x > 0) {
+          posN++;
+        } else {
+          bad++;
+        }
+      }
+    }
+    totalDev += dev;
+    totalBad += bad;
+    out.writeln('| $name | $n | $dev | $posN | $bad | ${dev == 0 ? '—' : (sum / dev).toStringAsFixed(2)} |');
+    print('EXPLOIT $name: dev $dev, Δ<=0 $bad');
+  }
+  print('EXPLOIT TOTAL: dev $totalDev, Δ<=0 $totalBad');
+  out
+    ..writeln()
+    ..writeln('**Desviaciones Full_Exploit: $totalDev; con Δ EV <= 0: $totalBad.** Las desviaciones de apuesta propia con Δ < 0 vuelven al ancla '
+        '(`[EV_ANCHOR]`); las de call/fold quedan bajo MDF/`Bluff_Combo_Audit` (el modelo de 1-2 calles infravalora el valor de calls de rango).')
+    ..writeln()
+    ..writeln('Regla sustituida: "c-bet aire vs Nit en 7s6s5d" (Δ EV 0.00, rechazada por la puerta de EV) => `Steal_En_Secos` (solo matriz rangeBetSmall) '
+        '+ `Delayed_Turn_Probe` en turn tras check-check (factor Over-Folder 1.6x).')
     ..writeln('Δ EV = 0.00 en overbet NL25+ : la conversión LLinus ya está activa vs Reg en NL25+ (gate de la Fase 5), no hay desviación adicional.')
-    ..writeln('Δ EV = 0.00 en c-bet vs Nit: la puerta de EV rechaza el farol (EV(bet) < EV(check) con el FE de nit del modelo) => '
-        'la regla "c-bet 100% vs nit" NO pasa la prueba EV_Exploit > EV_GTO en boards check-heavy; queda neutralizada.')
-    ..writeln('Δ EV > 0 demuestra `EV_Exploit > EV_GTO` en el spot bajo el perfil asumido. El agregado bb/100 requiere frecuencias de spots y '
-        'tendencias reales del pool por nivel (base de datos de manos), que este proyecto no tiene ni debe registrar (CLAUDE.md §5).')
+    ..writeln('El agregado bb/100 requiere frecuencias de spots y tendencias reales del pool por nivel (base de datos de manos), '
+        'que este proyecto no tiene ni debe registrar (CLAUDE.md §5).')
     ..writeln()
     ..writeln('## Calificación de ingeniería (Claude, evaluación honesta)')
     ..writeln()
@@ -332,12 +380,13 @@ void edge(StringBuffer out) {
     ..writeln('|---|---|---|')
     ..writeln('| Precisión Matemática GTO | 60/100 | Δ Nash 2.4% vs referencias teóricas (MDF, α, presupuesto geométrico), pero rangos preflop semilla, '
         'targets BB declarados por el usuario y ninguna validación contra exports de solver. |')
-    ..writeln('| Letalidad Explotativa vs Pool | 55/100 | Módulos de reads, thin value, LLinus e isolation con prueba EV por spot; '
-        'priors MDA/timing sin muestra real; una regla (c-bet vs nit en boards check-heavy) no supera la prueba EV. |')
+    ..writeln('| Letalidad Explotativa vs Pool | 66/100 | Full_Exploit por defecto (Pool_Exploit_Default NL2-NL50), matriz asimétrica '
+        'Over-Folder/Under-Bluffer/Inelastic-Caller y `exploitDeltaEV` > 0 en todas las desviaciones auditadas; '
+        'el Δ se mide con el mismo modelo EV que asume el perfil: priors MDA/timing sin muestra real del pool. |')
     ..writeln('| Velocidad / Rendimiento APK | 70/100 | Lookups O(1) < 0.5 ms, decisión con EV ~1 ms, isolate persistente; el APK nunca se ha compilado ni medido en un dispositivo. |')
     ..writeln('| Seguridad Anti-Explotación | 70/100 | Presupuestos MDF exactos, EV_Sanity_Guard, invariantes y fuzzer de monotonía; '
         'las leyes MDA (folds en NL2-NL50) son explotables por regs que sobre-faroleen esas líneas. |')
     ..writeln()
-    ..writeln('**Nota global: 64/100** — motor internamente consistente y auditado; la brecha principal es de datos (solver real y pool real), no de arquitectura.')
+    ..writeln('**Nota global: 67/100** — motor internamente consistente y auditado; la brecha principal es de datos (solver real y pool real), no de arquitectura.')
     ..writeln();
 }

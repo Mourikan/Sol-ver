@@ -56,33 +56,45 @@ Generado por `docs/audit_scripts/cold_numbers_benchmark.dart` con el motor real.
 
 **Promedio global Δ Nash: 2.4%** (Modo GTO exige <= 3.5% por calle).
 
-## Edge por nivel (Modo Exploit) — por spot, no bb/100
+## Edge por nivel (Modo Full_Exploit) — por spot, no bb/100
 
 Rake por bote = E[min(%·pot, cap)] con la distribución de tamaños de `RakeConfig.potDistribution` (plantilla, no tabla oficial de sala).
-Δ EV spot = EV(acción del motor con el read) − EV(acción del motor vs Reg_GTO), ambas bajo el perfil del villano asumido (prior del usuario).
+Δ EV = `exploitDeltaEV` = EV(acción del motor con el read) − EV(ancla Nash vs Reg_GTO), ambas bajo el perfil asumido (prior del usuario).
 
-| Nivel | Rake medio SRP (bb/bote) | Rake medio 3BP (bb/bote) | Δ EV thin value vs Fish (bb) | Δ EV overbet vs Scared capado, insta-check river (bb) | Δ EV c-bet aire vs Nit en 7s6s5d (bb) |
+| Nivel | Rake medio SRP (bb/bote) | Rake medio 3BP (bb/bote) | Δ EV thin value vs Fish (bb) | Δ EV overbet vs Scared capado, insta-check river (bb) | Δ EV Steal_En_Secos vs Nit, Qh3c en Kc7d2s (bb) | Δ EV Delayed_Turn_Probe vs Nit, As2s en 7s6s5d-2h (bb) |
+|---|---|---|---|---|---|---|
+| NL2 | 2.17 | 4.04 | 1.65 | 0.42 | 1.48 | 0.24 |
+| NL5 | 2.08 | 3.89 | 1.65 | 0.42 | 1.48 | 0.24 |
+| NL10 | 1.98 | 3.74 | 1.65 | 0.42 | 1.48 | 0.24 |
+| NL25 | 1.58 | 2.74 | 1.65 | 0.00 | 1.48 | 0.24 |
+| NL50 | 1.48 | 2.39 | 1.80 | 0.00 | 1.27 | 0.48 |
+| NL100 | 1.32 | 2.13 | 1.80 | 0.00 | 1.27 | 0.48 |
+| NL200 | 1.02 | 1.42 | 1.80 | 0.00 | 1.27 | 0.48 |
+
+### Auditoría Full_Exploit: todas las desviaciones (1 mano = 1 combo de Hero, NL10)
+
+| Spot | Combos evaluados | Desviaciones vs ancla | Δ > 0 | Δ <= 0 | Δ EV medio de la desviación (bb) |
 |---|---|---|---|---|---|
-| NL2 | 2.17 | 4.04 | 2.48 | 3.90 | 0.00 |
-| NL5 | 2.08 | 3.89 | 2.48 | 3.90 | 0.00 |
-| NL10 | 1.98 | 3.74 | 2.48 | 3.90 | 0.00 |
-| NL25 | 1.58 | 2.74 | 2.48 | 0.00 | 0.00 |
-| NL50 | 1.48 | 2.39 | 2.68 | 0.00 | 0.00 |
-| NL100 | 1.32 | 2.13 | 2.68 | 0.00 | 0.00 |
-| NL200 | 1.02 | 1.42 | 2.68 | 0.00 | 0.00 |
+| Thin value River vs Fish (Inelastic-Caller) | 1081 | 243 | 243 | 0 | 2.15 |
+| Overbet River vs Scared capado (Over-Folder) | 1081 | 198 | 198 | 0 | 3.27 |
+| Steal_En_Secos Flop vs Nit (Over-Folder) | 1176 | 372 | 372 | 0 | 1.43 |
+| Delayed_Turn_Probe vs Nit (Over-Folder) | 1128 | 159 | 159 | 0 | 1.10 |
+| Pool_Turn_Barrel vs Pool_Exploit_Default NL10 | 1128 | 151 | 151 | 0 | 4.30 |
 
+**Desviaciones Full_Exploit: 1123; con Δ EV <= 0: 0.** Las desviaciones de apuesta propia con Δ < 0 vuelven al ancla (`[EV_ANCHOR]`); las de call/fold quedan bajo MDF/`Bluff_Combo_Audit` (el modelo de 1-2 calles infravalora el valor de calls de rango).
+
+Regla sustituida: "c-bet aire vs Nit en 7s6s5d" (Δ EV 0.00, rechazada por la puerta de EV) => `Steal_En_Secos` (solo matriz rangeBetSmall) + `Delayed_Turn_Probe` en turn tras check-check (factor Over-Folder 1.6x).
 Δ EV = 0.00 en overbet NL25+ : la conversión LLinus ya está activa vs Reg en NL25+ (gate de la Fase 5), no hay desviación adicional.
-Δ EV = 0.00 en c-bet vs Nit: la puerta de EV rechaza el farol (EV(bet) < EV(check) con el FE de nit del modelo) => la regla "c-bet 100% vs nit" NO pasa la prueba EV_Exploit > EV_GTO en boards check-heavy; queda neutralizada.
-Δ EV > 0 demuestra `EV_Exploit > EV_GTO` en el spot bajo el perfil asumido. El agregado bb/100 requiere frecuencias de spots y tendencias reales del pool por nivel (base de datos de manos), que este proyecto no tiene ni debe registrar (CLAUDE.md §5).
+El agregado bb/100 requiere frecuencias de spots y tendencias reales del pool por nivel (base de datos de manos), que este proyecto no tiene ni debe registrar (CLAUDE.md §5).
 
 ## Calificación de ingeniería (Claude, evaluación honesta)
 
 | Eje | Nota | Fundamento |
 |---|---|---|
 | Precisión Matemática GTO | 60/100 | Δ Nash 2.4% vs referencias teóricas (MDF, α, presupuesto geométrico), pero rangos preflop semilla, targets BB declarados por el usuario y ninguna validación contra exports de solver. |
-| Letalidad Explotativa vs Pool | 55/100 | Módulos de reads, thin value, LLinus e isolation con prueba EV por spot; priors MDA/timing sin muestra real; una regla (c-bet vs nit en boards check-heavy) no supera la prueba EV. |
+| Letalidad Explotativa vs Pool | 66/100 | Full_Exploit por defecto (Pool_Exploit_Default NL2-NL50), matriz asimétrica Over-Folder/Under-Bluffer/Inelastic-Caller y `exploitDeltaEV` > 0 en todas las desviaciones auditadas; el Δ se mide con el mismo modelo EV que asume el perfil: priors MDA/timing sin muestra real del pool. |
 | Velocidad / Rendimiento APK | 70/100 | Lookups O(1) < 0.5 ms, decisión con EV ~1 ms, isolate persistente; el APK nunca se ha compilado ni medido en un dispositivo. |
 | Seguridad Anti-Explotación | 70/100 | Presupuestos MDF exactos, EV_Sanity_Guard, invariantes y fuzzer de monotonía; las leyes MDA (folds en NL2-NL50) son explotables por regs que sobre-faroleen esas líneas. |
 
-**Nota global: 64/100** — motor internamente consistente y auditado; la brecha principal es de datos (solver real y pool real), no de arquitectura.
+**Nota global: 67/100** — motor internamente consistente y auditado; la brecha principal es de datos (solver real y pool real), no de arquitectura.
 

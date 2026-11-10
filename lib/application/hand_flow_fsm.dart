@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../core/models/decision_output.dart';
 import '../core/models/game_state.dart';
+import '../core/reads/engine_mode.dart';
 import '../core/reads/gg_profiler.dart';
 import '../core/reads/range_funnel.dart';
 import 'solver_controller.dart';
@@ -18,6 +19,9 @@ class SeatState {
   bool alive = true;
   bool allIn = false;
   VillainProfile profile = VillainProfile.gtoBase;
+
+  /// true si el usuario etiquetó al villano; si no, se usa el perfil por defecto del modo (FULL_EXPLOIT).
+  bool labeled = false;
   TimingTell nextTiming = TimingTell.none;
 }
 
@@ -104,8 +108,17 @@ class HandFlowFSM extends ChangeNotifier {
     notifyListeners();
   }
 
+  EngineMode engineMode = ProfileDefaults.defaultMode;
+
+  VillainProfile effectiveProfile(Position p) {
+    final seat = seats[p];
+    if (seat != null && seat.labeled) return seat.profile;
+    return ProfileDefaults.defaultFor(stake, mode: engineMode);
+  }
+
   void setProfile(Position p, VillainProfile profile) {
     seats[p]?.profile = profile;
+    seats[p]?.labeled = true;
     _profiles[p] = profile;
     _refreshRecommendation();
     notifyListeners();
@@ -135,7 +148,12 @@ class HandFlowFSM extends ChangeNotifier {
   void _startPreflop() {
     seats
       ..clear()
-      ..addAll({for (final p in preflopOrder) p: SeatState(p, startingStackBb)..profile = _profiles[p] ?? VillainProfile.gtoBase});
+      ..addAll({
+        for (final p in preflopOrder)
+          p: SeatState(p, startingStackBb)
+            ..profile = _profiles[p] ?? VillainProfile.gtoBase
+            ..labeled = _profiles.containsKey(p),
+      });
     seats[Position.sb]!
       ..committed = 0.5
       ..stack -= 0.5;
@@ -324,7 +342,7 @@ class HandFlowFSM extends ChangeNotifier {
       hero: HoleCards(heroCards[0], heroCards[1]),
       board: board.length >= 3 ? List.of(board) : const [],
       actions: List.of(actions),
-      villainProfile: v == null ? VillainProfile.gtoBase : seats[v]!.profile,
+      villainProfile: v == null ? ProfileDefaults.defaultFor(stake, mode: engineMode) : effectiveProfile(v),
       activePlayers: alive.length,
     );
   }
@@ -346,7 +364,7 @@ class HandFlowFSM extends ChangeNotifier {
     try {
       final s = buildGameState();
       final v = s.villainPosition;
-      final read = v == null ? null : ReadProfile.fromVillainProfile(seats[v]!.profile);
+      final read = v == null ? null : ReadProfile.fromVillainProfile(effectiveProfile(v));
       activeRecommendation = solve(s, read);
     } catch (e) {
       recommendationError = e.toString();
