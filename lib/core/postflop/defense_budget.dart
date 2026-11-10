@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import '../evaluators/hand_evaluator.dart';
 import '../models/game_state.dart';
 import '../preflop/range_notation.dart';
+import '../discipline/timing_tells_matrix.dart';
 import '../reads/gg_profiler.dart';
 import '../evaluators/board_analyzer.dart';
 import 'flop_lookup_table.dart';
@@ -65,8 +66,10 @@ class DefenseBudget {
 
   static final _cache = <String, List<(double, double, int)>>{};
 
+  static const tankFloor = 0.25;
+
   static double factor(ReadProfile r, Stake stake) => switch (r.archetype) {
-        GgArchetype.agroSpewy => 1.15,
+        GgArchetype.agroSpewy => 1.18,
         GgArchetype.recPassiveFish when stake.index <= Stake.nl50.index => 0.82,
         GgArchetype.scaredMoneyReg when stake.index <= Stake.nl50.index => 0.90,
         _ => 1.0,
@@ -240,13 +243,18 @@ class DefenseBudget {
         r.archetype.name,
         call.toStringAsFixed(2),
         s.potBb?.toStringAsFixed(2),
-        for (final a in s.actions) '${a.street.index}${a.actor.index}${a.type.index}${a.amountBb}',
+        for (final a in s.actions) '${a.street.index}${a.actor.index}${a.type.index}${a.amountBb}${a.timing.index}',
       ].join('|');
 
   /// Evalúa si la mano de Hero entra en el presupuesto de defensa del nodo actual.
   static DefenseResult evaluate(GameState s, ReadProfile r, {required double potBeforeBet, required double call}) {
     final mdf = perPlayerMdf(PotGeometry.mdf(potBeforeBet, call), s.activePlayers);
-    final target = math.min(1.0, mdf * factor(r, s.stake));
+    var target = math.min(1.0, mdf * factor(r, s.stake));
+    // Fake_Tank_Value (Turn, <= NL50): Bluff_Catch_Budget x0.5 salvo vs Agro/Maniac; piso = top 25% del rango (sin cascada).
+    final tank = TimingTellsMatrix.lastVillain(s);
+    if (s.street == Street.turn && tank.read == TimingRead.longTankBigBetHeavyValue && r.archetype != GgArchetype.agroSpewy) {
+      target = math.max(target * tank.villainBluffMultiplier, tankFloor);
+    }
     final board = [for (final c in s.board) c.id];
     final sorted = _cache.putIfAbsent(_key(s, r, call), () {
       if (_cache.length > 512) _cache.clear();

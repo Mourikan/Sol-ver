@@ -5,7 +5,7 @@ APK Android Offline en Flutter (Dart) para Póker Cash 6-Max (NL2 a NL200, 100bb
 1. **Prioridad Absoluta (+EV):** El motor opera sobre una línea base GTO inquebrantable (MDF, Pot Odds con Rake Final Esperado, Conteo Real de Combos) y solo desvía las frecuencias cuando el EV de la explotación supera al EV del equilibrio sin exponer fugas masivas.
 2. **Prohibición de Multiplicadores Ciegos:** Prohibido apilar penalizaciones multiplicativas sin piso (`floor`). Todo ajuste por MDA, Timing o Read opera sobre el conteo real de combos del `RangeFunnel`.
 3. **Filtro de Cordura (`EV_Sanity_Guard`):** Ninguna heurística puede emitir una jugada -EV evidente: prohibido pagar 5-bet shoves de 100bb con `A5s` (es 4-bet bluff, no call-off), prohibido farolear River vs `CallingStation/Fish`, prohibido c-betear aire vs `Trapper_Limp_Reraiser`, prohibido foldear `Sets/Nut-Draws` en Turn o vs `Agro/Maniac`.
-4. **Arquitectura de defensa:** Flop/Turn = `DefenseBudget` (top `MDF x Exploit_Defense_Factor` del rango que llega al nodo: 1.0 Reg/GTO, 1.15 Agro, 0.82 Passive/Scared <=NL50). River = `Bluff_Combo_Audit` por combos reales. Implementación en `lib/core/postflop/defense_budget.dart` y `lib/core/discipline/`.
+4. **Arquitectura de defensa:** Flop/Turn = `DefenseBudget` (top `MDF x Exploit_Defense_Factor` del rango que llega al nodo: 1.0 Reg/GTO, 1.18 Agro/Maniac, 0.82 Passive/Scared <=NL50). River = `Bluff_Combo_Audit` por combos reales. Implementación en `lib/core/postflop/defense_budget.dart` y `lib/core/discipline/`.
 
 ## 2. REGLAS ESTRICTAS DE EJECUCIÓN (ANTI-ALUCINACIÓN)
 - PROHIBIDO inventar frecuencias GTO. Toda regla debe derivar de: Rake Tier, Range Advantage (RA), Nut Advantage (NA), SPR, MDF, Pot Odds y Blockers.

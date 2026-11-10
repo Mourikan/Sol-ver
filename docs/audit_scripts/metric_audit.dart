@@ -109,7 +109,7 @@ void flop() {
     (Stake.nl10, 'Reg', reg, ''),
     (Stake.nl25, 'Scared', scared, 'Scared ≤NL50 factor 0.90'),
     (Stake.nl25, 'Fish', fish, 'Regla Fish (factor 0.82)'),
-    (Stake.nl100, 'Maniac', maniac, 'Regla Maniac (factor 1.15)'),
+    (Stake.nl100, 'Maniac', maniac, 'Regla Maniac (factor 1.18)'),
   ]) {
     for (final b in ['As7d2c', 'Qc7h2d', '9h8h4c']) {
       final (_, bbR) = PostflopRanges.forPot(Position.btn, Position.bb, PotType.srp, st.rakeTier);
@@ -172,7 +172,7 @@ void turn() {
     (Stake.nl100, 'Reg', reg, ''),
     (Stake.nl10, 'Reg', reg, ''),
     (Stake.nl25, 'Scared', scared, 'Scared ≤NL50 factor 0.90'),
-    (Stake.nl100, 'Maniac', maniac, 'Regla Maniac (factor 1.15)'),
+    (Stake.nl100, 'Maniac', maniac, 'Regla Maniac (factor 1.18)'),
   ]) {
     for (final b in ['As7d2c5h', 'Qc7h2dKs', 'Kd8s3s4c']) {
       final g0 = GameState(stake: st, heroPosition: Position.bb, villainPosition: Position.btn, effectiveStackBb: 95.7, potBb: 9.1,
@@ -201,7 +201,7 @@ void river() {
   for (final (st, rn, rp, just) in [
     (Stake.nl100, 'Reg', reg, ''),
     (Stake.nl10, 'Reg (MDA: triple barrel overbet)', reg, 'Ley MDA NL2-NL50 (CLAUDE.md §4)'),
-    (Stake.nl100, 'Maniac', maniac, 'Regla Maniac (piso agro + factor 1.15)'),
+    (Stake.nl100, 'Maniac', maniac, 'Regla Maniac (piso agro + factor 1.18)'),
   ]) {
     for (final b in ['Kd8s3s4c2h', 'As7d2c5h9s', 'Qc7h2dKs3c']) {
       final acts = [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8), a(Street.flop, Position.bb, ActionType.call, 1.8),

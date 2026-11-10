@@ -3,6 +3,7 @@ import 'package:flutter/material.dart' hide Card;
 import '../application/hand_flow_fsm.dart';
 import '../core/models/game_state.dart';
 import 'theme.dart';
+import 'widgets/smarthud_quick_sheet.dart';
 import 'widgets/action_pad.dart';
 import 'widgets/card_picker_grid.dart';
 import 'widgets/solver_verdict_card.dart';
@@ -171,6 +172,7 @@ class _Seat extends StatelessWidget {
     return GestureDetector(
       key: ValueKey('seat-${p.name}'),
       onTap: fsm.phase == HandPhase.setup ? () => onHero(p) : null,
+      onLongPress: hero || seat == null ? null : () => SmartHudQuickSheet.show(context, fsm, p),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
         margin: const EdgeInsets.all(3),

@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import '../core/models/decision_output.dart';
 import '../core/models/game_state.dart';
 import '../core/reads/engine_mode.dart';
+import '../core/reads/gg_smarthud_analyzer.dart';
+import '../core/reads/villain_archetypes.dart';
 import '../core/reads/gg_profiler.dart';
 import '../core/reads/range_funnel.dart';
 import 'solver_controller.dart';
@@ -23,6 +25,9 @@ class SeatState {
   /// true si el usuario etiquetó al villano; si no, se usa el perfil por defecto del modo (FULL_EXPLOIT).
   bool labeled = false;
   TimingTell nextTiming = TimingTell.none;
+
+  /// Último diagnóstico SmartHUD (stats GGPoker + etiqueta) del asiento.
+  SmartHudDeviation? hud;
 }
 
 class IllegalAction implements Exception {
@@ -125,6 +130,23 @@ class HandFlowFSM extends ChangeNotifier {
   }
 
   final Map<Position, VillainProfile> _profiles = {};
+
+  /// SmartHUD: analiza stats (+ etiqueta manual opcional) y activa el perfil del motor de la etiqueta resultante.
+  SmartHudDeviation? setHud(Position p, SmartHudStats stats, {VillainTag? manualTag}) {
+    final seat = seats[p];
+    if (seat == null) return null;
+    final dev = GgSmartHudAnalyzer.analyze(stats, manualTag: manualTag);
+    seat.hud = dev;
+    if (dev.tag == VillainTag.poolDefault) {
+      seat.labeled = false;
+      _profiles.remove(p);
+      _refreshRecommendation();
+      notifyListeners();
+    } else {
+      setProfile(p, dev.vector.profileFor(stake));
+    }
+    return dev;
+  }
 
   void setTiming(Position p, TimingTell t) {
     seats[p]?.nextTiming = t;

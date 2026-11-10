@@ -310,6 +310,13 @@ void edge(StringBuffer out) {
       hero: HoleCards.parse(h), board: Card.parseMany('Kc8d3h2s'),
       actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8), a(Street.flop, Position.bb, ActionType.call, 1.8),
         a(Street.turn, Position.bb, ActionType.check)]);
+  GameState instaOver(Stake st, [String h = 'Td3c']) => GameState(stake: st, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 80, potBb: 18,
+      hero: HoleCards.parse(h), board: Card.parseMany('QhJd4c2s8d'),
+      actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8), a(Street.flop, Position.bb, ActionType.call, 1.8),
+        const PlayerAction(Street.turn, Position.bb, ActionType.check, 0, TimingTell.instaAction), a(Street.turn, Position.btn, ActionType.bet, 4.5),
+        a(Street.turn, Position.bb, ActionType.call, 4.5), const PlayerAction(Street.river, Position.bb, ActionType.check, 0, TimingTell.instaAction)]);
+  GameState maniacFlop(Stake st, [String h = 'Kh7h']) => GameState(stake: st, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 97.5, potBb: 5.5,
+      hero: HoleCards.parse(h), board: Card.parseMany('Kc7d2s'), actions: [...srp, a(Street.flop, Position.bb, ActionType.check)]);
   String d(double? x) => (x ?? 0).toStringAsFixed(2);
 
   for (final stake in Stake.values) {
@@ -326,6 +333,8 @@ void edge(StringBuffer out) {
     ('Steal_En_Secos Flop vs Nit (Over-Folder)', steal, VillainProfile.nit, null, Stake.nl10),
     ('Delayed_Turn_Probe vs Nit (Over-Folder)', probe, VillainProfile.nit, null, Stake.nl10),
     ('Pool_Turn_Barrel vs Pool_Exploit_Default NL10', poolBarrel, VillainProfile.poolDefault, null, Stake.nl10),
+    ('Insta_Check Overbet_Bluff 125% vs Scared (SmartHUD 21/18/7/32)', instaOver, VillainProfile.regAbc, null, Stake.nl10),
+    ('Trap_Check_Nuts 40% + flop vs Maniac (SmartHUD 40/32/14/62)', maniacFlop, VillainProfile.maniac, null, Stake.nl10),
   ];
   out
     ..writeln()

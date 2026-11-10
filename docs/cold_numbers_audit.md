@@ -76,12 +76,14 @@ Rake por bote = E[min(%·pot, cap)] con la distribución de tamaños de `RakeCon
 | Spot | Combos evaluados | Desviaciones vs ancla | Δ > 0 | Δ <= 0 | Δ EV medio de la desviación (bb) |
 |---|---|---|---|---|---|
 | Thin value River vs Fish (Inelastic-Caller) | 1081 | 243 | 243 | 0 | 2.15 |
-| Overbet River vs Scared capado (Over-Folder) | 1081 | 198 | 198 | 0 | 3.27 |
+| Overbet River vs Scared capado (Over-Folder) | 1081 | 212 | 212 | 0 | 3.31 |
 | Steal_En_Secos Flop vs Nit (Over-Folder) | 1176 | 372 | 372 | 0 | 1.43 |
-| Delayed_Turn_Probe vs Nit (Over-Folder) | 1128 | 159 | 159 | 0 | 1.10 |
+| Delayed_Turn_Probe vs Nit (Over-Folder) | 1128 | 287 | 287 | 0 | 0.92 |
 | Pool_Turn_Barrel vs Pool_Exploit_Default NL10 | 1128 | 151 | 151 | 0 | 4.30 |
+| Insta_Check Overbet_Bluff 125% vs Scared (SmartHUD 21/18/7/32) | 1081 | 270 | 270 | 0 | 5.24 |
+| Trap_Check_Nuts 40% + flop vs Maniac (SmartHUD 40/32/14/62) | 1176 | 54 | 54 | 0 | 0.27 |
 
-**Desviaciones Full_Exploit: 1123; con Δ EV <= 0: 0.** Las desviaciones de apuesta propia con Δ < 0 vuelven al ancla (`[EV_ANCHOR]`); las de call/fold quedan bajo MDF/`Bluff_Combo_Audit` (el modelo de 1-2 calles infravalora el valor de calls de rango).
+**Desviaciones Full_Exploit: 1589; con Δ EV <= 0: 0.** Las desviaciones de apuesta propia con Δ < 0 vuelven al ancla (`[EV_ANCHOR]`); las de call/fold quedan bajo MDF/`Bluff_Combo_Audit` (el modelo de 1-2 calles infravalora el valor de calls de rango).
 
 Regla sustituida: "c-bet aire vs Nit en 7s6s5d" (Δ EV 0.00, rechazada por la puerta de EV) => `Steal_En_Secos` (solo matriz rangeBetSmall) + `Delayed_Turn_Probe` en turn tras check-check (factor Over-Folder 1.6x).
 Δ EV = 0.00 en overbet NL25+ : la conversión LLinus ya está activa vs Reg en NL25+ (gate de la Fase 5), no hay desviación adicional.

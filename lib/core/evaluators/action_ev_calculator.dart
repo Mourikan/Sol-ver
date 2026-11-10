@@ -177,7 +177,11 @@ class ActionEvCalculator {
       final fin = potNow + toCall;
       cc = eqAll * eqr * (fin - _rake(s, fin)) - toCall + futureBluffCapture(s, vc, eqAll, potAfterCall: fin);
     } else {
-      cc = eqAll * eqr * (potNow - _rake(s, potNow));
+      final vp = s.villainProfile;
+      final stab = vp == VillainProfile.maniac || vp == VillainProfile.regAgro ? futureBluffCapture(s, vc, eqAll, potAfterCall: potNow) : 0.0;
+      cc = eqAll * eqr * (potNow - _rake(s, potNow)) + stab;
+      // Villain_Stab_Capture (Agro/Maniac): tras nuestro check el agro apuesta su cuota de faroles (acotada por α geométrico,
+      // mismo modelo que Future_Bluff_Capture); Hero la captura con su equity. Solo Flop/Turn.
     }
     final stack = s.effectiveStackBb ?? double.infinity;
     // exactSize: EV del tamaño pedido (auditoría Δ EV por sizing); por defecto argmax sobre sizings candidatos.

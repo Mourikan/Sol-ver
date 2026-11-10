@@ -38,7 +38,14 @@ class PostflopHeuristicEngine {
     final delta = evOfDecision(s, rp, d, potBefore: potBefore, toCall: toCall) -
         evOfDecision(s, rp, base, potBefore: potBefore, toCall: toCall);
     // Regla explotativa con Δ < 0 en apuesta propia => no se aplica (vuelve al ancla Nash). Los calls quedan bajo MDF.
-    if (delta < 0 && d.action == DecisionAction.betRaise) {
+    // Check explotativo (sin apuesta enfrente) con Δ < 0 frente a la apuesta del ancla => tampoco se aplica, salvo candados
+    // del EV_Sanity_Guard y del Profile_Gate (Fish/Station inelástico y Trapper: farol 0% por candado de perfil).
+    final lock = d.justificacionGto.contains(EvSanityGuard.tag) ||
+        d.ajusteExplotativoRead.contains(EvSanityGuard.tag) ||
+        rp.archetype == GgArchetype.recPassiveFish ||
+        rp.archetype == GgArchetype.trapperLimpReraiser;
+    final passiveLoses = toCall == 0 && d.action == DecisionAction.check && base.action == DecisionAction.betRaise && !lock;
+    if (delta < 0 && (d.action == DecisionAction.betRaise || passiveLoses)) {
       return base.copyWith(
           exploitDeltaEV: 0,
           ajusteExplotativoRead: '[EV_ANCHOR] desviación ${d.action.name} vs ${rp.archetype.name} con Δ EV '
@@ -190,6 +197,11 @@ class PostflopHeuristicEngine {
   ];
 
   /// Banda de indiferencia: diferencias de EV menores se tratan como mezcla de equilibrio (no se corrigen).
+  static const maniacTrapShare = 0.40;
+
+  /// Timing (Fase 9.1, priors del usuario): Auto_Profit_Stab 66-80% (punto medio) y Overbet_Bluff River 125%.
+  static const instaStabPct = 73.0, instaOverbetPct = 125.0;
+
   static double evTolerance(double pot) => pot * 0.05 < 0.25 ? 0.25 : pot * 0.05;
 
   /// Puerta de EV: si la acción heurística pierde más que la banda frente al argmax(EV), se corrige y se documenta.
@@ -330,6 +342,25 @@ class PostflopHeuristicEngine {
       }
     }
 
+    // Insta_Check (Profile_Gate primero): rango Capped_Weak. Fish => solo thin value; Trapper/Reg_GTO => sin desviación.
+    final instaCheck = villainChecked &&
+        street.any((a) => a.actor == villain && a.type == ActionType.check && a.timing == TimingTell.instaAction);
+    final timingGate = rp.archetype != GgArchetype.recPassiveFish &&
+        rp.archetype != GgArchetype.trapperLimpReraiser &&
+        rp.archetype != GgArchetype.unknownReg;
+    const noSdv = {HandTier.airGiveUp, HandTier.backdoorBlockerBluff};
+    if (instaCheck && timingGate && noSdv.contains(h.tier)) {
+      if (s.street == Street.turn) {
+        return _bet(instaStabPct, pot, stack, metrics, 'Insta-check Turn: rango Capped_Weak (sin sets/nut-draws que protegerían).',
+            'Auto_Profit_Stab ${instaStabPct.round()}% vs ${rp.archetype.name} (Profile_Gate OK; FE del rango capado > alpha).');
+      }
+      final (blocksCall, _, blk) = TurnRiverSolver.keyBlockers(s, h);
+      if (s.street == Street.river && blocksCall) {
+        return _bet(instaOverbetPct, pot, stack, metrics, 'Insta-check River: rango Capped_Weak => Overbet_Bluff polar ${instaOverbetPct.round()}%.',
+            'Overbet_Bluff con blocker ($blk) vs ${rp.archetype.name}; Profile_Gate OK.');
+      }
+    }
+
     final conv = BlockerBluffConverter.evaluate(s, rp, heroCanBet: villainChecked || heroIp);
     if (conv.converts) {
       if (conv.mode == ConversionMode.polarizedOverbetBluff) {
@@ -417,6 +448,12 @@ class PostflopHeuristicEngine {
       } else if (row.$2 + row.$3 == 0 || note != null) {
         row = size >= 60 ? (0.0, 0.0, 1.0) : (0.0, 1.0, 0.0);
       }
+      // TAG_AGRO_MANIAC: Trap_Check_Nuts 40% (prior del usuario): el maniac farolea en el nodo de check.
+      final maniacTrap = s.villainProfile == VillainProfile.maniac && h.tier == HandTier.nutsMonster;
+      if (maniacTrap) {
+        final keep = 1 - maniacTrapShare, bet = row.$2 + row.$3;
+        row = bet == 0 ? (1.0, 0.0, 0.0) : (1 - keep * bet, row.$2 * keep, row.$3 * keep);
+      }
       m.add(KeyMetric(MetricType.rangeActionFreq, r.betFreq, 'bet del rango PFA (matriz ${r.strategy.name})'));
       final roll = DeterministicActionMixer.roll([s.hero!.high, s.hero!.low], flop, pot);
       final big = roll < row.$3 * 100, small = !big && roll < (row.$3 + row.$2) * 100;
@@ -424,7 +461,8 @@ class PostflopHeuristicEngine {
       final gto = '$tag | ${r.strategy.name} | fila tier [X ${(row.$1 * 100).round()} / B33 ${(row.$2 * 100).round()} / B75 ${(row.$3 * 100).round()}]'
           '${r.trapActive && h.tier == HandTier.nutsMonster ? ' (trap ${(FlopLookupTable.trapShare * 100).round()}%)' : ''} | '
           'bet rango ${(r.betFreq * 100).round()}% / check ${(r.checkFreq * 100).round()}% (monsters en check ${(r.monsterShareOfCheck * 100).toStringAsFixed(1)}%)';
-      final read = note ?? 'Sin desviación: ${s.villainProfile.name}.';
+      final read = '${note ?? 'Sin desviación: ${s.villainProfile.name}.'}'
+          '${maniacTrap ? ' Trap_Check_Nuts ${(maniacTrapShare * 100).round()}% vs Maniac.' : ''}';
       final src = freqs.values.any((v) => v > 0 && v < 1) ? FreqSource.modelCalibrated : FreqSource.pure;
       final d = big || small
           ? _bet(big ? (note != null ? size : 75) : (note != null ? size : FlopLookupTable.sizeOf[StrategyClass.rangeBetSmall]!), pot, stack, m, gto, read)

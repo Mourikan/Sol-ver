@@ -137,7 +137,8 @@ class TurnRiverSolver {
       case GgArchetype.trapperLimpReraiser:
         return 0.0;
       case GgArchetype.scaredMoneyReg:
-        return f.isCapped && potBb > ReadProfile.scaredBigPotBb ? 2.0 : 1.0;
+        if (f.isCapped && potBb > ReadProfile.scaredBigPotBb) return 2.0;
+        return street == Street.turn ? scaredTurnBarrelFactor : 1.0;
       case GgArchetype.agroSpewy:
         return 0.5;
       case GgArchetype.unknownReg:
@@ -149,6 +150,9 @@ class TurnRiverSolver {
 
   /// Over-Folder: Exploit_Bluff_Factor acotado a [1.6, 2.2] (CLAUDE.md §9).
   static const overFolderMin = 1.6, overFolderMax = 2.2;
+
+  /// TAG_SCARED_REG: Turn_Barrel_Bluff_Factor (prior del usuario, dentro de [1.6, 2.2]).
+  static const scaredTurnBarrelFactor = 1.8;
   static double overFolderFactor(double raw) => raw.clamp(overFolderMin, overFolderMax).toDouble();
 
   LateStreetPlan plan(GameState s, ReadProfile read, {required bool heroHadInitiative, required double pot, required double stack}) {

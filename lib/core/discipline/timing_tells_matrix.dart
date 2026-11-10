@@ -41,7 +41,7 @@ class TimingTellsMatrix {
       return const TimingEffect(TimingRead.longTankCheckMediumValue,
           capped: true, minPressureSizePct: 75, note: 'Long tank -> check: valor medio dudoso (TP mal kicker / 2nd pair); paga 1 apuesta pequeña => sizing >= 75%.');
     }
-    if (a.timing == TimingTell.longTank && a.isAggressive && a.street == Street.river && micro) {
+    if (a.timing == TimingTell.longTank && a.isAggressive && a.street != Street.flop && micro) {
       return const TimingEffect(TimingRead.longTankBigBetHeavyValue,
           villainBluffMultiplier: falseTankBluffMultiplier, note: 'Falso tank + apuesta grande (NL2-NL50): 80% valor pesado => faroles x0.5.');
     }

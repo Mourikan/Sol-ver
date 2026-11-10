@@ -45,8 +45,8 @@ class FullTreePreflop {
   /// Penalización de realización multiway para manos fuera de la whitelist (parámetro de modelo).
   static const multiwayOffsuitEqr = 0.80;
 
-  /// Iso vs Rec_Passive_Fish (L5): lineal top ~29% en CO/BTN/ciegas.
-  static const fishIsoRange = '22+,A2s+,K5s+,Q8s+,J8s+,T8s+,97s+,87s,76s,65s,A7o+,K9o+,QTo+,JTo';
+  /// Iso vs Rec_Passive_Fish: Iso_Raise_Linear top ~32% en CO/BTN/ciegas (prior del usuario, Fase 9.1).
+  static const fishIsoRange = '22+,A2s+,K5s+,Q8s+,J8s+,T8s+,97s+,87s,76s,65s,A7o+,A5o,K9o+,Q9o+,J9o+';
 
   static const callOff = 'QQ+,AKs,AKo';
   static const callOffVsNit = 'KK+,AKs';

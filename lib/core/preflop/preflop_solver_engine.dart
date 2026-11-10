@@ -64,6 +64,34 @@ class PreflopContext {
 }
 
 class PreflopSolverEngine {
+  /// Expansión del 3-bet de defensa vs Maniac (prior del usuario, Fase 9.1).
+  static const maniac3BetExpansion = 0.12;
+
+  /// Expansión del steal desde CO vs ciegas Nit (prior del usuario, Fase 9.1). BTN/SB mantienen steal 100%.
+  static const nitStealExpansion = 0.15;
+
+  static final _maniacCache = <String, Float32List>{};
+
+  /// Rango 3-bet base (raise > 0) + mejores manos por equity vs el RFI del opener hasta +12% de 1326 combos.
+  static Float32List maniacDefense3Bet(Position hero, Position opener, RakeTier tier) =>
+      _maniacCache.putIfAbsent('${hero.name}|${opener.name}|${tier.name}', () {
+        final raise = PreflopRangesDb.vsRfi(hero, opener, tier).weights[PreflopAction.raise];
+        final out = Float32List(169);
+        for (var i = 0; i < 169; i++) {
+          if ((raise?[i] ?? 0) > 0) out[i] = 1;
+        }
+        final key = '${_tk(tier)}_RFI_${opener.name}';
+        final cand = [for (var i = 0; i < 169; i++) if (out[i] == 0) i]
+          ..sort((a, b) => HandProps.equity(key, b)!.compareTo(HandProps.equity(key, a)!));
+        var added = 0.0;
+        for (final i in cand) {
+          if (added >= maniac3BetExpansion * 1326) break;
+          added += Matrix169.combos(i);
+          out[i] = 1;
+        }
+        return out;
+      });
+
   const PreflopSolverEngine({this.rake = RakeConfig.defaults, this.seed = 0});
 
   final Map<RakeTier, RakeConfig> rake;
@@ -148,7 +176,7 @@ class PreflopSolverEngine {
     }
   }
 
-  String _tk(RakeTier t) => t == RakeTier.microHighRake ? 'HR' : 'MR';
+  static String _tk(RakeTier t) => t == RakeTier.microHighRake ? 'HR' : 'MR';
   String _tierLabel(RakeTier t) => t == RakeTier.microHighRake ? 'High-Rake (NL2-NL25)' : 'Mid-Rake (NL50-NL200)';
 
   double potOddsRequired(double call, double pot) => call / (pot + call);
@@ -281,8 +309,13 @@ class PreflopSolverEngine {
     final stealVsNit = s.villainProfile == VillainProfile.nit &&
         ctx.limpers == 0 &&
         (hero == Position.btn || hero == Position.sb);
+    final coStealVsNit = s.villainProfile == VillainProfile.nit && ctx.limpers == 0 && hero == Position.co;
     var w = range[hand.index].toDouble();
     if (stealVsNit) w = 1.0;
+    if (coStealVsNit) {
+      final exp = StructureModifier.expandedRfi(hero, tier, nitStealExpansion + StructureModifier.rfiExpansion(s, hero));
+      w = exp[hand.index].toDouble();
+    }
 
     final base = ctx.limpers > 0
         ? (ip ? 3.5 : 4.5) + ctx.limpers
@@ -307,6 +340,8 @@ class PreflopSolverEngine {
           'freq tabla: ${_freqLabel(f)}${hero == Position.sb ? ' | SB: raise-or-fold, 0% complete' : ''}',
       ajusteExplotativoRead: stealVsNit
           ? 'Ciegas Nit: fold-to-steal excesivo => steal 100% cualquier dos cartas.'
+          : coStealVsNit
+          ? 'Ciegas Nit: Steal_RFI +${(nitStealExpansion * 100).round()}% desde CO (lineal por equity).'
           : ctx.limpers > 0
               ? 'Iso ${base}bb (${ctx.limpers} limper(s) +1bb c/u)${station ? '; station: sin bluffs, sizing agrandado' : ''}.'
               : 'Sin desviación: perfil ${s.villainProfile.name}.',
@@ -358,6 +393,16 @@ class PreflopSolverEngine {
     } else if (fc > 0 && offSize && !passes) {
       fc = 0;
       notes.add('Open ${ctx.raiseSizeBb}bb (no estándar): flat no supera umbral (eq ${_p(eq)} < ${_p(req)}).');
+    }
+
+    // TAG_AGRO_MANIAC (ATS >= 55%): 3-bet de defensa en ciegas expandido +12% de combos, lineal por equity vs su RFI.
+    final maniacSteal = profile == VillainProfile.maniac &&
+        (hero == Position.bb || hero == Position.sb) &&
+        (opener == Position.co || opener == Position.btn || opener == Position.sb);
+    if (maniacSteal && f3 < 1 && maniacDefense3Bet(hero, opener, tier)[i] > 0) {
+      f3 = 1;
+      fc = 0;
+      notes.add('Maniac ATS>=55%: 3-bet Def +${(maniac3BetExpansion * 100).round()}% lineal (${Matrix169.percent(maniacDefense3Bet(hero, opener, tier)).toStringAsFixed(1)}%).');
     }
 
     final f = {PreflopAction.raise: f3, PreflopAction.call: fc, PreflopAction.fold: 1 - f3 - fc};

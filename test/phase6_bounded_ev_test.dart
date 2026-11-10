@@ -57,9 +57,9 @@ void main() {
       }
       expect(cont / tot, inInclusiveRange(0.48, 0.63));
     });
-    test('Factores: 1.0 reg, 1.15 agro, 0.82 passive/scared <= NL50', () {
+    test('Factores: 1.0 reg, 1.18 agro (Maniac Fase 9.1), 0.82 passive/scared <= NL50', () {
       expect(DefenseBudget.factor(reg, Stake.nl10), 1.0);
-      expect(DefenseBudget.factor(maniac, Stake.nl100), 1.15);
+      expect(DefenseBudget.factor(maniac, Stake.nl100), 1.18);
       expect(DefenseBudget.factor(fish, Stake.nl25), 0.82);
       expect(DefenseBudget.factor(fish, Stake.nl100), 1.0);
     });
