@@ -63,40 +63,54 @@ Rake por bote = E[min(%·pot, cap)] con la distribución de tamaños de `RakeCon
 
 | Nivel | Rake medio SRP (bb/bote) | Rake medio 3BP (bb/bote) | Δ EV thin value vs Fish (bb) | Δ EV overbet vs Scared capado, insta-check river (bb) | Δ EV Steal_En_Secos vs Nit, Qh3c en Kc7d2s (bb) | Δ EV Delayed_Turn_Probe vs Nit, As2s en 7s6s5d-2h (bb) |
 |---|---|---|---|---|---|---|
-| NL2 | 2.17 | 4.04 | 1.65 | 0.42 | 1.48 | 0.24 |
-| NL5 | 2.08 | 3.89 | 1.65 | 0.42 | 1.48 | 0.24 |
-| NL10 | 1.98 | 3.74 | 1.65 | 0.42 | 1.48 | 0.24 |
-| NL25 | 1.58 | 2.74 | 1.65 | 0.00 | 1.48 | 0.24 |
-| NL50 | 1.48 | 2.39 | 1.80 | 0.00 | 1.27 | 0.48 |
-| NL100 | 1.32 | 2.13 | 1.80 | 0.00 | 1.27 | 0.48 |
-| NL200 | 1.02 | 1.42 | 1.80 | 0.00 | 1.27 | 0.48 |
+| NL2 | 2.17 | 4.04 | 0.77 | 0.00 | 1.48 | 0.24 |
+| NL5 | 2.08 | 3.89 | 0.77 | 0.00 | 1.48 | 0.24 |
+| NL10 | 1.98 | 3.74 | 0.77 | 0.00 | 1.48 | 0.24 |
+| NL25 | 1.58 | 2.74 | 0.77 | 0.00 | 1.48 | 0.24 |
+| NL50 | 1.48 | 2.39 | 0.87 | 0.00 | 1.27 | 0.48 |
+| NL100 | 1.32 | 2.13 | 0.87 | 0.00 | 1.27 | 0.48 |
+| NL200 | 1.02 | 1.42 | 0.87 | 0.00 | 1.27 | 0.48 |
 
 ### Auditoría Full_Exploit: todas las desviaciones (1 mano = 1 combo de Hero, NL10)
 
 | Spot | Combos evaluados | Desviaciones vs ancla | Δ > 0 | Δ <= 0 | Δ EV medio de la desviación (bb) |
 |---|---|---|---|---|---|
-| Thin value River vs Fish (Inelastic-Caller) | 1081 | 243 | 243 | 0 | 2.15 |
-| Overbet River vs Scared capado (Over-Folder) | 1081 | 212 | 212 | 0 | 3.31 |
+| Thin value River vs Fish (Inelastic-Caller) | 1081 | 251 | 251 | 0 | 2.58 |
+| Overbet River vs Scared capado (Over-Folder) | 1081 | 218 | 218 | 0 | 3.09 |
 | Steal_En_Secos Flop vs Nit (Over-Folder) | 1176 | 372 | 372 | 0 | 1.43 |
 | Delayed_Turn_Probe vs Nit (Over-Folder) | 1128 | 287 | 287 | 0 | 0.92 |
-| Pool_Turn_Barrel vs Pool_Exploit_Default NL10 | 1128 | 151 | 151 | 0 | 4.30 |
-| Insta_Check Overbet_Bluff 125% vs Scared (SmartHUD 21/18/7/32) | 1081 | 270 | 270 | 0 | 5.24 |
+| Pool_Turn_Barrel vs Pool_Exploit_Default NL10 | 1128 | 162 | 162 | 0 | 1.49 |
+| Insta_Check Overbet_Bluff 125% vs Scared (SmartHUD 21/18/7/32) | 1081 | 290 | 290 | 0 | 4.17 |
 | Trap_Check_Nuts 40% + flop vs Maniac (SmartHUD 40/32/14/62) | 1176 | 54 | 54 | 0 | 0.27 |
 
-**Desviaciones Full_Exploit: 1589; con Δ EV <= 0: 0.** Las desviaciones de apuesta propia con Δ < 0 vuelven al ancla (`[EV_ANCHOR]`); las de call/fold quedan bajo MDF/`Bluff_Combo_Audit` (el modelo de 1-2 calles infravalora el valor de calls de rango).
+**Desviaciones Full_Exploit: 1634; con Δ EV <= 0: 0.** Las desviaciones de apuesta propia con Δ < 0 vuelven al ancla (`[EV_ANCHOR]`); las de call/fold quedan bajo MDF/`Bluff_Combo_Audit` (el modelo de 1-2 calles infravalora el valor de calls de rango).
 
 Regla sustituida: "c-bet aire vs Nit en 7s6s5d" (Δ EV 0.00, rechazada por la puerta de EV) => `Steal_En_Secos` (solo matriz rangeBetSmall) + `Delayed_Turn_Probe` en turn tras check-check (factor Over-Folder 1.6x).
 Δ EV = 0.00 en overbet NL25+ : la conversión LLinus ya está activa vs Reg en NL25+ (gate de la Fase 5), no hay desviación adicional.
 El agregado bb/100 requiere frecuencias de spots y tendencias reales del pool por nivel (base de datos de manos), que este proyecto no tiene ni debe registrar (CLAUDE.md §5).
+
+
+## Auditoría de Terminaciones Explotativas (T1–T6) por Stake (NL2 a NL200)
+
+Barrido de los 1081-1176 combos de Hero en la línea gatillo. EV en bb promediado sobre los combos donde la terminación desvía la acción del ancla Reg_GTO; ambos EV con `ActionEvCalculator` bajo el mismo contexto de línea (priors declarados por el usuario: FE pool T1 65%, T4 62%; farol real T2 12%). Acción = la más frecuente entre los combos desviados.
+
+| Terminación | Nivel Óptimo | Acción GTO Base | Acción Explotativa | Combos desviados (Δ<=0) | EV GTO (bb) | EV Exploit (bb) | Ganancia Neta (+Δ EV bb) |
+|---|---|---|---|---|---|---|---|
+| T1 B-X-B River Overbet Punish | NL2-NL100 (NL10) | check | betRaise 115% | 223 (0) | 2.26 | 3.73 | +1.46 |
+| T2 Triple Barrel Shutdown | NL2-NL50 (NL10) | call 78% | fold | 234 (0) | -11.26 | 0.00 | +11.26 |
+| T3 Sizing asimétrico vs Fish | NL2-NL200 (NL10) | check | betRaise 100% | 251 (0) | 5.34 | 7.91 | +2.58 |
+| T4 Turn Capped Double Barrel Blitz | NL10-NL200 (NL25) | check | betRaise 80% | 12 (0) | 1.47 | 4.01 | +2.54 |
+| T5 Small River Bet-Fold | NL2-NL100 (NL10) | check | betRaise 25% | 68 (0) | 12.93 | 13.61 | +0.68 |
+| T6 Delayed Probe OOP | NL50-NL200 (NL50) | check | betRaise 70% | 691 (0) | 1.87 | 4.25 | +2.38 |
 
 ## Calificación de ingeniería (Claude, evaluación honesta)
 
 | Eje | Nota | Fundamento |
 |---|---|---|
 | Precisión Matemática GTO | 60/100 | Δ Nash 2.4% vs referencias teóricas (MDF, α, presupuesto geométrico), pero rangos preflop semilla, targets BB declarados por el usuario y ninguna validación contra exports de solver. |
-| Letalidad Explotativa vs Pool | 66/100 | Full_Exploit por defecto (Pool_Exploit_Default NL2-NL50), matriz asimétrica Over-Folder/Under-Bluffer/Inelastic-Caller y `exploitDeltaEV` > 0 en todas las desviaciones auditadas; el Δ se mide con el mismo modelo EV que asume el perfil: priors MDA/timing sin muestra real del pool. |
+| Letalidad Explotativa vs Pool | 70/100 | Full_Exploit por defecto, matriz asimétrica y 6 terminaciones T1-T6 con +Δ EV > 0 en todos los combos desviados (barrido exhaustivo); la magnitud de T1/T2/T4 depende de priors de FE/farol del usuario; el Δ se mide con el mismo modelo EV que asume el perfil: priors MDA/timing sin muestra real del pool. |
 | Velocidad / Rendimiento APK | 70/100 | Lookups O(1) < 0.5 ms, decisión con EV ~1 ms, isolate persistente; el APK nunca se ha compilado ni medido en un dispositivo. |
 | Seguridad Anti-Explotación | 70/100 | Presupuestos MDF exactos, EV_Sanity_Guard, invariantes y fuzzer de monotonía; las leyes MDA (folds en NL2-NL50) son explotables por regs que sobre-faroleen esas líneas. |
 
-**Nota global: 67/100** — motor internamente consistente y auditado; la brecha principal es de datos (solver real y pool real), no de arquitectura.
+**Nota global: 68/100** — motor internamente consistente y auditado; la brecha principal es de datos (solver real y pool real), no de arquitectura.
 

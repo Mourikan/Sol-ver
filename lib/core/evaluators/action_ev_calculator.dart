@@ -120,7 +120,12 @@ class ActionEvCalculator {
   /// [potBefore] = bote antes de la apuesta del villano (incluye lo ya comprometido por ambos en la calle);
   /// [toCall] = lo que Hero debe pagar; [betSizeBb] = tamaño de nuestra apuesta (o raise-to) candidata.
   static ActionEVs postflop(GameState s, ReadProfile read,
-      {required double potBefore, required double toCall, required double betSizeBb, bool exactSize = false}) {
+      {required double potBefore,
+      required double toCall,
+      required double betSizeBb,
+      bool exactSize = false,
+      double? foldEquityOverride,
+      double? villainBluffShare}) {
     final river = s.street == Street.river;
     final pool = read.archetype == GgArchetype.poolDefault || s.villainProfile == VillainProfile.poolDefault;
     final multiwayCbet = pool && toCall > 0 && s.street == Street.flop && s.activePlayers >= 3;
@@ -150,7 +155,8 @@ class ActionEvCalculator {
       }
       final rawFe = tot == 0 ? 0.0 : folds / tot;
       final alpha = size / (potNow + size);
-      final fe = foldEquity(rawFe, alpha, read, vp, river: river, capped: capped, secondBarrel: secondBarrel, betFraction: f);
+      // Terminaciones T1-T6: FE del perfil en la línea (prior declarado) sustituye al FE genérico.
+      final fe = foldEquityOverride ?? foldEquity(rawFe, alpha, read, vp, river: river, capped: capped, secondBarrel: secondBarrel, betFraction: f);
       // Retira el FE% más débil del rango (orden por tier) y mide la equity contra lo que paga.
       final foldW = List<double>.filled(vc.combos.length, 0);
       var acc = 0.0;
@@ -175,7 +181,10 @@ class ActionEvCalculator {
     final double cc;
     if (facing) {
       final fin = potNow + toCall;
-      cc = eqAll * eqr * (fin - _rake(s, fin)) - toCall + futureBluffCapture(s, vc, eqAll, potAfterCall: fin);
+      // T2: bluff-catcher puro vs rango polar sub-faroleado => solo gana contra la cuota real de faroles.
+      cc = villainBluffShare != null
+          ? villainBluffShare * (fin - _rake(s, fin)) - toCall
+          : eqAll * eqr * (fin - _rake(s, fin)) - toCall + futureBluffCapture(s, vc, eqAll, potAfterCall: fin);
     } else {
       final vp = s.villainProfile;
       final stab = vp == VillainProfile.maniac || vp == VillainProfile.regAgro ? futureBluffCapture(s, vc, eqAll, potAfterCall: potNow) : 0.0;

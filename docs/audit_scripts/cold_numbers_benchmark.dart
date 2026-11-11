@@ -11,6 +11,7 @@ import 'package:sol_ver/core/models/game_state.dart';
 import 'package:sol_ver/core/postflop/defense_budget.dart';
 import 'package:sol_ver/core/postflop/hand_tier.dart';
 import 'package:sol_ver/core/postflop/postflop_heuristic_engine.dart';
+import 'package:sol_ver/core/postflop/terminal_exploit_closers.dart';
 import 'package:sol_ver/core/preflop/full_tree_preflop.dart';
 import 'package:sol_ver/core/preflop/preflop_ranges_db.dart';
 import 'package:sol_ver/core/preflop/range_notation.dart';
@@ -383,19 +384,102 @@ void edge(StringBuffer out) {
     ..writeln('El agregado bb/100 requiere frecuencias de spots y tendencias reales del pool por nivel (base de datos de manos), '
         'que este proyecto no tiene ni debe registrar (CLAUDE.md §5).')
     ..writeln()
+    ;
+  closers(out);
+  out
     ..writeln('## Calificación de ingeniería (Claude, evaluación honesta)')
     ..writeln()
     ..writeln('| Eje | Nota | Fundamento |')
     ..writeln('|---|---|---|')
     ..writeln('| Precisión Matemática GTO | 60/100 | Δ Nash 2.4% vs referencias teóricas (MDF, α, presupuesto geométrico), pero rangos preflop semilla, '
         'targets BB declarados por el usuario y ninguna validación contra exports de solver. |')
-    ..writeln('| Letalidad Explotativa vs Pool | 66/100 | Full_Exploit por defecto (Pool_Exploit_Default NL2-NL50), matriz asimétrica '
-        'Over-Folder/Under-Bluffer/Inelastic-Caller y `exploitDeltaEV` > 0 en todas las desviaciones auditadas; '
+    ..writeln('| Letalidad Explotativa vs Pool | 70/100 | Full_Exploit por defecto, matriz asimétrica y 6 terminaciones T1-T6 con '
+        '+Δ EV > 0 en todos los combos desviados (barrido exhaustivo); la magnitud de T1/T2/T4 depende de priors de FE/farol del usuario; '
         'el Δ se mide con el mismo modelo EV que asume el perfil: priors MDA/timing sin muestra real del pool. |')
     ..writeln('| Velocidad / Rendimiento APK | 70/100 | Lookups O(1) < 0.5 ms, decisión con EV ~1 ms, isolate persistente; el APK nunca se ha compilado ni medido en un dispositivo. |')
     ..writeln('| Seguridad Anti-Explotación | 70/100 | Presupuestos MDF exactos, EV_Sanity_Guard, invariantes y fuzzer de monotonía; '
         'las leyes MDA (folds en NL2-NL50) son explotables por regs que sobre-faroleen esas líneas. |')
     ..writeln()
-    ..writeln('**Nota global: 67/100** — motor internamente consistente y auditado; la brecha principal es de datos (solver real y pool real), no de arquitectura.')
+    ..writeln('**Nota global: 68/100** — motor internamente consistente y auditado; la brecha principal es de datos (solver real y pool real), no de arquitectura.')
     ..writeln();
+}
+
+
+/// Auditoría T1-T6: barrido de todos los combos de Hero en la línea gatillo; Δ = EV_Exploit − EV_GTO (ancla Reg_GTO) bajo el
+/// mismo contexto de línea (prior del perfil). Promedios sobre los combos donde la terminación desvía la acción.
+void closers(StringBuffer out) {
+  const pool = VillainProfile.poolDefault;
+  const fishVp = VillainProfile.callingStation;
+  final flop = [a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8), a(Street.flop, Position.bb, ActionType.call, 1.8)];
+  GameState t1(String h) => GameState(stake: Stake.nl10, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 95.5, potBb: 9.1,
+      villainProfile: pool, hero: HoleCards.parse(h), board: Card.parseMany('Kc8d3h2s6c'),
+      actions: [...srp, ...flop, a(Street.turn, Position.bb, ActionType.check), a(Street.turn, Position.btn, ActionType.check), a(Street.river, Position.bb, ActionType.check)]);
+  GameState t2(String h) => GameState(stake: Stake.nl10, heroPosition: Position.bb, villainPosition: Position.btn, effectiveStackBb: 88.5, potBb: 23.1,
+      villainProfile: pool, hero: HoleCards.parse(h), board: Card.parseMany('Kc8d3h2s6c'),
+      actions: [...srp, ...flop, a(Street.turn, Position.bb, ActionType.check), a(Street.turn, Position.btn, ActionType.bet, 7), a(Street.turn, Position.bb, ActionType.call, 7),
+        a(Street.river, Position.bb, ActionType.check), a(Street.river, Position.btn, ActionType.bet, 18)]);
+  GameState t3(String h) => GameState(stake: Stake.nl10, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 90, potBb: 9.1,
+      villainProfile: fishVp, hero: HoleCards.parse(h), board: Card.parseMany('Ks8s3d4c2h'),
+      actions: [...srp, ...flop, a(Street.turn, Position.bb, ActionType.check), a(Street.turn, Position.btn, ActionType.check), a(Street.river, Position.bb, ActionType.check)]);
+  GameState t4(String h) => GameState(stake: Stake.nl25, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 95.5, potBb: 9.1,
+      villainProfile: pool, hero: HoleCards.parse(h), board: Card.parseMany('Kc8d3h2s'),
+      actions: [...srp, ...flop, a(Street.turn, Position.bb, ActionType.check)]);
+  GameState t5(String h) => GameState(stake: Stake.nl10, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 88.5, potBb: 23.1,
+      villainProfile: pool, hero: HoleCards.parse(h), board: Card.parseMany('Kc8d3h2s6c'),
+      actions: [...srp, ...flop, a(Street.turn, Position.bb, ActionType.check), a(Street.turn, Position.btn, ActionType.bet, 7), a(Street.turn, Position.bb, ActionType.call, 7),
+        a(Street.river, Position.bb, ActionType.check)]);
+  GameState t6(String h) => GameState(stake: Stake.nl50, heroPosition: Position.bb, villainPosition: Position.btn, effectiveStackBb: 97.5, potBb: 5.5,
+      villainProfile: pool, hero: HoleCards.parse(h), board: Card.parseMany('Kc8d3h2s'),
+      actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.check)]);
+  final spots = <(String, String, GameState Function(String), double, double)>[
+    ('T1 B-X-B River Overbet Punish', 'NL2-NL100 (NL10)', t1, 9.1, 0),
+    ('T2 Triple Barrel Shutdown', 'NL2-NL50 (NL10)', t2, 23.1, 18),
+    ('T3 Sizing asimétrico vs Fish', 'NL2-NL200 (NL10)', t3, 9.1, 0),
+    ('T4 Turn Capped Double Barrel Blitz', 'NL10-NL200 (NL25)', t4, 9.1, 0),
+    ('T5 Small River Bet-Fold', 'NL2-NL100 (NL10)', t5, 23.1, 0),
+    ('T6 Delayed Probe OOP', 'NL50-NL200 (NL50)', t6, 5.5, 0),
+  ];
+  String act(DecisionOutput d) => '${d.action.name}${d.sizing == null ? '' : ' ${d.sizing!.potPct.round()}%'}';
+  out
+    ..writeln()
+    ..writeln('## Auditoría de Terminaciones Explotativas (T1–T6) por Stake (NL2 a NL200)')
+    ..writeln()
+    ..writeln('Barrido de los 1081-1176 combos de Hero en la línea gatillo. EV en bb promediado sobre los combos donde la terminación '
+        'desvía la acción del ancla Reg_GTO; ambos EV con `ActionEvCalculator` bajo el mismo contexto de línea (priors declarados '
+        'por el usuario: FE pool T1 65%, T4 62%; farol real T2 12%). Acción = la más frecuente entre los combos desviados.')
+    ..writeln()
+    ..writeln('| Terminación | Nivel Óptimo | Acción GTO Base | Acción Explotativa | Combos desviados (Δ<=0) | EV GTO (bb) | EV Exploit (bb) | Ganancia Neta (+Δ EV bb) |')
+    ..writeln('|---|---|---|---|---|---|---|---|');
+  for (final (name, lvl, build, potBefore, toCall) in spots) {
+    final board = build('AhAd').board.map((c) => c.id).toSet();
+    var dev = 0, bad = 0;
+    var evG = 0.0, evE = 0.0;
+    final baseActs = <String, int>{}, exActs = <String, int>{};
+    for (var i = 0; i < 52; i++) {
+      for (var j = i + 1; j < 52; j++) {
+        if (board.contains(i) || board.contains(j)) continue;
+        final g = build('${cs(j)}${cs(i)}');
+        final rp = ReadProfile.fromVillainProfile(g.villainProfile);
+        final dx = post.decide(g);
+        final base = post.decide(g.copyWith(villainProfile: VillainProfile.gtoBase), read: reg);
+        final deviates = dx.action != base.action || (dx.sizing?.bb ?? 0) != (base.sizing?.bb ?? 0);
+        if (!deviates || !dx.ajusteExplotativoRead.contains('Terminal_Closer')) continue;
+        final ctx = TerminalExploitClosers.context(g, rp, potBefore: potBefore, toCall: toCall);
+        final e = PostflopHeuristicEngine.evOfDecision(g, rp, dx, potBefore: potBefore, toCall: toCall, closer: ctx);
+        final b = PostflopHeuristicEngine.evOfDecision(g, rp, base, potBefore: potBefore, toCall: toCall, closer: ctx);
+        dev++;
+        if (e - b <= 0) bad++;
+        evG += b;
+        evE += e;
+        baseActs.update(act(base), (v) => v + 1, ifAbsent: () => 1);
+        exActs.update(act(dx), (v) => v + 1, ifAbsent: () => 1);
+      }
+    }
+    String top(Map<String, int> m) => m.isEmpty ? '—' : (m.entries.toList()..sort((x, y) => y.value.compareTo(x.value))).first.key;
+    final n = dev == 0 ? 1 : dev;
+    out.writeln('| $name | $lvl | ${top(baseActs)} | ${top(exActs)} | $dev ($bad) | ${(evG / n).toStringAsFixed(2)} | '
+        '${(evE / n).toStringAsFixed(2)} | ${dev == 0 ? '0.00' : '+${((evE - evG) / n).toStringAsFixed(2)}'} |');
+    print('CLOSER ${name.split(' ').first}: dev $dev, Δ<=0 $bad, +Δ ${((evE - evG) / n).toStringAsFixed(2)}bb');
+  }
+  out.writeln();
 }

@@ -19,6 +19,7 @@ import '../reads/gg_profiler.dart';
 import '../reads/multiway_threat_aggregator.dart';
 import 'postflop_ranges.dart';
 import 'range_equity.dart';
+import 'terminal_exploit_closers.dart';
 import 'turn_river_solver.dart';
 
 class PostflopHeuristicEngine {
@@ -35,8 +36,10 @@ class PostflopHeuristicEngine {
     // CAPA 1 — Ancla Nash: decisión vs Reg_GTO en segundo plano; ambas líneas evaluadas bajo el perfil asumido.
     final base = _decideHu(s.copyWith(villainProfile: VillainProfile.gtoBase), _anchor);
     final (potBefore, toCall) = _potAndCall(s);
-    final delta = evOfDecision(s, rp, d, potBefore: potBefore, toCall: toCall) -
-        evOfDecision(s, rp, base, potBefore: potBefore, toCall: toCall);
+    // Terminaciones T1-T6: el mismo contexto de línea (prior del perfil) evalúa la línea explotativa y el ancla.
+    final closer = TerminalExploitClosers.context(s, rp, potBefore: potBefore, toCall: toCall);
+    final delta = evOfDecision(s, rp, d, potBefore: potBefore, toCall: toCall, closer: closer) -
+        evOfDecision(s, rp, base, potBefore: potBefore, toCall: toCall, closer: closer);
     // Regla explotativa con Δ < 0 en apuesta propia => no se aplica (vuelve al ancla Nash). Los calls quedan bajo MDF.
     // Check explotativo (sin apuesta enfrente) con Δ < 0 frente a la apuesta del ancla => tampoco se aplica, salvo candados
     // del EV_Sanity_Guard y del Profile_Gate (Fish/Station inelástico y Trapper: farol 0% por candado de perfil).
@@ -78,9 +81,16 @@ class PostflopHeuristicEngine {
   }
 
   /// EV (bb) de la acción de una decisión con `ActionEvCalculator` bajo el read dado (mismo modelo para exploit y GTO).
-  static double evOfDecision(GameState s, ReadProfile rp, DecisionOutput d, {required double potBefore, required double toCall}) {
+  static double evOfDecision(GameState s, ReadProfile rp, DecisionOutput d,
+      {required double potBefore, required double toCall, CloserContext? closer}) {
     final size = d.action == DecisionAction.betRaise && d.sizing != null ? d.sizing!.bb : (toCall > 0 ? toCall * 3 : potBefore * 0.5);
-    final ev = ActionEvCalculator.postflop(s, rp, potBefore: potBefore, toCall: toCall, betSizeBb: size, exactSize: true);
+    final ev = ActionEvCalculator.postflop(s, rp,
+        potBefore: potBefore,
+        toCall: toCall,
+        betSizeBb: size,
+        exactSize: true,
+        foldEquityOverride: closer?.foldEquityOverride,
+        villainBluffShare: closer?.villainBluffShare);
     return switch (d.action) {
       DecisionAction.fold => toCall > 0 ? ev.fold : ev.checkCall,
       DecisionAction.check || DecisionAction.call => ev.checkCall,
@@ -183,6 +193,7 @@ class PostflopHeuristicEngine {
     EvSanityGuard.tag,
     'Turn_SDV_Into_Bluff',
     'FOLD DISCIPLINADO',
+    'Terminal_Closer',
     'Nutted_Unbalanced_Value',
     'Trapper',
     'trap',
@@ -286,6 +297,12 @@ class PostflopHeuristicEngine {
     if (s.potType == PotType.fourBetPlus) {
       return FourBetPotSolver.decide(s, h,
           pot: pot, stack: stack, toCall: toCall, potBeforeBet: pot - villainIn + heroIn, heroIsPfa: s.preflopAggressor == s.heroPosition);
+    }
+    if (s.street != Street.flop) {
+      final potBefore = pot - villainIn + heroIn;
+      final cp = TerminalExploitClosers.plan(s, rp, h,
+          potBefore: potBefore, toCall: toCall, roll: DeterministicActionMixer.roll([s.hero!.high, s.hero!.low], s.board, pot));
+      if (cp != null) return _closer(cp, pot, stack, toCall, potBefore, metrics);
     }
     if (toCall > 0) {
       final firstAgg = street.where((a) => a.isAggressive).firstOrNull;
@@ -425,6 +442,35 @@ class PostflopHeuristicEngine {
       justificacionGto: gto,
       ajusteExplotativoRead: read,
     );
+  }
+
+  DecisionOutput _closer(CloserPlan cp, double pot, double stack, double toCall, double potBefore, List<KeyMetric> m) {
+    final read = '${cp.marker} (Stake_Gate + perfil; certificado por exploitDeltaEV).';
+    switch (cp.action) {
+      case DecisionAction.fold:
+        return DecisionOutput(
+            action: DecisionAction.fold,
+            metrics: m,
+            freqGto: const {DecisionAction.fold: 1.0},
+            freqSource: FreqSource.pure,
+            justificacionGto: cp.why,
+            ajusteExplotativoRead: '100% FOLD DISCIPLINADO: $read');
+      case DecisionAction.check || DecisionAction.call:
+        return _check(m, cp.why, read);
+      case DecisionAction.betRaise:
+        if (toCall > 0) {
+          var to = toCall * TerminalExploitClosers.t1RaiseMult;
+          if (to >= stack * 0.9) to = stack;
+          return DecisionOutput(
+            action: DecisionAction.betRaise,
+            sizing: Sizing(bb: to, potPct: to / potBefore * 100),
+            metrics: m,
+            justificacionGto: cp.why,
+            ajusteExplotativoRead: read,
+          );
+        }
+        return _bet(cp.sizePct!, pot, stack, m, cp.why, read);
+    }
   }
 
   DecisionOutput _check(List<KeyMetric> m, String gto, String read) =>

@@ -71,3 +71,15 @@ Arquitectura de decisión en 2 capas. Origen de datos internos: `RangeSource.cal
   2. **Under-Bluffer** (`Pool_River_Raise`, `Pool_Triple_Barrel_NL2_NL50`, `Rec_Pot_Donk`, `Trapper_Limp_3Bet`): `MDF_Override = OFF` => `Disciplined_Overfold` de bluff-catchers puros (1 par / overpair sin redraw).
   3. **Inelastic-Caller** (`Fish / CallingStation`): `River_Bluff_Freq = 0%`; thin value expandido; `Greedy_Value_Sizing` 80-125% con TopPair_GoodKicker+.
 - Toda desviación expone `DecisionOutput.exploitDeltaEV = EV_Exploit - EV_GTO` (bb, ambos bajo el EV del perfil asumido); una regla explotativa con Δ <= 0 no se aplica (ej.: c-bet de aire vs Nit en board húmedo => sustituido por `Delayed_Turn_Probe` / steal solo en boards secos).
+
+## 10. SKILL INTERNA: [STAKE_CRUSHER_TERMINAL_EXPLOITS]
+**Directiva Suprema:** maximizar EV real en bb (`argmax(EV_Exploit)`). En calles de cierre (Turn/River) se rompe deliberadamente MDF / α de Nash
+cuando se activa un gatillo de nivel (`Stake_Gate`) y `ActionEVCalculator` certifica `EV_Exploit > EV_GTO` (`exploitDeltaEV`) tras `EV_Sanity_Guard`.
+Nunca vs `Reg_GTO` (ancla intacta). Implementación: `lib/core/postflop/terminal_exploit_closers.dart`. FE / cuotas de farol = priors declarados por el usuario.
+- **T1 B-X-B River Overbet Punish** (NL2-NL100, Pool/Scared): river check => overbet 115% con valor o nut-blocker sin SDV; probe <=33% => raise 3.2x (TwoPair+ / nut-blocker). FE pool 65%.
+- **T2 Triple Barrel / River Raise Shutdown** (NL2-NL50, Pool/Nit/Scared/Fish): B-B-B (turn y river >=75%) o raise river => `MDF_Override 0%`, 100% fold de 1-par si farol real (12%) < pot odds. Maniac excluido.
+- **T3 Sizing asimétrico vs Fish** (NL2-NL200): TPGK+ 100% (85-115); top/2º par débil 30% (25-33); farol River 0%.
+- **T4 Turn Capped Double Barrel Blitz** (NL10-NL200, IP, c-bet <=40% pagada, turn sin completar): 80% con semifaroles, valor y overcards con blocker; FE pool 62% >= 58%.
+- **T5 Small River Bet-Fold** (NL2-NL100, rango condensado): 25% con Marginal_Made_Showdown; si resube => fold (T2).
+- **T6 Delayed Probe OOP** (NL50-NL200, flop X-X, turn sin completar): probe 70% con valor/draws + ~55% del resto (mezcla determinista).
+Auditoría: tabla T1-T6 en `docs/cold_numbers_audit.md` (barrido exhaustivo de combos; 0 desviaciones con Δ <= 0 exigido).

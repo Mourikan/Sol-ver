@@ -45,7 +45,7 @@ Generado por `docs/audit_scripts/metric_audit.dart` simulando el motor combo a c
 |---|---|---|---|---|---|
 | Double barrel 80% Kd7s2s-4h (semi 36 / puro 48 / valor 79) | Reg | geo2 = 51.5% | 51.5% | 0.0 | OK |
 | Double barrel 80% Kd7s2s-4h (semi 36 / puro 276 / valor 79) | Scared (pot>35bb, capado) | geo2 = 51.5% x 2.0 = 100.0% | 79.7% | 20.3 | Justificado: Exploit_Bluff_Factor 2.0 (scaredMoneyReg) |
-| Double barrel 80% Kd7s2s-4h (semi 28 / puro 0 / valor 79) | Fish | geo2 = 51.5% x 0.5 = 25.8% | 26.1% | 0.3 | OK (Exploit_Bluff_Factor 0.5 (recPassiveFish)) |
+| Double barrel 100% Kd7s2s-4h (semi 28 / puro 49 / valor 79) | Fish | geo2 = 53.3% x 0.5 = 26.7% | 49.4% | 22.7 | Justificado: Exploit_Bluff_Factor 0.5 (recPassiveFish) |
 | Fold BB vs barrel 75% (As7d2c5h) | nl100 Reg | 1-MDF = 42.8% | 42.3% | 0.5 | OK |
 | Fold BB vs barrel 75% (Qc7h2dKs) | nl100 Reg | 1-MDF = 42.8% | 42.4% | 0.4 | OK |
 | Fold BB vs barrel 75% (Kd8s3s4c) | nl100 Reg | 1-MDF = 42.8% | 41.0% | 1.8 | OK |
@@ -72,7 +72,7 @@ Generado por `docs/audit_scripts/metric_audit.dart` simulando el motor combo a c
 | Bluff-catch vs pot (Kd8s3s4c2h) — unblockers 70.0% vs blockers 69.5% | nl100 Maniac | MDF 50.0% | 59.0% | 9.0 | Justificado: Regla Maniac (piso agro + factor 1.18) |
 | Bluff-catch vs pot (As7d2c5h9s) — n/a (sin proyecto de color) | nl100 Maniac | MDF 50.0% | 59.1% | 9.1 | Justificado: Regla Maniac (piso agro + factor 1.18) |
 | Bluff-catch vs pot (Qc7h2dKs3c) — n/a (sin proyecto de color) | nl100 Maniac | MDF 50.0% | 59.0% | 9.0 | Justificado: Regla Maniac (piso agro + factor 1.18) |
-| Conversión LLinus (overbet/all-in de no-valor) QhJh4c2h8d capado | Scared | >0% | 44.2% | 0.0 | OK (Regla LLinus (rango capado)) |
+| Conversión LLinus (overbet/all-in de no-valor) QhJh4c2h8d capado | Scared | >0% | 38.2% | 0.0 | OK (Regla LLinus (rango capado)) |
 | Conversión LLinus (overbet/all-in de no-valor) QhJh4c2h8d capado | Reg NL50 | >0% | 42.3% | 0.0 | OK (Regla LLinus (rango capado)) |
 | Conversión LLinus (overbet/all-in de no-valor) QhJh4c2h8d capado | CallingStation | 0% estricto | 0.0% | 0.0 | OK (Gate Fish/Station) |
 

@@ -146,10 +146,10 @@ void main() {
       expect(d.action, DecisionAction.check);
       expect(solver.plan(g('QsJs'), fish, heroHadInitiative: false, pot: 9.1, stack: 90).bluffShare, 0);
     });
-    test('Top pair mal kicker: thin value 50-66%; buen kicker: value bet', () {
+    test('Top pair mal kicker: Block-Thin-Value 25-33% (T3, Fase 9.2); buen kicker: value bet', () {
       final d = post.decide(g('Kh5h'), read: fish);
       expect(d.action, DecisionAction.betRaise);
-      expect(d.sizing!.potPct, inInclusiveRange(50, 66));
+      expect(d.sizing!.potPct, inInclusiveRange(25, 33));
       expect(post.decide(g('AhKd'), read: fish).action, DecisionAction.betRaise);
     });
     test('2do par: thin value vs fish', () {
