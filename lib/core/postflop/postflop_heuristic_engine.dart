@@ -20,12 +20,48 @@ import '../reads/multiway_threat_aggregator.dart';
 import 'postflop_ranges.dart';
 import 'range_equity.dart';
 import 'terminal_exploit_closers.dart';
+import '../evaluators/decision_justifier.dart';
+import '../reads/villain_range_inspector.dart';
 import 'turn_river_solver.dart';
 
 class PostflopHeuristicEngine {
   const PostflopHeuristicEngine();
 
   DecisionOutput decide(GameState input, {ReadProfile? read}) {
+    final d = _decideCore(input, read: read);
+    final rp = read ?? ReadProfile.fromVillainProfile(input.villainProfile);
+    final s = read == null ? input : input.copyWith(villainProfile: read.engineProfile);
+    return annotate(s, rp, d);
+  }
+
+  /// Inspector de rango percibido + justificador determinista (sin Monte Carlo).
+  DecisionOutput annotate(GameState s, ReadProfile rp, DecisionOutput d) {
+    final (potBefore, toCall) = _potAndCall(s);
+    final f = d.action == DecisionAction.betRaise && d.sizing != null && potBefore > 0
+        ? (toCall > 0 ? (d.sizing!.bb - toCall) / (potBefore + 2 * toCall) : d.sizing!.bb / potBefore)
+        : 0.66;
+    final r = VillainRangeInspector.inspect(s, rp, betFraction: f, potBefore: potBefore, toCall: toCall);
+    // Con terminación activa, los EV mostrados usan el mismo contexto de línea que certificó exploitDeltaEV.
+    final closer = s.activeVillains.length >= 2 || rp.archetype == GgArchetype.unknownReg
+        ? null
+        : TerminalExploitClosers.context(s, rp, potBefore: potBefore, toCall: toCall);
+    if (closer != null && d.actionEVs != null) {
+      final size = d.action == DecisionAction.betRaise && d.sizing != null ? d.sizing!.bb : (toCall > 0 ? toCall * 3 : potBefore * 0.5);
+      d = d.copyWith(
+          actionEVs: ActionEvCalculator.postflop(s, rp,
+                  potBefore: potBefore,
+                  toCall: toCall,
+                  betSizeBb: size,
+                  exactSize: true,
+                  foldEquityOverride: closer.foldEquityOverride,
+                  villainBluffShare: closer.villainBluffShare)
+              .toMap());
+    }
+    return d.copyWith(
+        perceivedVillainRange: r, justification: DecisionJustifier.build(s, rp, d, r, potBefore: potBefore, toCall: toCall));
+  }
+
+  DecisionOutput _decideCore(GameState input, {ReadProfile? read}) {
     if (input.activeVillains.length >= 2) return _multiway(input, read);
     final missing = input.missingForPostflop();
     if (missing.isNotEmpty) throw MissingInputs(missing);

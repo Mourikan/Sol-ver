@@ -43,6 +43,10 @@ class ActionEvCalculator {
 
   static const samples = 300;
 
+  /// Caché O(1) de showdowns por (rango del nodo, mano de Hero): la puerta de EV, el ancla Nash y exploitDeltaEV
+  /// reutilizan el mismo muestreo determinista dentro de una decisión (resultado idéntico, sin recomputar Monte Carlo).
+  static final _shotCache = <String, List<(int, double)>>{};
+
   /// ¿El villano continúa contra una apuesta de fracción [f] del bote con este tier? (perfil: station/fish pagan con
   /// cualquier par; maniac paga showdown hasta bote).
   static bool continues(HandTier t, double f, {required bool river, VillainProfile vp = VillainProfile.gtoBase}) {
@@ -132,7 +136,9 @@ class ActionEvCalculator {
     final vc = RangeEquity.villainCombos(s, valuePrior: multiwayCbet ? MDAParameters.flopCbetHonestyMultiway : null);
     final secondBarrel = s.street == Street.turn && toCall == 0 &&
         s.actions.any((a) => a.street == Street.flop && a.actor == s.heroPosition && a.isAggressive);
-    final shots = RangeEquity.sampleShowdowns(s, vc.combos, vc.weights, samples);
+    final shotKey = '${identityHashCode(vc.combos)}|${s.hero!.mask}|$samples';
+    final shots = _shotCache[shotKey] ??= RangeEquity.sampleShowdowns(s, vc.combos, vc.weights, samples);
+    if (_shotCache.length > 64) _shotCache.remove(_shotCache.keys.first);
     final ip = s.heroPosition.isInPositionVs(s.villainPosition!);
     final spr = (s.effectiveStackBb ?? 100) / (s.potBb ?? 1);
     final eqr = EqrTable.factor(s.hero!.index169, ip: ip, spr: spr);

@@ -42,7 +42,23 @@ class BoardMetrics {
 class BoardAnalyzer {
   const BoardAnalyzer._();
 
+  /// Memo O(1): el análisis es determinista por (board, pfa, defensor, tipo de bote).
+  static final _memo = <String, BoardMetrics>{};
+
   static BoardMetrics analyze(
+    List<Card> board, {
+    required Position pfa,
+    required Position defender,
+    PotType potType = PotType.srp,
+  }) {
+    final key = '${board.join()}|${pfa.index}|${defender.index}|${potType.index}';
+    final hit = _memo[key];
+    if (hit != null) return hit;
+    if (_memo.length > 512) _memo.clear();
+    return _memo[key] = _analyze(board, pfa: pfa, defender: defender, potType: potType);
+  }
+
+  static BoardMetrics _analyze(
     List<Card> board, {
     required Position pfa,
     required Position defender,

@@ -258,7 +258,19 @@ class FlopLookupTable {
     return {for (final e in acc.entries) e.key: total == 0 ? 0 : e.value / total};
   }
 
+  static final _evalMemo = <String, FlopStrategyResult>{};
+
+  /// Memo O(1) por (flop, nodo, identidad de rangos, posiciones): resultado determinista.
   static FlopStrategyResult evaluate(List<Card> flop, HuNode node,
+      {required Float32List pfaRange, Float32List? defenderRange, Position pfa = Position.btn, Position defender = Position.bb}) {
+    final key = '${flop.join()}|${node.index}|${identityHashCode(pfaRange)}|${identityHashCode(defenderRange)}|${pfa.index}|${defender.index}';
+    final hit = _evalMemo[key];
+    if (hit != null) return hit;
+    if (_evalMemo.length > 512) _evalMemo.clear();
+    return _evalMemo[key] = _evaluate(flop, node, pfaRange: pfaRange, defenderRange: defenderRange, pfa: pfa, defender: defender);
+  }
+
+  static FlopStrategyResult _evaluate(List<Card> flop, HuNode node,
       {required Float32List pfaRange, Float32List? defenderRange, Position pfa = Position.btn, Position defender = Position.bb}) {
     final b = bucketOf(flop);
     final st = strategy(b, node);

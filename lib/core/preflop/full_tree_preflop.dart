@@ -5,6 +5,8 @@ import '../models/action_mixer.dart';
 import '../models/decision_output.dart';
 import '../models/game_state.dart';
 import '../reads/gg_profiler.dart';
+import '../reads/villain_range_inspector.dart';
+import '../evaluators/decision_justifier.dart';
 import 'hand_normalizer.dart';
 import 'preflop_ranges_db.dart';
 import 'preflop_solver_engine.dart';
@@ -112,7 +114,7 @@ class FullTreePreflop {
     return pre.skip(firstRaise + 1).any((a) => a.isAggressive && limpers.contains(a.actor));
   }
 
-  DecisionOutput decide(GameState s, {ReadProfile? read}) {
+  DecisionOutput _decideRaw(GameState s, {ReadProfile? read}) {
     if (s.hero == null) throw const MissingInputs(['hero']);
     final spot = classify(s);
     final hand = HandNormalizer.normalize(s.hero!);
@@ -150,6 +152,21 @@ class FullTreePreflop {
       _ => d.sizing?.bb ?? 0,
     };
     return EvSanityGuard.preflop(s, d, hand.label, callBb: call, potBb: spot.potBb);
+  }
+
+  /// Decisión preflop + rango percibido del villano + justificación determinista (100% de las decisiones).
+  DecisionOutput decide(GameState s, {ReadProfile? read}) {
+    final out = _decideRaw(s, read: read);
+    final spot = classify(s);
+    final rp = read ?? ReadProfile.fromVillainProfile(s.villainProfile);
+    final facing = switch (spot.scenario) {
+      TreeScenario.facing4Bet || TreeScenario.facing5Bet => spot.callBb,
+      _ => s.villainPosition == null ? 0.0 : spot.callBb,
+    };
+    final r = VillainRangeInspector.inspect(s, rp, potBefore: spot.potBb, toCall: facing);
+    return out.copyWith(
+        perceivedVillainRange: r,
+        justification: DecisionJustifier.build(s, rp, out, r, potBefore: spot.potBb, toCall: facing));
   }
 
   /// Hero enfrenta 4-bet (tras su 3-bet) o 5-bet (tras su 4-bet). Blocker-bluffs: 100% fold salvo pot odds <= 28%.

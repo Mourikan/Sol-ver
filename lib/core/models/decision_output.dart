@@ -1,3 +1,7 @@
+import 'decision_insight.dart';
+
+export 'decision_insight.dart';
+
 enum DecisionAction { fold, check, call, betRaise }
 
 class Sizing {
@@ -33,6 +37,8 @@ class DecisionOutput {
     this.actionEVs,
     this.heuristicAction,
     this.exploitDeltaEV,
+    this.perceivedVillainRange,
+    this.justification,
     this.metrics = const [],
     required this.justificacionGto,
     required this.ajusteExplotativoRead,
@@ -57,6 +63,12 @@ class DecisionOutput {
   /// EV_Exploit - EV_GTO (bb) de la línea elegida frente a la línea base Reg_GTO, ambas bajo el perfil asumido.
   /// null en modo Reg_GTO (sin desviación posible).
   final double? exploitDeltaEV;
+
+  /// Rango percibido del villano en el nodo (VillainRangeInspector).
+  final VillainPerceivedRange? perceivedVillainRange;
+
+  /// Lectura dominante + prueba de EV + regla activa (DecisionJustifier).
+  final DecisionJustification? justification;
   final List<KeyMetric> metrics;
   final String justificacionGto;
   final String ajusteExplotativoRead;
@@ -68,7 +80,8 @@ class DecisionOutput {
 
   DecisionOutput copyWith({DecisionAction? action, Sizing? sizing, String? ajusteExplotativoRead, List<KeyMetric>? metrics,
           Map<DecisionAction, double>? freqGto, FreqSource? freqSource, Map<String, double>? actionEVs, DecisionAction? heuristicAction,
-          bool clearSizing = false, double? exploitDeltaEV}) =>
+          bool clearSizing = false, double? exploitDeltaEV,
+          VillainPerceivedRange? perceivedVillainRange, DecisionJustification? justification}) =>
       DecisionOutput(
         action: action ?? this.action,
         sizing: clearSizing ? null : (sizing ?? this.sizing),
@@ -78,6 +91,8 @@ class DecisionOutput {
         actionEVs: actionEVs ?? this.actionEVs,
         heuristicAction: heuristicAction ?? this.heuristicAction,
         exploitDeltaEV: exploitDeltaEV ?? this.exploitDeltaEV,
+        perceivedVillainRange: perceivedVillainRange ?? this.perceivedVillainRange,
+        justification: justification ?? this.justification,
         metrics: metrics ?? this.metrics,
         justificacionGto: justificacionGto,
         ajusteExplotativoRead: ajusteExplotativoRead ?? this.ajusteExplotativoRead,
@@ -91,6 +106,8 @@ class DecisionOutput {
         'freq_source': freqSource.name,
         if (actionEVs != null) 'action_evs_bb': actionEVs,
         if (exploitDeltaEV != null) 'exploit_delta_ev_bb': exploitDeltaEV,
+        if (perceivedVillainRange != null) 'VillainPerceivedRange': perceivedVillainRange!.toJson(),
+        if (justification != null) 'justification': justification!.toJson(),
         'metricas': [for (final m in metrics) m.toJson()],
         'justificacion_gto': justificacionGto,
         'ajuste_explotativo_read': ajusteExplotativoRead,
