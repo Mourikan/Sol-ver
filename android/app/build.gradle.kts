@@ -29,29 +29,11 @@ android {
         versionName = flutter.versionName
     }
 
-    // Firma release: usa android/key.properties si existe (keystore propio); si no, firma debug (APK instalable por sideload).
-    val keyPropsFile = rootProject.file("key.properties")
-    val keyProps = java.util.Properties()
-    if (keyPropsFile.exists()) keyProps.load(java.io.FileInputStream(keyPropsFile))
-    signingConfigs {
-        if (keyPropsFile.exists()) {
-            create("release") {
-                keyAlias = keyProps["keyAlias"] as String
-                keyPassword = keyProps["keyPassword"] as String
-                storeFile = file(keyProps["storeFile"] as String)
-                storePassword = keyProps["storePassword"] as String
-            }
-        }
-    }
-
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = if (keyPropsFile.exists()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
-            // Sin R8/shrink: evita romper reflexión y fallos por keystore ausente en CI.
-            isMinifyEnabled = false
-            isShrinkResources = false
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 }
