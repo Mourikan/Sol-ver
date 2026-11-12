@@ -39,6 +39,7 @@ class DecisionOutput {
     this.exploitDeltaEV,
     this.perceivedVillainRange,
     this.justification,
+    this.runoutForecast,
     this.metrics = const [],
     required this.justificacionGto,
     required this.ajusteExplotativoRead,
@@ -69,6 +70,9 @@ class DecisionOutput {
 
   /// Lectura dominante + prueba de EV + regla activa (DecisionJustifier).
   final DecisionJustification? justification;
+
+  /// Predictor de la siguiente calle (solo Flop/Turn).
+  final RunoutForecast? runoutForecast;
   final List<KeyMetric> metrics;
   final String justificacionGto;
   final String ajusteExplotativoRead;
@@ -81,7 +85,7 @@ class DecisionOutput {
   DecisionOutput copyWith({DecisionAction? action, Sizing? sizing, String? ajusteExplotativoRead, List<KeyMetric>? metrics,
           Map<DecisionAction, double>? freqGto, FreqSource? freqSource, Map<String, double>? actionEVs, DecisionAction? heuristicAction,
           bool clearSizing = false, double? exploitDeltaEV,
-          VillainPerceivedRange? perceivedVillainRange, DecisionJustification? justification}) =>
+          VillainPerceivedRange? perceivedVillainRange, DecisionJustification? justification, RunoutForecast? runoutForecast}) =>
       DecisionOutput(
         action: action ?? this.action,
         sizing: clearSizing ? null : (sizing ?? this.sizing),
@@ -93,6 +97,7 @@ class DecisionOutput {
         exploitDeltaEV: exploitDeltaEV ?? this.exploitDeltaEV,
         perceivedVillainRange: perceivedVillainRange ?? this.perceivedVillainRange,
         justification: justification ?? this.justification,
+        runoutForecast: runoutForecast ?? this.runoutForecast,
         metrics: metrics ?? this.metrics,
         justificacionGto: justificacionGto,
         ajusteExplotativoRead: ajusteExplotativoRead ?? this.ajusteExplotativoRead,
@@ -108,6 +113,7 @@ class DecisionOutput {
         if (exploitDeltaEV != null) 'exploit_delta_ev_bb': exploitDeltaEV,
         if (perceivedVillainRange != null) 'VillainPerceivedRange': perceivedVillainRange!.toJson(),
         if (justification != null) 'justification': justification!.toJson(),
+        if (runoutForecast != null) 'runout_forecast': runoutForecast!.toJson(),
         'metricas': [for (final m in metrics) m.toJson()],
         'justificacion_gto': justificacionGto,
         'ajuste_explotativo_read': ajusteExplotativoRead,

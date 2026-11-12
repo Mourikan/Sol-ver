@@ -6,6 +6,7 @@ import '../postflop/geometry.dart';
 import '../postflop/hand_tier.dart';
 import '../preflop/range_notation.dart';
 import '../reads/anti_counter_exploit_shield.dart';
+import '../reads/mental_state_modulator.dart';
 import '../reads/gg_profiler.dart';
 import '../reads/mda_consensus_db.dart';
 import 'board_history.dart';
@@ -183,6 +184,10 @@ class BluffCatchAuditor {
     if (micro && mdaNode && !agro && !AntiCounterExploitShield.active(s.stake, read)) {
       adj *= 1 - mdaUnderBluff;
       reasons.add('MDA NL2-NL50: ${node.name} sub-faroleado ${(mdaUnderBluff * 100).round()}% (sobre combos)');
+    }
+    if (MentalStateModulator.tilt(read)) {
+      adj *= 1 + MentalStateModulator.tiltBluffBoost;
+      reasons.add('[🔥 EN TILT] faroles del villano +${(MentalStateModulator.tiltBluffBoost * 100).round()}% (bluff-catch ampliado)');
     }
     final t = TimingTellsMatrix.lastVillain(s);
     if (t.villainBluffMultiplier != 1.0 && !agro) {

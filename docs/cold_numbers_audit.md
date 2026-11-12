@@ -76,14 +76,14 @@ Rake por bote = E[min(%·pot, cap)] con la distribución de tamaños de `RakeCon
 | Spot | Combos evaluados | Desviaciones vs ancla | Δ > 0 | Δ <= 0 | Δ EV medio de la desviación (bb) |
 |---|---|---|---|---|---|
 | Thin value River vs Fish (Inelastic-Caller) | 1081 | 251 | 251 | 0 | 2.58 |
-| Overbet River vs Scared capado (Over-Folder) | 1081 | 218 | 218 | 0 | 3.09 |
+| Overbet River vs Scared capado (Over-Folder) | 1081 | 253 | 253 | 0 | 2.98 |
 | Steal_En_Secos Flop vs Nit (Over-Folder) | 1176 | 372 | 372 | 0 | 1.43 |
 | Delayed_Turn_Probe vs Nit (Over-Folder) | 1128 | 287 | 287 | 0 | 0.92 |
 | Pool_Turn_Barrel vs Pool_Exploit_Default NL10 | 1128 | 162 | 162 | 0 | 1.49 |
 | Insta_Check Overbet_Bluff 125% vs Scared (SmartHUD 21/18/7/32) | 1081 | 290 | 290 | 0 | 4.17 |
 | Trap_Check_Nuts 40% + flop vs Maniac (SmartHUD 40/32/14/62) | 1176 | 54 | 54 | 0 | 0.27 |
 
-**Desviaciones Full_Exploit: 1634; con Δ EV <= 0: 0.** Las desviaciones de apuesta propia con Δ < 0 vuelven al ancla (`[EV_ANCHOR]`); las de call/fold quedan bajo MDF/`Bluff_Combo_Audit` (el modelo de 1-2 calles infravalora el valor de calls de rango).
+**Desviaciones Full_Exploit: 1669; con Δ EV <= 0: 0.** Las desviaciones de apuesta propia con Δ < 0 vuelven al ancla (`[EV_ANCHOR]`); las de call/fold quedan bajo MDF/`Bluff_Combo_Audit` (el modelo de 1-2 calles infravalora el valor de calls de rango).
 
 Regla sustituida: "c-bet aire vs Nit en 7s6s5d" (Δ EV 0.00, rechazada por la puerta de EV) => `Steal_En_Secos` (solo matriz rangeBetSmall) + `Delayed_Turn_Probe` en turn tras check-check (factor Over-Folder 1.6x).
 Δ EV = 0.00 en overbet NL25+ : la conversión LLinus ya está activa vs Reg en NL25+ (gate de la Fase 5), no hay desviación adicional.
@@ -97,7 +97,7 @@ Barrido de los 1081-1176 combos de Hero en la línea gatillo. EV en bb promediad
 | Terminación | Nivel Óptimo | Acción GTO Base | Acción Explotativa | Combos desviados (Δ<=0) | EV GTO (bb) | EV Exploit (bb) | Ganancia Neta (+Δ EV bb) |
 |---|---|---|---|---|---|---|---|
 | T1 B-X-B River Overbet Punish | NL2-NL100 (NL10) | check | betRaise 115% | 223 (0) | 2.26 | 3.73 | +1.46 |
-| T2 Triple Barrel Shutdown | NL2-NL50 (NL10) | call 78% | fold | 234 (0) | -11.26 | 0.00 | +11.26 |
+| T2 Triple Barrel Shutdown | NL2-NL50 (NL10) | call 78% | fold | 183 (0) | -11.26 | 0.00 | +11.26 |
 | T3 Sizing asimétrico vs Fish | NL2-NL200 (NL10) | check | betRaise 100% | 251 (0) | 5.34 | 7.91 | +2.58 |
 | T4 Turn Capped Double Barrel Blitz | NL10-NL200 (NL25) | check | betRaise 80% | 12 (0) | 1.47 | 4.01 | +2.54 |
 | T5 Small River Bet-Fold | NL2-NL100 (NL10) | check | betRaise 25% | 68 (0) | 12.93 | 13.61 | +0.68 |

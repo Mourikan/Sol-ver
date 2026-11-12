@@ -5,6 +5,7 @@ import '../evaluators/hand_evaluator.dart';
 import '../models/decision_output.dart';
 import '../models/game_state.dart';
 import '../reads/gg_profiler.dart';
+import '../reads/mental_state_modulator.dart';
 import '../reads/range_funnel.dart';
 import 'geometry.dart';
 import 'defense_budget.dart';
@@ -133,6 +134,16 @@ class TurnRiverSolver {
   }
 
   static double exploitBluffFactor(ReadProfile r, FunnelResult f, Street street, double potBb) {
+    // Estado mental (prioridad sobre el arquetipo): tilt => 0% farol puro en Turn/River; protector => presión máxima en Turn capado.
+    if (MentalStateModulator.heroBluffLocked(r, street)) return 0.0;
+    final base = _archetypeFactor(r, f, street, potBb);
+    if (r.mentalState == VillainMentalState.scaredDeepProtector && r.archetype != GgArchetype.agroSpewy && street == Street.turn && f.isCapped) {
+      return base < overFolderMin ? overFolderMin : base;
+    }
+    return base;
+  }
+
+  static double _archetypeFactor(ReadProfile r, FunnelResult f, Street street, double potBb) {
     switch (r.archetype) {
       case GgArchetype.recPassiveFish:
         return street == Street.river ? 0.0 : 0.5;

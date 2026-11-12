@@ -15,7 +15,7 @@ class ProCoachNarrativeBuilder {
 
   static (String, String, String) build(GameState s, ReadProfile rp, DecisionOutput d, VillainPerceivedRange r,
       {required double potBefore, required double toCall, required String rule, required String profile}) {
-    return (_read(s, r, profile), _why(s, rp, d, r, potBefore, toCall, rule), _plan(s, d, potBefore, toCall, rule));
+    return (_read(s, r, profile, rp.mentalState), _why(s, rp, d, r, potBefore, toCall, rule), _plan(s, d, potBefore, toCall, rule));
   }
 
   static String _shape(VillainPerceivedRange r) {
@@ -25,7 +25,7 @@ class ProCoachNarrativeBuilder {
     return 'MIXTO';
   }
 
-  static String _read(GameState s, VillainPerceivedRange r, String profile) {
+  static String _read(GameState s, VillainPerceivedRange r, String profile, VillainMentalState mentalState) {
     if (s.villainPosition == null) {
       return 'Rival aún sin definir: decisión de apertura con el rango posicional (los jugadores por detrás no han actuado).';
     }
@@ -56,7 +56,12 @@ class ProCoachNarrativeBuilder {
           : 'Su apuesta concentra valor y faroles según el sizing; los pares medios suelen pasar.';
     }
     final presets = r.activePresets.isEmpty ? '' : ' Lecturas activas: ${r.activePresets.join(', ')}.';
-    return 'Rival [$profile] con rango ${_shape(r)} ($buckets). $why${top.isEmpty ? '' : ' Manos más representativas: $top.'}$presets';
+    final mental = switch (mentalState) {
+      VillainMentalState.steamingTilt => ' [🔥 EN TILT]: paga con cualquier par/draw y farolea más.',
+      VillainMentalState.scaredDeepProtector => ' [🛡️ PROTEGIENDO STACK]: foldea más en botes grandes.',
+      VillainMentalState.normal => '',
+    };
+    return 'Rival [$profile] con rango ${_shape(r)} ($buckets). $why${top.isEmpty ? '' : ' Manos más representativas: $top.'}$presets$mental';
   }
 
   static String _why(GameState s, ReadProfile rp, DecisionOutput d, VillainPerceivedRange r, double potBefore, double toCall, String rule) {
@@ -69,6 +74,16 @@ class ProCoachNarrativeBuilder {
     final blk = r.heroBlockedNutsCombos > 0
         ? ' Además nuestras cartas bloquean ${r.heroBlockedNutsCombos.toStringAsFixed(0)} combos de sus mejores manos.'
         : '';
+    final txt = '${d.justificacionGto} ${d.ajusteExplotativoRead}';
+    final bait = RegExp(r'ANZUELO INDUCTOR \(\+([0-9.]+)bb').firstMatch(txt);
+    if (bait != null && d.action == DecisionAction.betRaise) {
+      return 'Sizing anzuelo (25% Pot) con Nuts para inducir spazz-raise del perfil agresivo '
+          '(+${bait.group(1)} bb extra vs apuesta grande que lo haría foldear su aire).$ruleTxt';
+    }
+    if (txt.contains('RIESGO RIO')) {
+      return 'Kicker dominado: la mayor parte de su rango de valor tras varios barriles tiene nuestro mismo par con mejor kicker o '
+          'dos pares+; pagar regala el stack (Reverse Implied Odds). ${d.action == DecisionAction.fold ? 'Fold' : 'Check'} ahorra la diferencia.$ruleTxt';
+    }
     switch (d.action) {
       case DecisionAction.betRaise:
         final sz = d.sizing;

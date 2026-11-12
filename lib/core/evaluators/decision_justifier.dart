@@ -53,7 +53,13 @@ class DecisionJustifier {
                 ? 'Inelástico (${_p(r.predictedFoldFreq)} Fold)'
                 : 'Nuts ${_p(r.nutsAndMonstersPct)} / Aire ${_p(r.pureAirAndBluffsPct)}';
     final pre = r.activePresets.isEmpty ? '' : ' | ${r.activePresets.join(' + ')}';
-    final badge = '[READ: ${profileLabel(rp, s.villainProfile)}$tell$pre -> $rangeTag]';
+    final mental = switch (rp.mentalState) {
+      VillainMentalState.steamingTilt => ' 🔥TILT',
+      VillainMentalState.scaredDeepProtector => ' 🛡️PROTECTOR',
+      VillainMentalState.normal => '',
+    };
+    final rio = '${d.justificacionGto} ${d.ajusteExplotativoRead}'.contains('RIESGO RIO') ? ' [⚠️ RIESGO RIO: KICKER DOMINADO]' : '';
+    final badge = '[READ: ${profileLabel(rp, s.villainProfile)}$mental$tell$pre -> $rangeTag]$rio';
 
     final rule = activeRule(d);
     final range = r.totalActiveCombos == 0

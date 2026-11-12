@@ -22,6 +22,10 @@ import 'range_equity.dart';
 import 'terminal_exploit_closers.dart';
 import '../reads/unmapped_spots_resolver.dart';
 import 'monotone_fourflush_solver.dart';
+import 'bait_induce_engine.dart';
+import 'next_street_runout_predictor.dart';
+import '../evaluators/reverse_implied_odds_guard.dart';
+import '../reads/mental_state_modulator.dart';
 import '../evaluators/decision_justifier.dart';
 import '../reads/villain_range_inspector.dart';
 import 'turn_river_solver.dart';
@@ -43,6 +47,8 @@ class PostflopHeuristicEngine {
         ? (toCall > 0 ? (d.sizing!.bb - toCall) / (potBefore + 2 * toCall) : d.sizing!.bb / potBefore)
         : 0.66;
     final r = VillainRangeInspector.inspect(s, rp, betFraction: f, potBefore: potBefore, toCall: toCall);
+    final forecast = NextStreetRunoutPredictor.forecast(s);
+    if (forecast != null) d = d.copyWith(runoutForecast: forecast);
     // Con terminación activa, los EV mostrados usan el mismo contexto de línea que certificó exploitDeltaEV.
     final closer = s.activeVillains.length >= 2 || rp.archetype == GgArchetype.unknownReg
         ? null
@@ -73,9 +79,13 @@ class PostflopHeuristicEngine {
     if (rp.archetype == GgArchetype.unknownReg) return d;
     // Guard central Four_To_A_Flush: ningún módulo explotativo farolea sin carta del palo con 4 al color.
     final tierNow = HandTierClassifier.classify(s.hero!.high.id, s.hero!.low.id, [for (final c in s.board) c.id]).tier;
-    if (d.action == DecisionAction.betRaise && _potAndCall(s).$2 == 0 && MonotoneFourFlushSolver.killNoSuitBluff(s, rp) &&
-        (tierNow == HandTier.airGiveUp || tierNow == HandTier.backdoorBlockerBluff)) {
+    final noSdvNow = tierNow == HandTier.airGiveUp || tierNow == HandTier.backdoorBlockerBluff;
+    if (d.action == DecisionAction.betRaise && _potAndCall(s).$2 == 0 && MonotoneFourFlushSolver.killNoSuitBluff(s, rp) && noSdvNow) {
       d = _check(d.metrics, d.justificacionGto, '[FOUR_FLUSH_LOCK] farol sin carta del palo anulado. ${d.ajusteExplotativoRead}');
+    }
+    // Tilt: 0% farol puro de Hero en Turn/River (paga con cualquier par/draw).
+    if (d.action == DecisionAction.betRaise && _potAndCall(s).$2 == 0 && MentalStateModulator.heroBluffLocked(rp, s.street) && noSdvNow) {
+      d = _check(d.metrics, d.justificacionGto, '[TILT_LOCK] 0% farol puro vs rival en tilt. ${d.ajusteExplotativoRead}');
     }
     // CAPA 1 — Ancla Nash: decisión vs Reg_GTO en segundo plano; ambas líneas evaluadas bajo el perfil asumido.
     final base = _decideHu(s.copyWith(villainProfile: VillainProfile.gtoBase), _anchor);
@@ -85,8 +95,18 @@ class PostflopHeuristicEngine {
     final ht = HandTierClassifier.classify(s.hero!.high.id, s.hero!.low.id, [for (final c in s.board) c.id]);
     final spot = closer != null
         ? null
-        : (UnmappedSpotsResolver.plan(s, rp, ht, potBefore: potBefore, toCall: toCall) ??
+        : (ReverseImpliedOddsGuard.plan(s, rp, ht, toCall: toCall) ??
+            UnmappedSpotsResolver.plan(s, rp, ht, potBefore: potBefore, toCall: toCall) ??
             MonotoneFourFlushSolver.plan(s, rp, ht, potBefore: potBefore, toCall: toCall));
+    // Anzuelo: el modelo de 1-2 calles no ve el bluff-raise inducido => Δ con el EV del propio motor anzuelo.
+    if (d.ajusteExplotativoRead.contains('Bait_Induce')) {
+      final e = BaitInduceEngine.evaluate(s, rp, ht, pot: potBefore)!;
+      final dB = e.$2 - evOfDecision(s, rp, base, potBefore: potBefore, toCall: toCall);
+      if (dB < 0) {
+        return base.copyWith(exploitDeltaEV: 0, ajusteExplotativoRead: '[EV_ANCHOR] anzuelo con Δ ${dB.toStringAsFixed(2)}bb: no aplicado. ${d.ajusteExplotativoRead}');
+      }
+      return d.copyWith(exploitDeltaEV: dB);
+    }
     final delta = evOfDecision(s, rp, d,
             potBefore: potBefore, toCall: toCall, closer: closer, bluffShare: spot?.bluffShare, feOverride: spot?.foldEquityOverride) -
         evOfDecision(s, rp, base,
@@ -360,6 +380,11 @@ class PostflopHeuristicEngine {
     }
     if (s.street != Street.flop) {
       final potBefore = pot - villainIn + heroIn;
+      // Fase 9.8: guardia RIO (protector) y anzuelo con Nuts preceden a las terminaciones.
+      final rio = ReverseImpliedOddsGuard.plan(s, rp, h, toCall: toCall);
+      if (rio != null) return _spot(rio, pot, stack, toCall, potBefore, metrics);
+      final bait = BaitInduceEngine.plan(s, rp, h, pot: pot, toCall: toCall);
+      if (bait != null) return _spot(bait, pot, stack, toCall, potBefore, metrics);
       final cp = TerminalExploitClosers.plan(s, rp, h,
           potBefore: potBefore, toCall: toCall, roll: DeterministicActionMixer.roll([s.hero!.high, s.hero!.low], s.board, pot));
       if (cp != null) return _closer(cp, pot, stack, toCall, potBefore, metrics);
@@ -368,6 +393,8 @@ class PostflopHeuristicEngine {
     if (sp != null) return _spot(sp, pot, stack, toCall, pot - villainIn + heroIn, metrics);
     final mono = MonotoneFourFlushSolver.plan(s, rp, h, potBefore: pot - villainIn + heroIn, toCall: toCall);
     if (mono != null) return _spot(mono, pot, stack, toCall, pot - villainIn + heroIn, metrics);
+    final tilt = MentalStateModulator.plan(s, rp, h, toCall: toCall);
+    if (tilt != null) return _spot(tilt, pot, stack, toCall, pot - villainIn + heroIn, metrics);
     if (toCall > 0) {
       final firstAgg = street.where((a) => a.isAggressive).firstOrNull;
       final donk = firstAgg != null && firstAgg.actor == villain && hadInitiative;

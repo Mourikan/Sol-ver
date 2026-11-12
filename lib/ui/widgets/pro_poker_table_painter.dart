@@ -94,7 +94,7 @@ class ProPokerTablePainter extends CustomPainter {
   /// SPR_Commitment_Gauge: escala 13 -> 0 sobre un arco de 270°.
   static const gaugeMaxSpr = 13.0, commitSpr = 2.5;
 
-  static Color tagColor(String t) => switch (t) {
+  static Color tagColor(String t) => switch (t.replaceAll('🔥', '').replaceAll('🛡️', '')) {
         'HERO' => AppColors.emerald,
         'Fish' || 'Fish/CS' => AppColors.cyan,
         'Nit' => const Color(0xFF94A3B8),

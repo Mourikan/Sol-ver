@@ -1,4 +1,7 @@
 import '../models/game_state.dart';
+import 'mental_state_modulator.dart';
+
+export 'mental_state_modulator.dart' show VillainMentalState;
 
 enum ActionTag { openLimp, limpReraisePreflop, checkCallFlopCheckTurn, barrelOffOnBricks }
 
@@ -16,15 +19,25 @@ class SmartHudInput {
 
 /// Read resultante. Los priors (85%, 70%) son lecturas poblacionales especificadas por el usuario, no frecuencias de solver.
 class ReadProfile {
-  const ReadProfile(this.archetype, this.reasons, {this.threeBet, this.foldTo4Bet, this.pfr});
+  const ReadProfile(this.archetype, this.reasons,
+      {this.threeBet, this.foldTo4Bet, this.pfr, this.vpip, this.mentalState = VillainMentalState.normal});
 
   final GgArchetype archetype;
   final List<String> reasons;
   final double? threeBet;
   final double? foldTo4Bet;
 
-  /// PFR del SmartHUD (escudo anti-contra-explotación).
+  /// PFR / VPIP del SmartHUD (escudo anti-contra-explotación, aggression ratio).
   final double? pfr;
+  final double? vpip;
+
+  /// Estado mental marcado en la UI (tilt / protector de stack).
+  final VillainMentalState mentalState;
+
+  double? get aggressionRatio => pfr == null || vpip == null ? null : pfr! / (vpip! < 1 ? 1 : vpip!);
+
+  ReadProfile withMental(VillainMentalState m) =>
+      ReadProfile(archetype, reasons, threeBet: threeBet, foldTo4Bet: foldTo4Bet, pfr: pfr, vpip: vpip, mentalState: m);
 
   /// 4-bet bluff habilitado: reg/GTO con fold-to-4bet >= 45% (o desconocido); nunca vs fish/station/trapper/3-bettor < 4%.
   bool get allows4BetBluff {
@@ -65,7 +78,7 @@ class GgProfiler {
 
   static ReadProfile classify(SmartHudInput h, [Set<ActionTag> tags = const {}]) {
     final r = _classify(h, tags);
-    return ReadProfile(r.archetype, r.reasons, threeBet: h.threeBet, foldTo4Bet: h.foldTo4Bet, pfr: h.pfr);
+    return ReadProfile(r.archetype, r.reasons, threeBet: h.threeBet, foldTo4Bet: h.foldTo4Bet, pfr: h.pfr, vpip: h.vpip);
   }
 
   static ReadProfile _classify(SmartHudInput h, Set<ActionTag> tags) {

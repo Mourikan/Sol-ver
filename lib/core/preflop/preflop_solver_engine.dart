@@ -9,6 +9,7 @@ import '../postflop/postflop_ranges.dart';
 import 'hand_normalizer.dart';
 import 'structure_modifier.dart';
 import 'stack_topology_resolver.dart';
+import 'gg_rake_preflop_optimizer.dart';
 import 'preflop_ranges_db.dart';
 import 'range_notation.dart';
 
@@ -446,6 +447,21 @@ class PreflopSolverEngine {
       notes.add('Maniac ATS>=55%: 3-bet Def +${(maniac3BetExpansion * 100).round()}% lineal (${Matrix169.percent(maniacDefense3Bet(hero, opener, tier)).toStringAsFixed(1)}%).');
     }
 
+    // No-Flop-No-Drop (FULL_EXPLOIT, nunca vs Reg_GTO): frontera call/3-bet => argmax(EV) (el EV del 3-bet ya incluye el
+    // bote ganado preflop sin rake).
+    if (profile != VillainProfile.gtoBase && GgRakePreflopOptimizer.isBorder(i) && fc > 0 && hero != Position.bb) {
+      final evs = preflopEVs(s, ctx, hand, raiseTo: _threeBetSize(s, ctx, ip));
+      final ev3 = evs['betRaise'] ?? 0, evC = evs['call'] ?? 0;
+      if (ev3 > evC && ev3 > 0) {
+        final vs3 = PreflopRangesDb.vs3Bet(opener, heroInPosition: !ip);
+        final cont = (_combos(vs3.weights[PreflopAction.raise]!) + _combos(vs3.weights[PreflopAction.call]!)) /
+            _combos(PreflopRangesDb.rfi(opener, tier).weights[PreflopAction.raise]!);
+        final saved = GgRakePreflopOptimizer.noFlopRakeSavedBB(s, profileFe((1 - cont).clamp(0.0, 1.0), profile), ctx.potBb + ctx.callBb);
+        f3 = (f3 + fc).clamp(0.0, 1.0);
+        fc = 0;
+        notes.add('No-Flop-No-Drop: EV 3-bet ${ev3.toStringAsFixed(2)} > call ${evC.toStringAsFixed(2)}bb (incluye ${saved.toStringAsFixed(3)}bb de rake ahorrado).');
+      }
+    }
     // Short_Mid_Stack (20-48bb): decisión por EV con el EQR de topología (sin implícitas para set-mining/flushes).
     if (StackTopologyResolver.shortMid(s.effectiveStackBb) && fc > 0) {
       final evs = preflopEVs(s, ctx, hand);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/hand_flow_fsm.dart';
 import '../../core/models/game_state.dart';
+import '../../core/reads/gg_profiler.dart';
 import '../../core/reads/gg_smarthud_analyzer.dart';
 import '../../core/reads/villain_archetypes.dart';
 import '../services/tactical_feedback_service.dart';
@@ -108,6 +109,23 @@ class _SmartHudQuickSheetState extends State<SmartHudQuickSheet> {
                 color: SmartHudQuickSheet.tagColors[dev.tag]!.withValues(alpha: .12), borderRadius: BorderRadius.circular(8)),
             child: Text(dev.badge, style: TextStyle(color: SmartHudQuickSheet.tagColors[dev.tag], fontSize: 12, fontWeight: FontWeight.w700)),
           ),
+          const SizedBox(height: 8),
+          Row(children: [
+            for (final (m, l, c) in [
+              (VillainMentalState.steamingTilt, '🔥 En Tilt', AppColors.crimson),
+              (VillainMentalState.scaredDeepProtector, '🛡️ Protegiendo Stack', AppColors.cyan),
+            ])
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: _Chip(l, c, widget.fsm.mentalOf(widget.seat) == m, () {
+                    TacticalFeedback.tap();
+                    widget.fsm.setMental(widget.seat, widget.fsm.mentalOf(widget.seat) == m ? VillainMentalState.normal : m);
+                    setState(() {});
+                  }, key: ValueKey(m == VillainMentalState.steamingTilt ? 'mental-tilt' : 'mental-protect')),
+                ),
+              ),
+          ]),
           const SizedBox(height: 10),
           Row(children: [
             for (var i = 0; i < SmartHudQuickSheet.timings.length; i++)

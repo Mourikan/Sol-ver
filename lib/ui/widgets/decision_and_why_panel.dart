@@ -74,6 +74,35 @@ class DecisionAndWhyPanel extends StatelessWidget {
             EvMicroBar(raise: ev['betRaise'], passive: ev['call'] ?? ev['check'], passiveLabel: ev.containsKey('call') ? 'CALL' : 'CHECK'),
           ]),
         ),
+        // ⏱️ Timebank de 12s (entrenamiento de velocidad): reinicia en cada nueva decisión de Hero.
+        if (fsm.currentActor == fsm.heroPosition)
+          TweenAnimationBuilder<double>(
+            key: ValueKey('timebank-${fsm.actions.length}-${fsm.board.length}'),
+            tween: Tween(begin: 1, end: 0),
+            duration: const Duration(seconds: 12),
+            builder: (context, v, _) => SizedBox(
+              key: const ValueKey('timebank'),
+              height: 12,
+              child: Row(children: [
+                Text('⏱️ ${(v * 12).ceil().toString().padLeft(2)}s ', style: Obsidian.num(size: 9, color: v < .25 ? Obsidian.crimsonFold : Obsidian.muted)),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: v,
+                      minHeight: 3,
+                      backgroundColor: Obsidian.bevelBottom,
+                      color: v < .25 ? Obsidian.crimsonFold : Obsidian.amberCheck,
+                    ),
+                  ),
+                ),
+              ]),
+            ),
+          ),
+        if (d.runoutForecast != null) ...[
+          const SizedBox(height: 3),
+          SizedBox(height: 18, child: RunoutStrip(d.runoutForecast!)),
+        ],
         const SizedBox(height: 4),
         if (r != null && r.totalActiveCombos > 0) ...[
           SizedBox(
@@ -131,6 +160,34 @@ class DecisionAndWhyPanel extends StatelessWidget {
           ),
       ]),
     );
+  }
+}
+
+/// Tira predictiva de la siguiente calle: 🟢 seguir apostando | 🟡 controlar | 🔴 frenar.
+class RunoutStrip extends StatelessWidget {
+  const RunoutStrip(this.f, {super.key});
+  final RunoutForecast f;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget chip(String icon, String title, List<String> cards, Color c) => Expanded(
+          child: Container(
+            margin: const EdgeInsets.only(right: 3),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            alignment: Alignment.centerLeft,
+            decoration: BoxDecoration(color: c.withValues(alpha: .12), borderRadius: BorderRadius.circular(4), border: Border.all(color: c.withValues(alpha: .6))),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text('$icon $title: ${cards.isEmpty ? '—' : cards.join(',')}', style: Obsidian.num(size: 10, color: c)),
+            ),
+          ),
+        );
+    return Row(key: const ValueKey('runout-strip'), children: [
+      chip('🟢', 'Kill', f.barrelKillCards, Obsidian.emeraldRaise),
+      chip('🟡', 'Freno', f.potControlCards, Obsidian.amberCheck),
+      chip('🔴', 'Peligro', f.abortDangerCards, Obsidian.crimsonFold),
+    ]);
   }
 }
 

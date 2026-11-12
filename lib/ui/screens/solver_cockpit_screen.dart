@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' hide Card;
 
 import '../../application/hand_flow_fsm.dart';
 import '../../core/models/game_state.dart';
+import '../../core/reads/gg_profiler.dart';
 import '../../core/reads/read_presets_catalog.dart';
 import '../../core/reads/villain_archetypes.dart';
 import '../theme.dart';
@@ -77,6 +78,15 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
   }
 
   String _tag(Position p) {
+    final m = switch (fsm.mentalOf(p)) {
+      VillainMentalState.steamingTilt => '🔥',
+      VillainMentalState.scaredDeepProtector => '🛡️',
+      VillainMentalState.normal => '',
+    };
+    return '$m${_baseTag(p)}';
+  }
+
+  String _baseTag(Position p) {
     final hud = fsm.hudOf(p);
     if (hud != null) return VillainArchetypes.of(hud.tag).label;
     return switch (fsm.effectiveProfile(p)) {

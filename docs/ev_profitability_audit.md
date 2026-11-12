@@ -1,6 +1,6 @@
 # Auditoría Integral de EV por Stake, Rentabilidad Post-Rake y Caza de Huecos (Fase 9.55)
 
-Generado por `docs/audit_scripts/full_ev_profitability_and_leaks_audit.dart` (30 nodos, 7560 decisiones auditadas en 11681 ms).
+Generado por `docs/audit_scripts/full_ev_profitability_and_leaks_audit.dart` (30 nodos, 7560 decisiones auditadas en 12092 ms).
 
 > **No es un winrate (CLAUDE.md §8).** Los pesos `w_i` de la cesta son una plantilla declarada, no frecuencias medidas; el EV es el de `ActionEvCalculator` desde el nodo (rake incluido en el bote final), no el EV de la mano completa. Por eso no se emite el veredicto "RENTABLE / PERDEDOR por rake": requiere frecuencias reales de spots y del pool, que el proyecto no tiene ni debe registrar.
 
@@ -25,7 +25,7 @@ NL50-NL200: sin lectura individual el motor usa Reg_GTO/Unknown_Reg con escudo (
 | Fish | 315 | 0 | 2.74 |
 | Nit | 175 | 0 | 2.06 |
 | Scared_Reg | 129 | 0 | 2.42 |
-| Maniac | 149 | 0 | 4.31 |
+| Maniac | 156 | 0 | 4.16 |
 | Trapper | 344 | 0 | 5.81 |
 | Pool_Default | 125 | 0 | 2.21 |
 
@@ -36,7 +36,7 @@ NL50-NL200: sin lectura individual el motor usa Reg_GTO/Unknown_Reg con escudo (
 | SmartHUD Tags (perfil) | 708 | 3.24 | 2291.5 |
 | Terminaciones T1-T6 | 249 | 3.54 | 882.1 |
 | Geo-2E / Monocolor / Squeeze | 90 | 7.38 | 663.8 |
-| Guardas (Sanity/Ancla/Gate) | 31 | 13.43 | 416.4 |
+| Guardas (Sanity/Ancla/Gate) | 38 | 11.12 | 422.7 |
 | Presets / Spots sin HUD | 81 | 1.36 | 109.8 |
 | Timing Tells | 78 | 1.18 | 92.3 |
 

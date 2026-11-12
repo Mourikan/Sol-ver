@@ -6,6 +6,7 @@ import '../postflop/hand_tier.dart';
 import '../postflop/range_equity.dart';
 import '../preflop/preflop_ranges_db.dart';
 import '../reads/gg_profiler.dart';
+import '../reads/mental_state_modulator.dart';
 import '../reads/mda_consensus_db.dart';
 import '../reads/range_funnel.dart';
 
@@ -171,7 +172,9 @@ class ActionEvCalculator {
       final rawFe = tot == 0 ? 0.0 : folds / tot;
       final alpha = size / (potNow + size);
       // Terminaciones T1-T6: FE del perfil en la línea (prior declarado) sustituye al FE genérico.
-      final fe = foldEquityOverride ?? foldEquity(rawFe, alpha, read, vp, river: river, capped: capped, secondBarrel: secondBarrel, betFraction: f);
+      final fe = foldEquityOverride ??
+          MentalStateModulator.adjustFe(
+              foldEquity(rawFe, alpha, read, vp, river: river, capped: capped, secondBarrel: secondBarrel, betFraction: f), read, s, potNow);
       // Retira el FE% más débil del rango (orden por tier) y mide la equity contra lo que paga.
       final foldW = List<double>.filled(vc.combos.length, 0);
       var acc = 0.0;

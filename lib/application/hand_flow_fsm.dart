@@ -229,6 +229,28 @@ class HandFlowFSM extends ChangeNotifier {
 
   SmartHudDeviation? hudOf(Position p) => seats[p]?.hud ?? _huds[p];
 
+  /// Estado mental por asiento (persistente entre manos hasta que el usuario lo cambie; no es historial).
+  final Map<Position, VillainMentalState> _mental = {};
+  VillainMentalState mentalOf(Position p) => _mental[p] ?? VillainMentalState.normal;
+
+  void setMental(Position p, VillainMentalState m) {
+    if (m == VillainMentalState.normal) {
+      _mental.remove(p);
+    } else {
+      _mental[p] = m;
+    }
+    _refreshRecommendation();
+    notifyListeners();
+  }
+
+  /// Lectura efectiva del villano: perfil + stats SmartHUD (PFR/VPIP/3B) + estado mental.
+  ReadProfile readOf(Position p) {
+    final base = ReadProfile.fromVillainProfile(effectiveProfile(p));
+    final hud = hudOf(p);
+    return ReadProfile(base.archetype, base.reasons,
+        pfr: hud?.stats.pfr, vpip: hud?.stats.vpip, threeBet: hud?.stats.threeBet, mentalState: mentalOf(p));
+  }
+
   void setPresets(Position p, List<AnonymousReadPreset> presets) {
     manualPresets[p] = presets;
     _refreshRecommendation();
@@ -251,6 +273,10 @@ class HandFlowFSM extends ChangeNotifier {
     if (rotateButton) {
       Position mv(Position p) => preflopOrder[(preflopOrder.indexOf(p) + preflopOrder.length - 1) % preflopOrder.length];
       final prof = {for (final e in _profiles.entries) mv(e.key): e.value};
+      final mental = {for (final e in _mental.entries) mv(e.key): e.value};
+      _mental
+        ..clear()
+        ..addAll(mental);
       final huds = {for (final e in _huds.entries) mv(e.key): e.value};
       final stacks = {for (final e in _stacks.entries) mv(e.key): e.value};
       _profiles
@@ -629,7 +655,7 @@ class HandFlowFSM extends ChangeNotifier {
     try {
       final s = buildGameState();
       final v = s.villainPosition;
-      final read = v == null ? null : ReadProfile.fromVillainProfile(effectiveProfile(v));
+      final read = v == null ? null : readOf(v);
       var d = solve(s, read);
       final manual = v == null ? const <AnonymousReadPreset>[] : (manualPresets[v] ?? const <AnonymousReadPreset>[]);
       if (manual.isNotEmpty && s.board.length >= 3 && read != null) {

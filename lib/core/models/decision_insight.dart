@@ -82,3 +82,11 @@ class DecisionJustification {
         'nextStreetPlan': nextStreetPlan,
       };
 }
+
+/// Pronóstico de la siguiente calle (13 rangos x {brick offsuit, carta que completa color}).
+class RunoutForecast {
+  const RunoutForecast({required this.barrelKillCards, required this.potControlCards, required this.abortDangerCards});
+  final List<String> barrelKillCards, potControlCards, abortDangerCards;
+
+  Map<String, List<String>> toJson() => {'barrelKill': barrelKillCards, 'potControl': potControlCards, 'abortDanger': abortDangerCards};
+}
