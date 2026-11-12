@@ -1,5 +1,10 @@
 # CLAUDE.md - Directrices del Proyecto APK GTO 6-Max
 
+## 0. SKILL OBLIGATORIA: [ZERO_BLOAT_TOKEN_MISER] (aplica a todos los turnos)
+- `Rule_1_No_Full_Reads`: prohibido leer archivos > 80 líneas completos; usar `grep -n` y rangos exactos solo ante fallos de compilación/test.
+- `Rule_2_Zero_Chat_Prose`: prohibido imprimir explicaciones, tablas o código en el chat; todo reporte va a un `.md` generado por script.
+- `Rule_3_Console_Cap`: la salida en terminal no supera 6 líneas + `[GASTO TURNO]`.
+
 ## 1. ARQUITECTURA DE MAXIMIZACIÓN DE EV ACOTADA (BOUNDED-GTO + SAFE EXPLOIT)
 APK Android Offline en Flutter (Dart) para Póker Cash 6-Max (NL2 a NL200, 100bb base + SPR variable). Motor determinista local (tablas preflop + heurística postflop + node-locking). CERO llamadas externas en runtime.
 1. **Prioridad Absoluta (+EV):** El motor opera sobre una línea base GTO inquebrantable (MDF, Pot Odds con Rake Final Esperado, Conteo Real de Combos) y solo desvía las frecuencias cuando el EV de la explotación supera al EV del equilibrio sin exponer fugas masivas.
