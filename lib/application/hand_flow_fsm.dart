@@ -9,6 +9,9 @@ import '../core/reads/gg_smarthud_analyzer.dart';
 import '../core/reads/villain_archetypes.dart';
 import '../core/reads/gg_profiler.dart';
 import '../core/reads/range_funnel.dart';
+import '../core/evaluators/decision_justifier.dart';
+import '../core/reads/read_presets_catalog.dart';
+import '../core/reads/villain_range_inspector.dart';
 import 'solver_controller.dart';
 
 enum HandPhase { setup, preflop, flopCards, flop, turnCards, turn, riverCards, river, handOver }
@@ -62,6 +65,82 @@ class HandFlowFSM extends ChangeNotifier {
   String? recommendationError;
   int solverMicros = 0;
 
+  /// Dinero muerto: ante por jugador y straddle de UTG (2bb).
+  double anteBb = 0;
+  bool hasStraddle = false;
+
+  /// Persistente entre manos (mesa continua): stacks, SmartHUD y etiquetas por asiento.
+  final Map<Position, double> _stacks = {};
+  final Map<Position, SmartHudDeviation> _huds = {};
+
+  /// Villano seleccionado en la UI (timing / presets) y presets manuales de la mano actual.
+  Position? selectedVillain;
+  final Map<Position, List<AnonymousReadPreset>> manualPresets = {};
+
+  /// Bote total, stack efectivo restante (Hero vs villano principal) y SPR en vivo.
+  double get currentPotBB => pot;
+  double get effectiveStackBB {
+    final v = _mainVillain();
+    final h = seats[heroPosition];
+    if (h == null) return startingStackBb;
+    if (v == null) return h.stack;
+    return math.min(h.stack, seats[v]!.stack);
+  }
+
+  double? get currentSPR => pot <= 0 ? null : effectiveStackBB / pot;
+
+  double stackOf(Position p) => seats[p]?.stack ?? (_stacks[p] ?? startingStackBb);
+
+  void setStack(Position p, double bb) {
+    _stacks[p] = bb;
+    notifyListeners();
+  }
+
+  /// Última acción del asiento en la calle actual.
+  PlayerAction? lastActionOf(Position p) => actions.where((a) => a.actor == p && a.street == street).lastOrNull;
+
+  SmartHudDeviation? hudOf(Position p) => seats[p]?.hud ?? _huds[p];
+
+  void setPresets(Position p, List<AnonymousReadPreset> presets) {
+    manualPresets[p] = presets;
+    _refreshRecommendation();
+    notifyListeners();
+  }
+
+  void setDeadMoney({double? ante, bool? straddle}) {
+    if (phase != HandPhase.setup) throw const IllegalAction('Ante/straddle solo en setup');
+    if (ante != null) anteBb = ante;
+    if (straddle != null) hasStraddle = straddle;
+    notifyListeners();
+  }
+
+  /// Nueva mano: limpia cartas, bote y acciones; conserva SmartHUD/etiquetas/stacks. Con [rotateButton] el botón avanza
+  /// un puesto y cada jugador (y su lectura) se mueve a su nueva posición.
+  void nextHand({bool rotateButton = false}) {
+    for (final e in seats.entries) {
+      if (e.value.hud != null) _huds[e.key] = e.value.hud!;
+    }
+    if (rotateButton) {
+      Position mv(Position p) => preflopOrder[(preflopOrder.indexOf(p) + preflopOrder.length - 1) % preflopOrder.length];
+      final prof = {for (final e in _profiles.entries) mv(e.key): e.value};
+      final huds = {for (final e in _huds.entries) mv(e.key): e.value};
+      final stacks = {for (final e in _stacks.entries) mv(e.key): e.value};
+      _profiles
+        ..clear()
+        ..addAll(prof);
+      _huds
+        ..clear()
+        ..addAll(huds);
+      _stacks
+        ..clear()
+        ..addAll(stacks);
+      heroPosition = mv(heroPosition);
+    }
+    manualPresets.clear();
+    selectedVillain = null;
+    reset();
+  }
+
   Street get street => switch (phase) {
         HandPhase.flop || HandPhase.turnCards => Street.flop,
         HandPhase.turn || HandPhase.riverCards => Street.turn,
@@ -106,6 +185,9 @@ class HandFlowFSM extends ChangeNotifier {
     actions.clear();
     seats.clear();
     _needsToAct.clear();
+    _potStartStreet = 0;
+    _currentBet = 0;
+    _lastRaiseSize = 1;
     phase = HandPhase.setup;
     currentActor = null;
     activeRecommendation = null;
@@ -134,9 +216,20 @@ class HandFlowFSM extends ChangeNotifier {
   /// SmartHUD: analiza stats (+ etiqueta manual opcional) y activa el perfil del motor de la etiqueta resultante.
   SmartHudDeviation? setHud(Position p, SmartHudStats stats, {VillainTag? manualTag}) {
     final seat = seats[p];
-    if (seat == null) return null;
     final dev = GgSmartHudAnalyzer.analyze(stats, manualTag: manualTag);
+    if (seat == null) {
+      // Setup (mano no iniciada): se guarda para los asientos de la próxima mano.
+      _huds[p] = dev;
+      if (dev.tag == VillainTag.poolDefault) {
+        _profiles.remove(p);
+      } else {
+        _profiles[p] = dev.vector.profileFor(stake);
+      }
+      notifyListeners();
+      return dev;
+    }
     seat.hud = dev;
+    _huds[p] = dev;
     if (dev.tag == VillainTag.poolDefault) {
       seat.labeled = false;
       _profiles.remove(p);
@@ -172,9 +265,10 @@ class HandFlowFSM extends ChangeNotifier {
       ..clear()
       ..addAll({
         for (final p in preflopOrder)
-          p: SeatState(p, startingStackBb)
+          p: SeatState(p, (_stacks[p] ?? startingStackBb) - anteBb)
             ..profile = _profiles[p] ?? VillainProfile.gtoBase
-            ..labeled = _profiles.containsKey(p),
+            ..labeled = _profiles.containsKey(p)
+            ..hud = _huds[p],
       });
     seats[Position.sb]!
       ..committed = 0.5
@@ -182,14 +276,20 @@ class HandFlowFSM extends ChangeNotifier {
     seats[Position.bb]!
       ..committed = 1.0
       ..stack -= 1.0;
-    _potStartStreet = 0;
+    _potStartStreet = anteBb * preflopOrder.length;
     _currentBet = 1.0;
     _lastRaiseSize = 1.0;
+    if (hasStraddle) {
+      seats[Position.utg]!
+        ..committed = 2.0
+        ..stack -= 2.0;
+      _currentBet = 2.0;
+    }
     phase = HandPhase.preflop;
     _needsToAct
       ..clear()
       ..addAll(preflopOrder);
-    currentActor = Position.utg;
+    currentActor = hasStraddle ? Position.mp : Position.utg;
     _refreshRecommendation();
   }
 
@@ -242,14 +342,16 @@ class HandFlowFSM extends ChangeNotifier {
   /// Aplica una acción. [amountBb] = total "to" de la calle para bet/raise.
   void act(Position p, ActionType type, {double amountBb = 0}) {
     if (phase == HandPhase.setup || awaitingCards || phase == HandPhase.handOver) throw const IllegalAction('No hay acción pendiente');
-    final aggressive = type == ActionType.bet || type == ActionType.raise || type == ActionType.allIn;
     if (p != currentActor) {
+      // Implicit_Fast_Forward: los asientos omitidos entre el turno actual y el actor foldean (o pasan si no deben nada).
       final o = _order;
-      final fastForward = phase == HandPhase.preflop && aggressive && _needsToAct.contains(p) &&
-          o.indexOf(p) > o.indexOf(currentActor!) && !_skipsHero(p);
+      final ci = o.indexOf(currentActor!), pi = o.indexOf(p);
+      final fastForward = _needsToAct.contains(p) && pi > ci && !_skipsHero(p);
       if (!fastForward) throw IllegalAction('Turno de ${currentActor?.name}, no de ${p.name}');
-      for (final q in o.sublist(o.indexOf(currentActor!), o.indexOf(p))) {
-        if (_needsToAct.contains(q)) _apply(q, ActionType.fold, 0);
+      for (final q in o.sublist(ci, pi)) {
+        if (!_needsToAct.contains(q)) continue;
+        final owes = _currentBet - seats[q]!.committed > 0;
+        _apply(q, owes ? ActionType.fold : ActionType.check, 0);
       }
     }
     _apply(p, type, amountBb);
@@ -366,6 +468,9 @@ class HandFlowFSM extends ChangeNotifier {
       actions: List.of(actions),
       villainProfile: v == null ? ProfileDefaults.defaultFor(stake, mode: engineMode) : effectiveProfile(v),
       activePlayers: alive.length,
+      anteBb: anteBb,
+      hasStraddle: hasStraddle,
+      seatStacksBb: {for (final s in seats.values) s.position: s.stack + s.committed},
     );
   }
 
@@ -387,7 +492,15 @@ class HandFlowFSM extends ChangeNotifier {
       final s = buildGameState();
       final v = s.villainPosition;
       final read = v == null ? null : ReadProfile.fromVillainProfile(effectiveProfile(v));
-      activeRecommendation = solve(s, read);
+      var d = solve(s, read);
+      final manual = v == null ? const <AnonymousReadPreset>[] : (manualPresets[v] ?? const <AnonymousReadPreset>[]);
+      if (manual.isNotEmpty && s.board.length >= 3 && read != null) {
+        final toCall = _currentBet - seats[heroPosition]!.committed;
+        final potBefore = pot - toCall;
+        final r = VillainRangeInspector.inspect(s, read, potBefore: potBefore, toCall: toCall, manualPresets: manual);
+        d = d.copyWith(perceivedVillainRange: r, justification: DecisionJustifier.build(s, read, d, r, potBefore: potBefore, toCall: toCall));
+      }
+      activeRecommendation = d;
     } catch (e) {
       recommendationError = e.toString();
     }

@@ -28,16 +28,17 @@ class VillainRangeInspector {
     return (a & 3) == (b & 3) ? h * 13 + l : l * 13 + h;
   }
 
-  static VillainPerceivedRange inspect(GameState s, ReadProfile rp, {double betFraction = 0.66, double potBefore = 0, double toCall = 0}) {
+  static VillainPerceivedRange inspect(GameState s, ReadProfile rp,
+      {double betFraction = 0.66, double potBefore = 0, double toCall = 0, List<AnonymousReadPreset> manualPresets = const []}) {
     if (s.villainPosition == null || s.hero == null) return VillainPerceivedRange.empty;
     try {
-      return s.board.length >= 3 ? _postflop(s, rp, betFraction, potBefore, toCall) : _preflop(s);
+      return s.board.length >= 3 ? _postflop(s, rp, betFraction, potBefore, toCall, manualPresets) : _preflop(s);
     } on Object {
       return VillainPerceivedRange.empty;
     }
   }
 
-  static VillainPerceivedRange _postflop(GameState s, ReadProfile rp, double f, double potBefore, double toCall) {
+  static VillainPerceivedRange _postflop(GameState s, ReadProfile rp, double f, double potBefore, double toCall, List<AnonymousReadPreset> manual) {
     final vc = RangeEquity.villainCombos(s);
     final heroMask = s.hero!.mask;
     final street = s.actions.where((a) => a.street == s.street && a.actor == s.villainPosition).toList();
@@ -48,9 +49,10 @@ class VillainRangeInspector {
     final vBet = street.where((a) => a.isAggressive).lastOrNull;
     final polar = s.street == Street.river && vBet != null && toCall > 0 && potBefore > 0 && toCall / potBefore >= polarSizing;
     // Equilibrium_Deviation_Read: presets sin HUD (nunca vs Reg_GTO etiquetado). Por tier: min() de multiplicadores, piso.
+    // Presets manuales (1 toque en la UI) se respetan también vs Reg_GTO; los automáticos nunca vs Reg_GTO.
     final presets = rp.archetype == GgArchetype.unknownReg
-        ? const <AnonymousReadPreset>[]
-        : ReadPresetsCatalog.detect(s, potBefore: potBefore, toCall: toCall);
+        ? manual
+        : ReadPresetsCatalog.detect(s, potBefore: potBefore, toCall: toCall, manual: manual);
     final effects = [for (final p in presets) ReadPresetsCatalog.effect(p, s)];
     final mult = <HandTier, double>{};
     for (final e in effects) {

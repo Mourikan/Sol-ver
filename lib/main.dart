@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 
-import 'ui/poker_table_screen.dart';
+import 'data/packed_lookup_repository.dart';
+import 'ui/screens/solver_cockpit_screen.dart';
 import 'ui/theme.dart';
 
-void main() => runApp(const SolVerApp());
+void main() {
+  // Tablas O(1) empaquetadas en memoria antes del primer frame.
+  PackedLookupRepository.instance;
+  runApp(const SolVerApp());
+}
 
 class SolVerApp extends StatelessWidget {
   const SolVerApp({super.key});
@@ -13,6 +18,6 @@ class SolVerApp extends StatelessWidget {
         title: 'Sol-ver 6-Max',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
-        home: const PokerTableScreen(),
+        home: const SolverCockpitScreen(),
       );
 }

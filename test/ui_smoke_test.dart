@@ -4,6 +4,7 @@ import 'package:sol_ver/application/hand_flow_fsm.dart';
 import 'package:sol_ver/core/models/game_state.dart';
 import 'package:sol_ver/main.dart';
 import 'package:sol_ver/ui/poker_table_screen.dart';
+import 'package:sol_ver/ui/screens/solver_cockpit_screen.dart';
 import 'package:sol_ver/ui/theme.dart';
 
 void main() {
@@ -33,10 +34,11 @@ void main() {
     expect(fsm.phase, HandPhase.setup);
   });
 
-  testWidgets('App arranca en dark mode con teclado de cartas', (t) async {
+  testWidgets('App arranca en dark mode con el cockpit y el teclado 4x13', (t) async {
     await t.binding.setSurfaceSize(const Size(360, 740));
     await t.pumpWidget(const SolVerApp());
-    expect(find.textContaining('Cartas de Hero'), findsOneWidget);
-    expect(Theme.of(t.element(find.byType(PokerTableScreen))).brightness, Brightness.dark);
+    expect(find.byType(SolverCockpitScreen), findsOneWidget);
+    expect(find.byKey(const ValueKey('fcm-As')), findsOneWidget);
+    expect(Theme.of(t.element(find.byType(SolverCockpitScreen))).brightness, Brightness.dark);
   });
 }
