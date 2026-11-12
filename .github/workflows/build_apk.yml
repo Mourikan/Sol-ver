@@ -1,9 +1,12 @@
 name: Build Sol-ver APK Release
 
 on:
-  push:
-    branches: [ main, master ]
   workflow_dispatch:
+  push:
+
+permissions:
+  contents: write
+  actions: write
 
 jobs:
   build-android-apk:
@@ -26,10 +29,14 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Install Dependencies
-        run: flutter pub get
+      - name: Ensure Android Platform & Debug Signing for Release
+        run: |
+          if [ ! -d "android" ]; then
+            flutter create --platforms=android .
+          fi
+          flutter pub get
 
-      - name: Build Release APK (ARM64 + Split ABI)
+      - name: Build Release APK (ARM64)
         run: flutter build apk --release --split-per-abi --no-tree-shake-icons
 
       - name: Upload APK Artifact
@@ -38,3 +45,4 @@ jobs:
           name: Solver-Obsidian-Release-APK
           path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
           retention-days: 14
+          if-no-files-found: error
