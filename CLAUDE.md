@@ -1,5 +1,10 @@
 # CLAUDE.md - Directrices del Proyecto APK GTO 6-Max
 
+## 00. SKILL: [CI_CD_SURGICAL_SCOPE_GUARD] (tareas de empaquetado / CI)
+- `Scope_Lock`: prohibido inspeccionar código fuente (`lib/`, `test/`); solo lectura quirúrgica (< 40 líneas) de `android/app/build.gradle*` y creación de `.github/workflows/`.
+- `Zero_Extra_Files`: prohibido generar scripts `.sh`, READMEs o documentación adicional no solicitada.
+- `Fire_And_Forget_Push`: prohibido ejecutar bucles de espera (`gh run watch`, `sleep`); solo `git add`, `commit` y `push`.
+
 ## 0. SKILL OBLIGATORIA: [ZERO_BLOAT_TOKEN_MISER] (aplica a todos los turnos)
 - `Rule_1_No_Full_Reads`: prohibido leer archivos > 80 líneas completos; usar `grep -n` y rangos exactos solo ante fallos de compilación/test.
 - `Rule_2_Zero_Chat_Prose`: prohibido imprimir explicaciones, tablas o código en el chat; todo reporte va a un `.md` generado por script.
