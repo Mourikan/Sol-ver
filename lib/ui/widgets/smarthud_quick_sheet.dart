@@ -4,6 +4,7 @@ import '../../application/hand_flow_fsm.dart';
 import '../../core/models/game_state.dart';
 import '../../core/reads/gg_smarthud_analyzer.dart';
 import '../../core/reads/villain_archetypes.dart';
+import '../services/tactical_feedback_service.dart';
 import '../theme.dart';
 
 /// Panel HUD por asiento: 1-tap etiqueta, steppers GGPoker (-5/+5) con diagnóstico en vivo y timing de la calle actual.
@@ -60,12 +61,14 @@ class _SmartHudQuickSheetState extends State<SmartHudQuickSheet> {
   }
 
   void _tag(VillainTag t) {
+    TacticalFeedback.tap();
     manual = t;
     stats = SmartHudStats.preset(t);
     _apply();
   }
 
   void _step(String k, double d) {
+    TacticalFeedback.tap();
     double c(double x) => (x + d).clamp(0, 100).toDouble();
     stats = switch (k) {
       'VPIP' => stats.copyWith(vpip: c(stats.vpip)),

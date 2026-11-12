@@ -5,7 +5,11 @@ import '../../core/models/game_state.dart';
 import '../../core/reads/read_presets_catalog.dart';
 import '../../core/reads/villain_archetypes.dart';
 import '../theme.dart';
+import '../services/tactical_feedback_service.dart';
+import '../theme/obsidian_theme.dart';
+import '../widgets/blocker_xray.dart';
 import '../widgets/decision_and_why_panel.dart';
+import '../widgets/live_line_breadcrumb.dart';
 import '../widgets/fast_card_matrix_picker.dart';
 import '../widgets/playing_card_widget.dart';
 import '../widgets/pro_poker_table_painter.dart';
@@ -24,6 +28,42 @@ class SolverCockpitScreen extends StatefulWidget {
 class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
   late final HandFlowFSM fsm = widget.fsm ?? HandFlowFSM();
   String? error;
+
+  @override
+  void initState() {
+    super.initState();
+    fsm.addListener(_onFsm);
+    TacticalFeedback.keepScreenOn(true);
+  }
+
+  @override
+  void dispose() {
+    fsm.removeListener(_onFsm);
+    TacticalFeedback.keepScreenOn(false);
+    super.dispose();
+  }
+
+  /// Háptica al publicarse la recomendación del turno de Hero.
+  void _onFsm() => TacticalFeedback.onDecision(fsm.currentActor == fsm.heroPosition ? fsm.activeRecommendation : null);
+
+  /// Tap en el villano en turno: acción pasiva por defecto (preflop: fold / check de BB; postflop: check o call).
+  void _seatTap(Position p) => _do(() {
+        TacticalFeedback.tap();
+        if (fsm.phase == HandPhase.setup) {
+          fsm.configure(hero: p);
+          return;
+        }
+        if (p == fsm.heroPosition) return;
+        fsm.selectedVillain = p;
+        if (fsm.currentActor == p && !fsm.awaitingCards) {
+          final owes = fsm.currentBet - fsm.seats[p]!.committed > 0;
+          fsm.act(p, fsm.street == Street.preflop ? (owes ? ActionType.fold : ActionType.check) : (owes ? ActionType.call : ActionType.check));
+        }
+      });
+
+  void _seatSwipeDown(Position p) => _do(() {
+        if (fsm.seats[p]?.alive ?? false) fsm.act(p, ActionType.fold);
+      });
 
   void _do(VoidCallback f) {
     setState(() {
@@ -58,18 +98,15 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
             listenable: fsm,
             builder: (context, _) => Column(children: [
               SizedBox(height: 32, child: _Header(fsm: fsm, act: _do)),
+              LiveLineBreadcrumb(fsm: fsm, act: _do),
               Expanded(
                 flex: 27,
                 child: ProPokerTable(
                   fsm: fsm,
                   tagOf: _tag,
-                  onTap: (p) => _do(() {
-                    if (fsm.phase == HandPhase.setup) {
-                      fsm.configure(hero: p);
-                    } else if (p != fsm.heroPosition) {
-                      fsm.selectedVillain = p;
-                    }
-                  }),
+                  geoActive: fsm.activeRecommendation?.justification?.mathRationale.startsWith('Geo-2E') ?? false,
+                  onTap: _seatTap,
+                  onSwipeDown: _seatSwipeDown,
                   onLongPress: (p) => SmartHudQuickSheet.show(context, fsm, p),
                 ),
               ),
@@ -79,7 +116,12 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
                 child: fsm.awaitingCards
                     ? Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                        child: FastCardMatrixPicker(dead: fsm.deadCardIds, onPick: (c) => _do(() => fsm.addCard(c))),
+                        child: FastCardMatrixPicker(
+                            dead: fsm.deadCardIds,
+                            onPick: (c) => _do(() {
+                                  TacticalFeedback.tap();
+                                  fsm.addCard(c);
+                                })),
                       )
                     : DecisionAndWhyPanel(fsm: fsm, error: error),
               ),
@@ -129,7 +171,7 @@ class _Header extends StatelessWidget {
           toggle('Straddle', fsm.hasStraddle, setup ? () => act(() => fsm.setDeadMoney(straddle: !fsm.hasStraddle)) : null),
           const SizedBox(width: 10),
           Text('${fsm.street.name.toUpperCase()} · solver ${(fsm.solverMicros / 1000).toStringAsFixed(2)} ms',
-              style: const TextStyle(color: AppColors.muted, fontSize: 11)),
+              style: Obsidian.num(size: 11, color: Obsidian.muted, weight: FontWeight.w600)),
         ]),
       ),
     );
@@ -169,7 +211,20 @@ class _CardsAndTells extends StatelessWidget {
           flex: 3,
           child: Row(children: [
             for (var i = 0; i < 2; i++)
-              Expanded(child: Padding(padding: const EdgeInsets.all(2), child: Center(child: PlayingCardWidget(hero[i], focus: next == i, key: ValueKey('slot-hero-$i'))))),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: Column(children: [
+                    Expanded(child: Center(child: PlayingCardWidget(hero[i], focus: next == i, key: ValueKey('slot-hero-$i')))),
+                    SizedBox(
+                      height: 13,
+                      child: hero[i] == null
+                          ? null
+                          : BlockerXRayBadge(BlockerXRay.of(hero[i]!, fsm.board), key: ValueKey('xray-$i')),
+                    ),
+                  ]),
+                ),
+              ),
             const SizedBox(width: 10),
             for (var i = 0; i < 5; i++)
               Expanded(

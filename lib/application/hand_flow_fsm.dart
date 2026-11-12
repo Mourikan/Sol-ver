@@ -119,7 +119,42 @@ class HandFlowFSM extends ChangeNotifier {
 
   // ---- Undo (pila de snapshots en memoria de la mano actual; no es historial persistente) ----
   final List<_Snap> _undo = [];
+  final List<String> _labels = [];
   bool get canUndo => _undo.isNotEmpty;
+
+  /// Etiqueta legible de cada paso de la mano actual (alineada con la pila de snapshots; '' = paso oculto).
+  List<String> get stepLabels => List.unmodifiable(_labels);
+
+  /// Instant Rewind: vuelve al estado exacto ANTES del paso [i] (el paso i y posteriores se descartan).
+  void rewindTo(int i) {
+    if (i < 0 || i >= _undo.length) throw IllegalAction('Paso $i fuera de rango');
+    while (_undo.length > i + 1) {
+      _undo.removeLast();
+      _labels.removeLast();
+    }
+    undo();
+  }
+
+  static String _abbr(PlayerAction a) => switch (a.type) {
+        ActionType.fold => '${a.actor.name.toUpperCase()} F',
+        ActionType.check => '${a.actor.name.toUpperCase()} X',
+        ActionType.call => '${a.actor.name.toUpperCase()} C ${a.amountBb.toStringAsFixed(1)}',
+        ActionType.allIn => '${a.actor.name.toUpperCase()} AI ${a.amountBb.toStringAsFixed(1)}',
+        _ => '${a.actor.name.toUpperCase()} ${a.isAggressive ? 'R' : ''} ${a.amountBb.toStringAsFixed(1)}bb',
+      };
+
+  /// Ejecuta [f] con snapshot previo; si lanza, el snapshot se descarta (la pila nunca guarda pasos fantasma).
+  void _step(void Function() f, String Function() label) {
+    _push();
+    try {
+      f();
+    } on Object {
+      _restore(_undo.removeLast());
+      rethrow;
+    }
+    _labels.add(label());
+    if (_labels.length > _undo.length) _labels.removeAt(0);
+  }
 
   void _push() {
     _undo.add(_Snap(
@@ -141,6 +176,13 @@ class HandFlowFSM extends ChangeNotifier {
   void undo() {
     if (_undo.isEmpty) throw const IllegalAction('Nada que deshacer');
     final s = _undo.removeLast();
+    if (_labels.length > _undo.length) _labels.removeLast();
+    _restore(s);
+    _refreshRecommendation();
+    notifyListeners();
+  }
+
+  void _restore(_Snap s) {
     heroCards
       ..clear()
       ..addAll(s.heroCards);
@@ -161,8 +203,6 @@ class HandFlowFSM extends ChangeNotifier {
     _currentBet = s.currentBet;
     _lastRaiseSize = s.lastRaise;
     _potStartStreet = s.potStart;
-    _refreshRecommendation();
-    notifyListeners();
   }
 
   /// Bote total, stack efectivo restante (Hero vs villano principal) y SPR en vivo.
@@ -269,6 +309,7 @@ class HandFlowFSM extends ChangeNotifier {
 
   void reset() {
     _undo.clear();
+    _labels.clear();
     heroCards.clear();
     board.clear();
     actions.clear();
@@ -339,14 +380,16 @@ class HandFlowFSM extends ChangeNotifier {
   void addCard(Card c) {
     if (!awaitingCards) throw const IllegalAction('Street_Gate cerrado: la acción de la calle no ha terminado');
     if (deadCardIds.contains(c.id)) throw IllegalAction('Carta muerta: $c');
-    _push();
-    if (phase == HandPhase.setup) {
-      heroCards.add(c);
-      if (heroCards.length == 2) _startPreflop();
-    } else {
-      board.add(c);
-      if (cardsNeeded == 0) _startStreet();
-    }
+    final hero = phase == HandPhase.setup;
+    _step(() {
+      if (hero) {
+        heroCards.add(c);
+        if (heroCards.length == 2) _startPreflop();
+      } else {
+        board.add(c);
+        if (cardsNeeded == 0) _startStreet();
+      }
+    }, () => hero ? '' : '[$c]');
     notifyListeners();
   }
 
@@ -432,7 +475,12 @@ class HandFlowFSM extends ChangeNotifier {
   /// Aplica una acción. [amountBb] = total "to" de la calle para bet/raise.
   void act(Position p, ActionType type, {double amountBb = 0}) {
     if (phase == HandPhase.setup || awaitingCards || phase == HandPhase.handOver) throw const IllegalAction('No hay acción pendiente');
-    _push();
+    final before = actions.length;
+    _step(() => _act(p, type, amountBb), () => actions.sublist(before).map(_abbr).join(' · '));
+    notifyListeners();
+  }
+
+  void _act(Position p, ActionType type, double amountBb) {
     if (p != currentActor) {
       // Implicit_Fast_Forward: los asientos omitidos entre el turno actual y el actor foldean (o pasan si no deben nada).
       final o = _order;
@@ -447,7 +495,6 @@ class HandFlowFSM extends ChangeNotifier {
     }
     _apply(p, type, amountBb);
     _advance(p);
-    notifyListeners();
   }
 
   bool _skipsHero(Position target) {

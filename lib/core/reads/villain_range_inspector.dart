@@ -141,7 +141,17 @@ class VillainRangeInspector {
       predictedBluffFreq: air / tot,
       heroBlockedNutsCombos: blockedNuts,
       activePresets: [for (final p in presets) ReadPresetsCatalog.label(p)],
+      classWeights: _weights(byClass),
     );
+  }
+
+  static List<double> _weights(Map<int, double> byClass) {
+    if (byClass.isEmpty) return const [];
+    final mx = byClass.values.reduce((a, b) => a > b ? a : b);
+    final out = List<double>.filled(169, 0);
+    if (mx <= 0) return out;
+    byClass.forEach((i, w) => out[i] = w / mx);
+    return out;
   }
 
   static List<String> _top(Map<int, double> byClass) =>
@@ -197,6 +207,7 @@ class VillainRangeInspector {
       topRepresentativeHands: _top(byClass),
       predictedFoldFreq: 0,
       predictedBluffFreq: air / tot,
+      classWeights: _weights(byClass),
     );
   }
 }

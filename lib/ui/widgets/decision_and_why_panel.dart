@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../application/hand_flow_fsm.dart';
 import '../../core/models/decision_output.dart';
 import '../theme.dart';
+import '../theme/obsidian_theme.dart';
+import 'peek_169_heatmap.dart';
 
 Color actionColor(DecisionAction a) => switch (a) {
       DecisionAction.betRaise => AppColors.emerald,
@@ -46,15 +48,15 @@ class DecisionAndWhyPanel extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Container(
+        Obsidian.panel(
           key: const ValueKey('oracle'),
+          glow: c,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          decoration: BoxDecoration(color: c.withValues(alpha: .14), borderRadius: BorderRadius.circular(10), border: Border.all(color: c, width: 1.5)),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             FittedBox(
               fit: BoxFit.scaleDown,
               alignment: Alignment.centerLeft,
-              child: Text(_label(d), key: const ValueKey('oracle-action'), style: TextStyle(color: c, fontSize: 24, fontWeight: FontWeight.w900)),
+              child: Text(_label(d), key: const ValueKey('oracle-action'), style: Obsidian.num(size: 24, color: c, weight: FontWeight.w900)),
             ),
             FittedBox(
               fit: BoxFit.scaleDown,
@@ -65,14 +67,33 @@ class DecisionAndWhyPanel extends StatelessWidget {
                 '  ·  ${[if (ev['betRaise'] != null) 'R ${f(ev['betRaise'])}', if (ev['call'] != null) 'C ${f(ev['call'])}', if (ev['check'] != null) 'X ${f(ev['check'])}', 'F ${f(ev['fold'] ?? 0)}'].join(' | ')}'
                 '  ·  ${j?.activeCloserRule ?? 'GTO_Baseline'}',
                 key: const ValueKey('oracle-evs'),
-                style: const TextStyle(color: AppColors.text, fontSize: 12, fontWeight: FontWeight.w700),
+                style: Obsidian.num(size: 12, weight: FontWeight.w700),
               ),
             ),
+            const SizedBox(height: 3),
+            EvMicroBar(raise: ev['betRaise'], passive: ev['call'] ?? ev['check'], passiveLabel: ev.containsKey('call') ? 'CALL' : 'CHECK'),
           ]),
         ),
         const SizedBox(height: 4),
         if (r != null && r.totalActiveCombos > 0) ...[
-          SizedBox(height: 18, child: RangeBar(r)),
+          SizedBox(
+            height: 18,
+            child: Row(children: [
+              Expanded(child: RangeBar(r)),
+              const SizedBox(width: 4),
+              InkWell(
+                key: const ValueKey('peek-169'),
+                onTap: r.classWeights.isEmpty ? null : () => Peek169Heatmap.show(context, r.classWeights),
+                onLongPress: r.classWeights.isEmpty ? null : () => Peek169Heatmap.show(context, r.classWeights),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(color: Obsidian.violetExploit.withValues(alpha: .15), borderRadius: BorderRadius.circular(4), border: Border.all(color: Obsidian.violetExploit)),
+                  child: const Text('🔍 13x13', style: TextStyle(color: Obsidian.violetExploit, fontSize: 10, fontWeight: FontWeight.w900)),
+                ),
+              ),
+            ]),
+          ),
           const SizedBox(height: 3),
           SizedBox(
             height: 20,
@@ -110,6 +131,54 @@ class DecisionAndWhyPanel extends StatelessWidget {
           ),
       ]),
     );
+  }
+}
+
+/// Termómetro comparativo de EV: RAISE vs CALL/CHECK vs FOLD con el margen de dominancia (+Δ EV).
+class EvMicroBar extends StatelessWidget {
+  const EvMicroBar({super.key, this.raise, this.passive, this.passiveLabel = 'CALL'});
+  final double? raise, passive;
+  final String passiveLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <(String, double, Color)>[
+      if (raise != null) ('RAISE', raise!, Obsidian.emeraldRaise),
+      if (passive != null) (passiveLabel, passive!, passiveLabel == 'CALL' ? Obsidian.cyanCall : Obsidian.amberCheck),
+      ('FOLD', 0.0, Obsidian.crimsonFold),
+    ];
+    final vals = [for (final r in rows) r.$2];
+    final mx = vals.reduce((a, b) => a > b ? a : b), mn = vals.reduce((a, b) => a < b ? a : b);
+    final sorted = [...vals]..sort((a, b) => b.compareTo(a));
+    final dom = sorted.length > 1 ? sorted[0] - sorted[1] : 0.0;
+    final span = (mx - mn).abs() < 1e-9 ? 1.0 : mx - mn;
+    return Column(key: const ValueKey('ev-microbar'), children: [
+      for (final (l, v, col) in rows)
+        SizedBox(
+          height: 11,
+          child: Row(children: [
+            SizedBox(width: 44, child: Text(l, style: Obsidian.num(size: 9, color: v == mx ? col : Obsidian.muted, weight: FontWeight.w900))),
+            Expanded(
+              child: LayoutBuilder(builder: (context, c) {
+                final f = ((v - mn) / span).clamp(0.04, 1.0);
+                return Align(
+                  alignment: Alignment.centerLeft,
+                  child: Container(
+                    width: c.maxWidth * f,
+                    height: 6,
+                    decoration: BoxDecoration(color: v == mx ? col : col.withValues(alpha: .35), borderRadius: BorderRadius.circular(3)),
+                  ),
+                );
+              }),
+            ),
+            SizedBox(
+              width: 92,
+              child: Text('${v >= 0 ? '+' : ''}${v.toStringAsFixed(2)} bb${v == mx && dom > 0 ? ' (+${dom.toStringAsFixed(2)})' : ''}',
+                  textAlign: TextAlign.right, style: Obsidian.num(size: 9, color: v == mx ? col : Obsidian.muted)),
+            ),
+          ]),
+        ),
+    ]);
   }
 }
 

@@ -22,11 +22,16 @@ class SeatSnap {
 
 /// Mesa 6-max vectorial (GPU): tapete radial, glow del turno, fichas por apuesta y bote/SPR al centro.
 class ProPokerTable extends StatelessWidget {
-  const ProPokerTable({super.key, required this.fsm, required this.tagOf, required this.onTap, required this.onLongPress});
+  const ProPokerTable(
+      {super.key, required this.fsm, required this.tagOf, required this.onTap, required this.onLongPress, this.onSwipeDown, this.geoActive = false});
   final HandFlowFSM fsm;
   final String Function(Position) tagOf;
   final void Function(Position) onTap;
   final void Function(Position) onLongPress;
+
+  /// Swipe vertical hacia abajo sobre el asiento: fold inmediato del villano.
+  final void Function(Position)? onSwipeDown;
+  final bool geoActive;
 
   static Offset seatOffset(Position p, Position hero, Size s) {
     final order = HandFlowFSM.preflopOrder;
@@ -52,7 +57,7 @@ class ProPokerTable extends StatelessWidget {
           child: RepaintBoundary(
             child: CustomPaint(
                 key: const ValueKey('pro-table'),
-                painter: ProPokerTablePainter(seats, pot: fsm.totalPotBB, spr: fsm.currentSPR, hero: fsm.heroPosition)),
+                painter: ProPokerTablePainter(seats, pot: fsm.totalPotBB, spr: fsm.currentSPR, hero: fsm.heroPosition, geoActive: geoActive)),
           ),
         ),
         for (final s in seats)
@@ -66,6 +71,11 @@ class ProPokerTable extends StatelessWidget {
               behavior: HitTestBehavior.opaque,
               onTap: () => onTap(s.pos),
               onLongPress: s.hero ? null : () => onLongPress(s.pos),
+              onVerticalDragEnd: s.hero || onSwipeDown == null
+                  ? null
+                  : (d) {
+                      if ((d.primaryVelocity ?? 0) > 150) onSwipeDown!(s.pos);
+                    },
             ),
           ),
       ]);
@@ -74,11 +84,15 @@ class ProPokerTable extends StatelessWidget {
 }
 
 class ProPokerTablePainter extends CustomPainter {
-  ProPokerTablePainter(this.seats, {required this.pot, required this.spr, required this.hero});
+  ProPokerTablePainter(this.seats, {required this.pot, required this.spr, required this.hero, this.geoActive = false});
   final List<SeatSnap> seats;
   final double pot;
   final double? spr;
   final Position hero;
+  final bool geoActive;
+
+  /// SPR_Commitment_Gauge: escala 13 -> 0 sobre un arco de 270°.
+  static const gaugeMaxSpr = 13.0, commitSpr = 2.5;
 
   static Color tagColor(String t) => switch (t) {
         'HERO' => AppColors.emerald,
@@ -92,7 +106,10 @@ class ProPokerTablePainter extends CustomPainter {
       };
 
   void _text(Canvas c, String t, Offset at, {double fs = 11, Color col = AppColors.text, FontWeight w = FontWeight.w700}) {
-    final tp = TextPainter(text: TextSpan(text: t, style: TextStyle(color: col, fontSize: fs, fontWeight: w)), textDirection: TextDirection.ltr)..layout();
+    final tp = TextPainter(
+        text: TextSpan(text: t, style: TextStyle(color: col, fontSize: fs, fontWeight: w, fontFeatures: const [FontFeature.tabularFigures()])),
+        textDirection: TextDirection.ltr)
+      ..layout();
     tp.paint(c, at - Offset(tp.width / 2, tp.height / 2));
   }
 
@@ -109,8 +126,36 @@ class ProPokerTablePainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
       ..color = AppColors.border);
+    // SPR_Commitment_Gauge (270°): cuanto menor el SPR, más compromiso; brilla en zona de compromiso o Geo-2E.
+    final rad = math.min(table.height * 0.42, 46.0);
+    final arcRect = Rect.fromCircle(center: table.center, radius: rad);
+    const start = math.pi * 0.75, sweep = math.pi * 1.5;
+    canvas.drawArc(arcRect, start, sweep, false, Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round
+      ..color = AppColors.border);
+    final commit = spr == null ? 0.0 : (1 - (spr! / gaugeMaxSpr).clamp(0.0, 1.0));
+    final hot = spr != null && (spr! <= commitSpr || geoActive);
+    final gc = hot ? (geoActive ? AppColors.emerald : AppColors.cyan) : AppColors.amber;
+    if (commit > 0) {
+      if (hot) {
+        canvas.drawArc(arcRect, start, sweep * commit, false, Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 8
+          ..strokeCap = StrokeCap.round
+          ..color = gc.withValues(alpha: .35)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+      }
+      canvas.drawArc(arcRect, start, sweep * commit, false, Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 4
+        ..strokeCap = StrokeCap.round
+        ..color = gc);
+    }
     _text(canvas, 'Pot ${pot.toStringAsFixed(2)} bb', table.center.translate(0, -7), fs: 15, w: FontWeight.w900);
-    _text(canvas, 'SPR ${spr == null ? '—' : spr!.toStringAsFixed(2)}', table.center.translate(0, 11), fs: 11, col: AppColors.muted);
+    _text(canvas, 'SPR ${spr == null ? '—' : spr!.toStringAsFixed(2)}', table.center.translate(0, 11), fs: 11, col: hot ? gc : AppColors.muted);
+    if (hot) _text(canvas, geoActive ? '[GEO-2E]' : '[COMMIT ZONE]', table.center.translate(0, rad - 4), fs: 9, col: gc, w: FontWeight.w900);
     for (final s in seats) {
       final o = ProPokerTable.seatOffset(s.pos, hero, size);
       final plate = RRect.fromRectAndRadius(Rect.fromCenter(center: o, width: 74, height: 42), const Radius.circular(10));
@@ -146,7 +191,7 @@ class ProPokerTablePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(ProPokerTablePainter o) => o.pot != pot || o.spr != spr || o.hero != hero || !_listEq(o.seats, seats);
+  bool shouldRepaint(ProPokerTablePainter o) => o.pot != pot || o.spr != spr || o.hero != hero || o.geoActive != geoActive || !_listEq(o.seats, seats);
 
   static bool _listEq(List<SeatSnap> a, List<SeatSnap> b) {
     if (a.length != b.length) return false;

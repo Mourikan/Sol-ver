@@ -12,6 +12,7 @@ class VillainPerceivedRange {
     required this.predictedBluffFreq,
     this.heroBlockedNutsCombos = 0,
     this.activePresets = const [],
+    this.classWeights = const [],
   });
 
   static const empty = VillainPerceivedRange(
@@ -36,6 +37,9 @@ class VillainPerceivedRange {
 
   /// Presets de lectura sin HUD activos (Equilibrium_Deviation_Read).
   final List<String> activePresets;
+
+  /// Peso relativo (0..1, normalizado al máximo) de cada una de las 169 clases que sobreviven en el nodo (índice Matrix169).
+  final List<double> classWeights;
 
   Map<String, Object> toJson() => {
         'totalActiveCombos': totalActiveCombos,
