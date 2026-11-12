@@ -72,7 +72,8 @@ class ActionEvCalculator {
   /// Fold_Equity_Real: combos que foldean en el rango real del villano, modulado por perfil.
   static double foldEquity(double rawFe, double alpha, ReadProfile read, VillainProfile vp,
       {required bool river, required bool capped, bool secondBarrel = false, double betFraction = 0.5}) {
-    if ((read.archetype == GgArchetype.recPassiveFish || vp == VillainProfile.callingStation) && river) return 0.05;
+    // Inelastic-Caller: la premisa de la regla Station es FE ~ 0 en todas las calles (techo 5%, igual que River).
+    if (read.archetype == GgArchetype.recPassiveFish || vp == VillainProfile.callingStation) return river ? 0.05 : math.min(rawFe * 0.5, 0.05);
     if (read.archetype == GgArchetype.poolDefault || vp == VillainProfile.poolDefault) {
       // Pool paga de más vs apuestas pequeñas de River => techo de FE; foldea de más vs double barrel => suelo de FE.
       if (river && betFraction <= MDAParameters.smallBetMaxFraction) return math.min(rawFe, 1 - MDAParameters.riverCallEfficiencyVsSmallBet);
@@ -80,6 +81,10 @@ class ActionEvCalculator {
       return rawFe;
     }
     if (read.archetype == GgArchetype.scaredMoneyReg && capped) return math.min(0.85, alpha * 1.35);
+    // Trapper: 85% del rango es AA/KK/AKs (prior) => solo el 15% restante puede foldear.
+    if (read.archetype == GgArchetype.trapperLimpReraiser || vp == VillainProfile.trapperPremium) {
+      return math.min(rawFe * 0.5, 1 - ReadProfile.trapperPremiumPrior);
+    }
     return switch (vp) {
       VillainProfile.callingStation => rawFe * 0.5,
       VillainProfile.nit => math.min(0.9, rawFe * 1.2),

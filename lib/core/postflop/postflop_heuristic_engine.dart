@@ -69,8 +69,14 @@ class PostflopHeuristicEngine {
     if (missing.isNotEmpty) throw MissingInputs(missing);
     final rp = read ?? ReadProfile.fromVillainProfile(input.villainProfile);
     final s = read == null ? input : input.copyWith(villainProfile: read.engineProfile);
-    final d = _decideHu(s, rp);
+    var d = _decideHu(s, rp);
     if (rp.archetype == GgArchetype.unknownReg) return d;
+    // Guard central Four_To_A_Flush: ningún módulo explotativo farolea sin carta del palo con 4 al color.
+    final tierNow = HandTierClassifier.classify(s.hero!.high.id, s.hero!.low.id, [for (final c in s.board) c.id]).tier;
+    if (d.action == DecisionAction.betRaise && _potAndCall(s).$2 == 0 && MonotoneFourFlushSolver.killNoSuitBluff(s, rp) &&
+        (tierNow == HandTier.airGiveUp || tierNow == HandTier.backdoorBlockerBluff)) {
+      d = _check(d.metrics, d.justificacionGto, '[FOUR_FLUSH_LOCK] farol sin carta del palo anulado. ${d.ajusteExplotativoRead}');
+    }
     // CAPA 1 — Ancla Nash: decisión vs Reg_GTO en segundo plano; ambas líneas evaluadas bajo el perfil asumido.
     final base = _decideHu(s.copyWith(villainProfile: VillainProfile.gtoBase), _anchor);
     final (potBefore, toCall) = _potAndCall(s);
@@ -90,9 +96,17 @@ class PostflopHeuristicEngine {
     // del EV_Sanity_Guard y del Profile_Gate (Fish/Station inelástico y Trapper: farol 0% por candado de perfil).
     final lock = d.justificacionGto.contains(EvSanityGuard.tag) ||
         d.ajusteExplotativoRead.contains(EvSanityGuard.tag) ||
-        rp.archetype == GgArchetype.recPassiveFish ||
+        (rp.archetype == GgArchetype.recPassiveFish && s.street == Street.river) ||
         rp.archetype == GgArchetype.trapperLimpReraiser;
     final passiveLoses = toCall == 0 && d.action == DecisionAction.check && base.action == DecisionAction.betRaise && !lock;
+    // Call explotativo por encima del ancla (el ancla foldea) con Δ < 0 => no se aplica (la defensa no baja del MDF del ancla).
+    final callBeyondAnchor = toCall > 0 && d.action == DecisionAction.call && base.action == DecisionAction.fold && !lock;
+    if (delta < 0 && callBeyondAnchor) {
+      return base.copyWith(
+          exploitDeltaEV: 0,
+          ajusteExplotativoRead: '[EV_ANCHOR] call extra vs ${rp.archetype.name} con Δ EV ${delta.toStringAsFixed(2)}bb <= 0: '
+              'se mantiene la defensa del ancla. ${d.ajusteExplotativoRead}');
+    }
     if (delta < 0 && (d.action == DecisionAction.betRaise || passiveLoses)) {
       return base.copyWith(
           exploitDeltaEV: 0,
@@ -416,7 +430,8 @@ class PostflopHeuristicEngine {
         rp.archetype != GgArchetype.trapperLimpReraiser &&
         rp.archetype != GgArchetype.unknownReg;
     const noSdv = {HandTier.airGiveUp, HandTier.backdoorBlockerBluff};
-    if (instaCheck && timingGate && noSdv.contains(h.tier)) {
+    // Jerarquía: el candado Four_To_A_Flush (0% farol sin carta del palo) prevalece sobre el overbet del timing.
+    if (instaCheck && timingGate && noSdv.contains(h.tier) && !MonotoneFourFlushSolver.killNoSuitBluff(s, rp)) {
       if (s.street == Street.turn) {
         return _bet(instaStabPct, pot, stack, metrics, 'Insta-check Turn: rango Capped_Weak (sin sets/nut-draws que protegerían).',
             'Auto_Profit_Stab ${instaStabPct.round()}% vs ${rp.archetype.name} (Profile_Gate OK; FE del rango capado > alpha).');

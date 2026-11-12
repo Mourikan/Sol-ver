@@ -9,8 +9,8 @@ Generado por `docs/audit_scripts/cold_numbers_benchmark.dart` con el motor real.
 
 | Escenario y Mano | EV Fold (bb) | EV Call (bb) | EV Raise (bb) | Acción Tomada | Freq Motor | Freq GTO | Δ Nash |
 |---|---|---|---|---|---|---|---|
-| BB vs open BTN 2.5x — Kh9d | 0.00 | 0.24 | 1.79 | call 1.5bb | 54.4% | 53.0% | 1.4% |
-| BB vs open CO 2.5x — Ah9d | 0.00 | 0.49 | 1.72 | call 1.5bb | 45.5% | 44.0% | 1.5% |
+| BB vs open BTN 2.5x — Kh9d | 0.00 | 0.24 | 1.52 | call 1.5bb | 54.4% | 53.0% | 1.4% |
+| BB vs open CO 2.5x — Ah9d | 0.00 | 0.49 | 1.47 | call 1.5bb | 45.5% | 44.0% | 1.5% |
 | BTN vs open CO: 3-bet polar 7.5bb (farol/total) — Ah5h | 0.00 | 1.02 | 2.85 | call 2.5bb | 35.8% | 36.6% | 0.8% |
 | CO vs 3-bet BTN 8.0bb — KhQh | 0.00 | 0.42 | 2.60 | call 5.5bb | 28.5% | 33.3% | 4.8% |
 | BTN vs 3-bet BB 10.0bb — AhJd | 0.00 | 2.88 | 6.49 | call 7.5bb | 28.2% | 30.8% | 2.6% |

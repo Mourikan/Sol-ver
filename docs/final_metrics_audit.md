@@ -35,9 +35,9 @@ Generado por `docs/audit_scripts/metric_audit.dart` simulando el motor combo a c
 | Defensa BB vs c-bet 33% (As7d2c) | nl25 Fish | MDF 75.3% | 68.5% | 6.8 | OK (Regla Fish (factor 0.82)) · ALERTA <70% |
 | Defensa BB vs c-bet 33% (Qc7h2d) | nl25 Fish | MDF 75.3% | 70.3% | 5.0 | OK (Regla Fish (factor 0.82)) |
 | Defensa BB vs c-bet 33% (9h8h4c) | nl25 Fish | MDF 75.3% | 77.8% | 2.5 | OK (Regla Fish (factor 0.82)) |
-| Defensa BB vs c-bet 33% (As7d2c) | nl100 Maniac | MDF 75.3% | 89.0% | 13.7 | Justificado: Regla Maniac (factor 1.18) |
-| Defensa BB vs c-bet 33% (Qc7h2d) | nl100 Maniac | MDF 75.3% | 89.0% | 13.7 | Justificado: Regla Maniac (factor 1.18) |
-| Defensa BB vs c-bet 33% (9h8h4c) | nl100 Maniac | MDF 75.3% | 88.6% | 13.3 | Justificado: Regla Maniac (factor 1.18) |
+| Defensa BB vs c-bet 33% (As7d2c) | nl100 Maniac | MDF 75.3% | 80.1% | 4.8 | OK (Regla Maniac (factor 1.18)) |
+| Defensa BB vs c-bet 33% (Qc7h2d) | nl100 Maniac | MDF 75.3% | 80.3% | 5.0 | OK (Regla Maniac (factor 1.18)) |
+| Defensa BB vs c-bet 33% (9h8h4c) | nl100 Maniac | MDF 75.3% | 82.0% | 6.7 | OK (Regla Maniac (factor 1.18)) |
 
 ## Turn
 
@@ -45,7 +45,7 @@ Generado por `docs/audit_scripts/metric_audit.dart` simulando el motor combo a c
 |---|---|---|---|---|---|
 | Double barrel 69% Kd7s2s-4h (semi 36 / puro 45 / valor 79) | Reg | geo2 = 50.3% | 50.4% | 0.1 | OK |
 | Double barrel 69% Kd7s2s-4h (semi 36 / puro 251 / valor 79) | Scared (pot>35bb, capado) | geo2 = 50.3% x 2.0 = 100.0% | 78.3% | 21.7 | Justificado: Exploit_Bluff_Factor 2.0 (scaredMoneyReg) |
-| Double barrel 100% Kd7s2s-4h (semi 27 / puro 49 / valor 79) | Fish | geo2 = 53.3% x 0.5 = 26.7% | 49.0% | 22.4 | Justificado: Exploit_Bluff_Factor 0.5 (recPassiveFish) |
+| Double barrel 100% Kd7s2s-4h (semi 27 / puro 48 / valor 79) | Fish | geo2 = 53.3% x 0.5 = 26.7% | 48.5% | 21.8 | Justificado: Exploit_Bluff_Factor 0.5 (recPassiveFish) |
 | Fold BB vs barrel 75% (As7d2c5h) | nl100 Reg | 1-MDF = 42.8% | 42.3% | 0.5 | OK |
 | Fold BB vs barrel 75% (Qc7h2dKs) | nl100 Reg | 1-MDF = 42.8% | 42.4% | 0.4 | OK |
 | Fold BB vs barrel 75% (Kd8s3s4c) | nl100 Reg | 1-MDF = 42.8% | 41.0% | 1.8 | OK |
@@ -55,9 +55,9 @@ Generado por `docs/audit_scripts/metric_audit.dart` simulando el motor combo a c
 | Fold BB vs barrel 75% (As7d2c5h) | nl25 Scared | 1-MDF = 42.8% | 45.5% | 2.7 | OK (Scared ≤NL50 factor 0.90) |
 | Fold BB vs barrel 75% (Qc7h2dKs) | nl25 Scared | 1-MDF = 42.8% | 45.7% | 2.9 | OK (Scared ≤NL50 factor 0.90) |
 | Fold BB vs barrel 75% (Kd8s3s4c) | nl25 Scared | 1-MDF = 42.8% | 40.7% | 2.1 | OK (Scared ≤NL50 factor 0.90) |
-| Fold BB vs barrel 75% (As7d2c5h) | nl100 Maniac | 1-MDF = 42.8% | 32.3% | 10.5 | Justificado: Regla Maniac (factor 1.18) |
-| Fold BB vs barrel 75% (Qc7h2dKs) | nl100 Maniac | 1-MDF = 42.8% | 32.4% | 10.4 | Justificado: Regla Maniac (factor 1.18) |
-| Fold BB vs barrel 75% (Kd8s3s4c) | nl100 Maniac | 1-MDF = 42.8% | 32.4% | 10.3 | Justificado: Regla Maniac (factor 1.18) |
+| Fold BB vs barrel 75% (As7d2c5h) | nl100 Maniac | 1-MDF = 42.8% | 47.9% | 5.2 | OK (Regla Maniac (factor 1.18)) |
+| Fold BB vs barrel 75% (Qc7h2dKs) | nl100 Maniac | 1-MDF = 42.8% | 37.0% | 5.8 | OK (Regla Maniac (factor 1.18)) |
+| Fold BB vs barrel 75% (Kd8s3s4c) | nl100 Maniac | 1-MDF = 42.8% | 45.4% | 2.6 | OK (Regla Maniac (factor 1.18)) |
 
 ## River
 
@@ -69,9 +69,9 @@ Generado por `docs/audit_scripts/metric_audit.dart` simulando el motor combo a c
 | Bluff-catch vs pot (Kd8s3s4c2h) — unblockers 58.0% vs blockers 19.9% | nl10 Reg (MDA: triple barrel overbet) | MDF 50.0% | 44.8% | 5.2 | OK (Ley MDA NL2-NL50 (CLAUDE.md §4)) |
 | Bluff-catch vs pot (As7d2c5h9s) — n/a (sin proyecto de color) | nl10 Reg (MDA: triple barrel overbet) | MDF 50.0% | 37.3% | 12.7 | Justificado: Ley MDA NL2-NL50 (CLAUDE.md §4) |
 | Bluff-catch vs pot (Qc7h2dKs3c) — n/a (sin proyecto de color) | nl10 Reg (MDA: triple barrel overbet) | MDF 50.0% | 36.0% | 14.0 | Justificado: Ley MDA NL2-NL50 (CLAUDE.md §4) |
-| Bluff-catch vs pot (Kd8s3s4c2h) — unblockers 70.0% vs blockers 69.5% | nl100 Maniac | MDF 50.0% | 59.0% | 9.0 | Justificado: Regla Maniac (piso agro + factor 1.18) |
-| Bluff-catch vs pot (As7d2c5h9s) — n/a (sin proyecto de color) | nl100 Maniac | MDF 50.0% | 59.1% | 9.1 | Justificado: Regla Maniac (piso agro + factor 1.18) |
-| Bluff-catch vs pot (Qc7h2dKs3c) — n/a (sin proyecto de color) | nl100 Maniac | MDF 50.0% | 59.0% | 9.0 | Justificado: Regla Maniac (piso agro + factor 1.18) |
+| Bluff-catch vs pot (Kd8s3s4c2h) — unblockers 61.6% vs blockers 47.4% | nl100 Maniac | MDF 50.0% | 49.8% | 0.2 | OK (Regla Maniac (piso agro + factor 1.18)) |
+| Bluff-catch vs pot (As7d2c5h9s) — n/a (sin proyecto de color) | nl100 Maniac | MDF 50.0% | 40.2% | 9.8 | Justificado: Regla Maniac (piso agro + factor 1.18) |
+| Bluff-catch vs pot (Qc7h2dKs3c) — n/a (sin proyecto de color) | nl100 Maniac | MDF 50.0% | 53.2% | 3.2 | OK (Regla Maniac (piso agro + factor 1.18)) |
 | Conversión LLinus (overbet/all-in de no-valor) QhJh4c2h8d capado | Scared | >0% | 38.2% | 0.0 | OK (Regla LLinus (rango capado)) |
 | Conversión LLinus (overbet/all-in de no-valor) QhJh4c2h8d capado | Reg NL50 | >0% | 42.3% | 0.0 | OK (Regla LLinus (rango capado)) |
 | Conversión LLinus (overbet/all-in de no-valor) QhJh4c2h8d capado | CallingStation | 0% estricto | 0.0% | 0.0 | OK (Gate Fish/Station) |

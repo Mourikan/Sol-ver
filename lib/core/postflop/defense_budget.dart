@@ -98,12 +98,35 @@ class DefenseBudget {
   }
 
   static Float32List villainPreflopRange(GameState s) {
-    final r = _villainPreflopRange(s);
+    final r = _trapperBlend(s, _villainPreflopRange(s));
     if (!UnmappedSpotsResolver.villainLimped(s)) return r;
     // Multi_Limper_Iso_And_Cap_Filter: el limp-caller no tiene el top 8% (AA-JJ, AK) => rango truncado.
     final out = Float32List.fromList(r);
     for (final l in UnmappedSpotsResolver.limpCallerTop) {
       out[Matrix169.indexOf(l)] = 0;
+    }
+    return out;
+  }
+
+  /// Trapper: el prior del usuario (85% AA/KK/AKs) se impone sobre el rango posicional (mezcla 85/15 por combos).
+  static Float32List _trapperBlend(GameState s, Float32List r) {
+    if (s.villainProfile != VillainProfile.trapperPremium) return r;
+    final out = Float32List.fromList(r);
+    final prem = {for (final l in ['AA', 'KK', 'AKs']) Matrix169.indexOf(l)};
+    var pc = 0.0, oc = 0.0;
+    for (var i = 0; i < 169; i++) {
+      if (prem.contains(i)) {
+        out[i] = 1;
+        pc += Matrix169.combos(i);
+      } else {
+        oc += out[i] * Matrix169.combos(i);
+      }
+    }
+    if (oc <= 0) return out;
+    const p = ReadProfile.trapperPremiumPrior;
+    final f = pc * (1 - p) / (p * oc);
+    for (var i = 0; i < 169; i++) {
+      if (!prem.contains(i)) out[i] *= f;
     }
     return out;
   }

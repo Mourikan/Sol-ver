@@ -125,6 +125,28 @@ class PreflopSolverEngine {
 
   /// EV aproximado preflop (bb, relativo a fold = 0): equity tabulada x EQR x posición, rake del bote final esperado.
   /// FE = fracción del rango rival que foldea según los propios nodos del árbol; equity vs continuación = tabla proxy.
+  /// FE preflop modulada por perfil (mismos factores que el FE postflop de ActionEvCalculator): station/trapper x0.5,
+  /// nit x1.2 (tope 0.9), maniac/agro x0.7. gtoBase/pool sin cambio (ancla Nash intacta).
+  static double profileFe(double fe, VillainProfile vp, {bool facing4Bet = false}) => switch (vp) {
+        VillainProfile.callingStation || VillainProfile.trapperPremium => fe * 0.5,
+        // Nit: sobre-foldea opens/steals, pero su 3-bet (<= 4.5%) es lineal-nutted => casi no foldea al 4-bet.
+        VillainProfile.nit => facing4Bet ? fe * 0.5 : (fe * 1.2).clamp(0.0, 0.9),
+        VillainProfile.maniac || VillainProfile.regAgro => fe * 0.7,
+        _ => fe,
+      };
+
+  /// Sizing del 3-bet que se jugará (misma fórmula que la decisión) para evaluar las puertas de EV.
+  double _threeBetSize(GameState s, PreflopContext ctx, bool ip) {
+    final micro = s.rakeTier == RakeTier.microHighRake;
+    final mult = s.villainProfile == VillainProfile.callingStation
+        ? (ip ? 4.0 : 5.0)
+        : ip
+            ? (micro ? 3.2 : 3.0)
+            : (s.heroPosition == Position.bb ? (micro ? 4.5 : 3.75) : (micro ? 4.0 : 3.75));
+    final size = ctx.raiseSizeBb * mult + ctx.raiseSizeBb * ctx.coldCallers;
+    return s.effectiveStackBb != null && size >= s.effectiveStackBb! * commitThreshold ? s.effectiveStackBb! : size;
+  }
+
   Map<String, double> preflopEVs(GameState s, PreflopContext ctx, CanonicalHand hand, {double? raiseTo}) {
     final i = hand.index;
     final tier = s.rakeTier;
@@ -146,6 +168,7 @@ class PreflopSolverEngine {
         }
         final eqC = HandProps.equity('MR_RFI_utg', i)!;
         final fin = 2 * open + 1.5 - (s.heroPosition == Position.sb ? 0.5 : 0);
+        fe = profileFe(fe, s.villainProfile);
         final evOpen = fe * ctx.potBb + (1 - fe) * (eqC * hand.eqr * (fin - rk.rakeOn(fin)) - open);
         return {'fold': 0, 'betRaise': evOpen};
       case PreflopScenario.vsRfi:
@@ -153,13 +176,16 @@ class PreflopSolverEngine {
         final call = ctx.callBb;
         final finCall = ctx.potBb + call;
         final evCall = eq * eqr * (finCall - rk.rakeOn(finCall)) - call;
-        final r = raiseTo ?? ctx.raiseSizeBb * 3;
         final heroIp = s.heroPosition.isInPositionVs(villain);
+        // Por defecto, el EV del 3-bet se evalúa al sizing que el motor jugaría (no a 3x fijo).
+        final r = raiseTo ?? _threeBetSize(s, ctx, heroIp && s.heroPosition != Position.sb && s.heroPosition != Position.bb);
         final vs3 = PreflopRangesDb.vs3Bet(villain, heroInPosition: !heroIp);
         final cont = (_combos(vs3.weights[PreflopAction.raise]!) + _combos(vs3.weights[PreflopAction.call]!)) /
             _combos(PreflopRangesDb.rfi(villain, tier).weights[PreflopAction.raise]!);
-        final fe = (1 - cont).clamp(0.0, 1.0);
-        final eqC = HandProps.equity('MR_RFI_utg', i)!;
+        final fe = profileFe((1 - cont).clamp(0.0, 1.0), s.villainProfile);
+        // Station/Maniac pagan el 3-bet con un rango ancho => equity vs su RFI (no vs el rango tight de UTG).
+        final wide = s.villainProfile == VillainProfile.callingStation || s.villainProfile == VillainProfile.maniac;
+        final eqC = wide ? eq : HandProps.equity('MR_RFI_utg', i)!;
         final fin3 = 2 * r + (ctx.potBb - ctx.raiseSizeBb - (s.heroPosition == Position.bb ? 1 : (s.heroPosition == Position.sb ? 0.5 : 0)));
         final ev3 = fe * ctx.potBb + (1 - fe) * (eqC * eqr * (fin3 - rk.rakeOn(fin3)) - r);
         return {'fold': 0, 'call': evCall, 'betRaise': ev3};
@@ -171,7 +197,7 @@ class PreflopSolverEngine {
         final r = raiseTo ?? ctx.raiseSizeBb * 2.3;
         final tb = HandProps.equity('BLOCKER_REF', i)!;
         final valueShare = 34 / 1326 / (Matrix169.percent(RangeNotation.parse(PreflopRangesDb.threeBetValue[s.heroPosition] ?? 'QQ+,AKs,AKo')) / 100 + 1e-9);
-        final fe = (1 - valueShare).clamp(0.0, 0.9);
+        final fe = profileFe((1 - valueShare).clamp(0.0, 0.9), s.villainProfile, facing4Bet: true);
         final fin4 = 2 * r + 1.5;
         final ev4 = fe * ctx.potBb + (1 - fe) * (tb * eqr * (fin4 - rk.rakeOn(fin4)) - (r - ctx.heroOpenBb));
         return {'fold': 0, 'call': evCall, 'betRaise': ev4};
@@ -376,14 +402,22 @@ class PreflopSolverEngine {
     if (profile == VillainProfile.callingStation) {
       final value = RangeNotation.union([PreflopRangesDb.stationValue3Bet, _valueOf(opener)]);
       final isBluff = f3 > 0 && value[i] == 0;
-      if (isBluff) {
+      // Δ <= 0 no se aplica: solo se elimina el 3-bet bluff si su EV vs station no supera al fold (0).
+      if (isBluff && (preflopEVs(s, ctx, hand, raiseTo: _threeBetSize(s, ctx, ip))['betRaise'] ?? 0) <= 0) {
         f3 = 0;
         notes.add('Station: elimina 3-bet bluff (no foldea, sin fold equity).');
       }
-      if (value[i] > 0 && f3 < 1) {
+      final ev = preflopEVs(s, ctx, hand, raiseTo: _threeBetSize(s, ctx, ip));
+      if (value[i] > 0 && f3 < 1 && (ev['betRaise'] ?? 0) >= (ev['call'] ?? 0)) {
         f3 = 1;
         fc = 0;
         notes.add('Station: 3-bet lineal de valor extendido (domina su rango de call).');
+      }
+      // BB vs station: argmax(call, 3-bet) al sizing real (sin fold equity, el 3-bet solo vale por equity).
+      if (hero == Position.bb && f3 > 0 && (ev['betRaise'] ?? 0) < (ev['call'] ?? 0) && (ev['call'] ?? 0) > 0) {
+        fc = (fc + f3).clamp(0.0, 1.0);
+        f3 = 0;
+        notes.add('Station: call > 3-bet en EV (${(ev['call'] ?? 0).toStringAsFixed(2)} vs ${(ev['betRaise'] ?? 0).toStringAsFixed(2)}bb).');
       }
     }
 
@@ -404,7 +438,9 @@ class PreflopSolverEngine {
     final maniacSteal = profile == VillainProfile.maniac &&
         (hero == Position.bb || hero == Position.sb) &&
         (opener == Position.co || opener == Position.btn || opener == Position.sb);
-    if (maniacSteal && f3 < 1 && maniacDefense3Bet(hero, opener, tier)[i] > 0) {
+    if (maniacSteal && f3 < 1 && maniacDefense3Bet(hero, opener, tier)[i] > 0 &&
+        (preflopEVs(s, ctx, hand, raiseTo: _threeBetSize(s, ctx, ip))['betRaise'] ?? 0) >=
+            (fc > 0 ? (preflopEVs(s, ctx, hand)['call'] ?? 0) : 0)) {
       f3 = 1;
       fc = 0;
       notes.add('Maniac ATS>=55%: 3-bet Def +${(maniac3BetExpansion * 100).round()}% lineal (${Matrix169.percent(maniacDefense3Bet(hero, opener, tier)).toStringAsFixed(1)}%).');

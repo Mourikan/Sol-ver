@@ -45,6 +45,9 @@ class RangeEquity {
       s.stake.name,
       s.potType.name,
       valuePrior,
+      s.villainProfile == VillainProfile.trapperPremium || s.villainProfile == VillainProfile.maniac || s.villainProfile == VillainProfile.regAgro
+          ? s.villainProfile.name
+          : '',
       for (final a in s.actions) '${a.street.index}${a.actor.index}${a.type.index}${a.amountBb}',
     ].join('|');
     return _vcCache.putIfAbsent(key, () {
@@ -86,7 +89,9 @@ class RangeEquity {
           if (st == Street.flop && bet && pfaClass != null) {
             w *= FlopLookupTable.betProbability(pfaClass, t, trap: trap).clamp(policyMix, 1.0);
           } else {
-            w *= _lineWeight(t, bet: bet, called: acts.any((x) => x.type == ActionType.call));
+            // Maniac/Agro: sobre-farolea todas las calles => apuesta con todo su rango (sin descuento de aire/marginal).
+            final agro = s.villainProfile == VillainProfile.maniac || s.villainProfile == VillainProfile.regAgro;
+            w *= agro && bet ? 1.0 : _lineWeight(t, bet: bet, called: acts.any((x) => x.type == ActionType.call));
           }
         }
         if (w <= 0) continue;
