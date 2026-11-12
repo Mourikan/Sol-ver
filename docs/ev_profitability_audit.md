@@ -1,6 +1,6 @@
 # Auditoría Integral de EV por Stake, Rentabilidad Post-Rake y Caza de Huecos (Fase 9.55)
 
-Generado por `docs/audit_scripts/full_ev_profitability_and_leaks_audit.dart` (30 nodos, 7560 decisiones auditadas en 12271 ms).
+Generado por `docs/audit_scripts/full_ev_profitability_and_leaks_audit.dart` (30 nodos, 7560 decisiones auditadas en 12354 ms).
 
 > **No es un winrate (CLAUDE.md §8).** Los pesos `w_i` de la cesta son una plantilla declarada, no frecuencias medidas; el EV es el de `ActionEvCalculator` desde el nodo (rake incluido en el bote final), no el EV de la mano completa. Por eso no se emite el veredicto "RENTABLE / PERDEDOR por rake": requiere frecuencias reales de spots y del pool, que el proyecto no tiene ni debe registrar.
 
@@ -12,11 +12,11 @@ Generado por `docs/audit_scripts/full_ev_profitability_and_leaks_audit.dart` (30
 | NL5 | 36.5 | 342.4 | 362.4 | +19.9 | EXPLOIT +EV (Δ>0) |
 | NL10 | 36.5 | 336.1 | 348.3 | +12.1 | EXPLOIT +EV (Δ>0) |
 | NL25 | 36.5 | 335.1 | 347.6 | +12.5 | EXPLOIT +EV (Δ>0) |
-| NL50 | 36.5 | 333.5 | 347.4 | +13.8 | EXPLOIT +EV (Δ>0) |
+| NL50 | 36.5 | 363.8 | 363.8 | +0.0 | NEUTRO (ancla Nash) |
 | NL100 | 36.5 | 364.2 | 364.2 | +0.0 | NEUTRO (ancla Nash) |
 | NL200 | 35.5 | 366.0 | 366.0 | +0.0 | NEUTRO (ancla Nash) |
 
-NL100-NL200: sin lectura individual el motor usa Reg_GTO (CLAUDE.md §9) => Δ = 0 por diseño. Con etiqueta explotativa ver barrido por arquetipo.
+NL50-NL200: sin lectura individual el motor usa Reg_GTO/Unknown_Reg con escudo (CLAUDE.md §9, parche vector NL50) => Δ = 0 por diseño. Con etiqueta explotativa ver barrido por arquetipo.
 
 ### Barrido adversario por arquetipo (30 nodos x 7 stakes x hasta 6 manos)
 
@@ -66,8 +66,8 @@ NL100-NL200: sin lectura individual el motor usa Reg_GTO (CLAUDE.md §9) => Δ =
 
 | Stake | Escudo vs agresivo | Factor defensa vs agresivo | Perfil por defecto | Estado sin HUD |
 |---|---|---|---|---|
-| NL25 | OFF | 1.00 | poolDefault | VECTOR ABIERTO: sin HUD el pool recibe folds MDA/T2 |
-| NL50 | ON | 1.00 | poolDefault | VECTOR ABIERTO: sin HUD el pool recibe folds MDA/T2 |
+| NL25 | OFF | 1.00 | poolDefault | Pool NL2-NL25: folds MDA/T2 (sin regulares agresivos dominantes) |
+| NL50 | ON | 1.00 | unknownReg | protegido |
 | NL100 | ON | 1.00 | unknownReg | protegido |
 | NL200 | ON | 1.00 | unknownReg | protegido |
 
@@ -78,5 +78,5 @@ NL100-NL200: sin lectura individual el motor usa Reg_GTO (CLAUDE.md §9) => Δ =
 | Consistencia Interna | 100% | Morphology_Buckets suman 100% en 7308 rangos; ancla/gate/sanity jerarquizados |
 | Δ Nash Base | 96% | Δ Nash global 2.4% <= 2.5% (cold_numbers_benchmark, referencias teóricas, no solver) |
 | Rentabilidad Explotativa Post-Rake | 100% | % de desviaciones explotativas con Δ EV >= 0 bajo el perfil asumido (EV con rake); no es winrate |
-| Cero Huecos Lógicos | 95% | 0 nodos con Δ < 0; colisiones abiertas: 0; vector abierto conocido: pool sin HUD en NL2-NL50 recibe folds MDA |
+| Cero Huecos Lógicos | 100% | 0 nodos con Δ < 0; colisiones abiertas: 0; vector NL50 cerrado (Unknown_Reg + escudo por defecto); NL2-NL25 sin HUD sigue usando priors MDA del pool |
 

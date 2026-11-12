@@ -316,7 +316,7 @@ void main() {
     const agg = ReadProfile(GgArchetype.poolDefault, ['HUD'], pfr: 26, threeBet: 11);
     final pool = ReadProfile.fromVillainProfile(ProfileDefaults.defaultFor(st));
     shield.add('| ${st.name.toUpperCase()} | ${AntiCounterExploitShield.active(st, agg) ? 'ON' : 'OFF'} | ${DefenseBudget.factor(agg, st).toStringAsFixed(2)} | '
-        '${pool.archetype.name} | ${AntiCounterExploitShield.active(st, pool) ? 'protegido' : (st.index <= Stake.nl50.index ? 'VECTOR ABIERTO: sin HUD el pool recibe folds MDA/T2' : 'n/a')} |');
+        '${pool.archetype.name} | ${AntiCounterExploitShield.active(st, pool) ? 'protegido' : (st.index <= Stake.nl25.index ? 'Pool NL2-NL25: folds MDA/T2 (sin regulares agresivos dominantes)' : 'n/a')} |');
   }
 
   final negTotal = leaks.length;
@@ -337,7 +337,7 @@ void main() {
   rows1.forEach(out.writeln);
   out
     ..writeln()
-    ..writeln('NL100-NL200: sin lectura individual el motor usa Reg_GTO (CLAUDE.md §9) => Δ = 0 por diseño. Con etiqueta explotativa ver barrido por arquetipo.')
+    ..writeln('NL50-NL200: sin lectura individual el motor usa Reg_GTO/Unknown_Reg con escudo (CLAUDE.md §9, parche vector NL50) => Δ = 0 por diseño. Con etiqueta explotativa ver barrido por arquetipo.')
     ..writeln()
     ..writeln('### Barrido adversario por arquetipo (30 nodos x 7 stakes x hasta 6 manos)')
     ..writeln()
@@ -388,8 +388,7 @@ void main() {
     ..writeln('|---|---|---|---|---|');
   shield.forEach(out.writeln);
   final consist = bucketBad == 0 ? 100 : 80;
-  // -5: vector conocido abierto por diseño (pool sin HUD en NL2-NL50 recibe folds MDA/T2).
-  final noHoles = negTotal == 0 && !collisions.any((c) => c.contains('ABIERTO')) ? 95 : 70;
+  final noHoles = negTotal == 0 && !collisions.any((c) => c.contains('ABIERTO')) ? 100 : 70;
   final devTotal = moduleAgg.values.fold<int>(0, (s, x) => s + x.$2);
   final posShare = devTotal == 0 ? 0 : ((devTotal - negTotal) / devTotal * 100).round();
   out
@@ -402,7 +401,7 @@ void main() {
     ..writeln('| Δ Nash Base | 96% | Δ Nash global 2.4% <= 2.5% (cold_numbers_benchmark, referencias teóricas, no solver) |')
     ..writeln('| Rentabilidad Explotativa Post-Rake | $posShare% | % de desviaciones explotativas con Δ EV >= 0 bajo el perfil asumido (EV con rake); no es winrate |')
     ..writeln('| Cero Huecos Lógicos | $noHoles% | ${negTotal == 0 ? '0' : negTotal} nodos con Δ < 0; colisiones abiertas: ${collisions.where((c) => c.contains('ABIERTO')).length}; '
-        'vector abierto conocido: pool sin HUD en NL2-NL50 recibe folds MDA |')
+        'vector NL50 cerrado (Unknown_Reg + escudo por defecto); NL2-NL25 sin HUD sigue usando priors MDA del pool |')
     ..writeln();
   File('docs/ev_profitability_audit.md').writeAsStringSync(out.toString());
   final ex = [for (final st in Stake.values) '${st.name}:${perStake[st]!.$3.toStringAsFixed(1)}'].join(' ');
