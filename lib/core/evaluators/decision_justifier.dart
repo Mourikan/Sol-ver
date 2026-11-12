@@ -2,6 +2,7 @@ import '../discipline/ev_sanity_guard.dart';
 import '../models/decision_output.dart';
 import '../models/game_state.dart';
 import '../reads/gg_profiler.dart';
+import 'pro_coach_narrative_builder.dart';
 
 /// Ensambla en O(1) (sin Monte Carlo) la lectura dominante, la prueba de EV en 1 línea y la regla activa.
 class DecisionJustifier {
@@ -86,6 +87,13 @@ class DecisionJustifier {
         .firstMatch('${d.justificacionGto} ${d.ajusteExplotativoRead}');
     if (geo != null) math = '${geo.group(0)} | $math';
     if (r.topRepresentativeHands.isNotEmpty) math = '$math | Top: ${r.topRepresentativeHands.take(3).join(', ')}';
-    return DecisionJustification(activeReadBadge: badge, mathRationale: math, activeCloserRule: rule);
+    final n = ProCoachNarrativeBuilder.build(s, rp, d, r, potBefore: potBefore, toCall: toCall, rule: rule, profile: profileLabel(rp, s.villainProfile));
+    return DecisionJustification(
+        activeReadBadge: badge,
+        mathRationale: math,
+        activeCloserRule: rule,
+        villainReadExplanation: n.$1,
+        evWhyExplanation: n.$2,
+        nextStreetPlan: n.$3);
   }
 }

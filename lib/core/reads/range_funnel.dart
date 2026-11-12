@@ -16,7 +16,19 @@ class FunnelResult {
 class RangeFunnel {
   RangeFunnel._();
 
+  static final _memo = <String, FunnelResult>{};
+
+  /// Memo O(1): el embudo es determinista por (board, posiciones, tipo de bote, acciones).
   static FunnelResult track(GameState s) {
+    final key = '${s.board.join()}|${s.heroPosition.index}|${s.villainPosition?.index}|${s.potType.index}|'
+        '${s.actions.map((a) => '${a.street.index}${a.actor.index}${a.type.index}${a.amountBb}${a.timing.index}').join(',')}';
+    final hit = _memo[key];
+    if (hit != null) return hit;
+    if (_memo.length > 512) _memo.clear();
+    return _memo[key] = _track(s);
+  }
+
+  static FunnelResult _track(GameState s) {
     final villain = s.villainPosition!;
     final pfa = s.preflopAggressor;
     var state = VillainRangeState.uncapped;

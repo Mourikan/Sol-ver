@@ -56,8 +56,25 @@ class VillainPerceivedRange {
 
 /// Qué lee el motor y por qué la acción maximiza EV (determinista, 1 línea por campo).
 class DecisionJustification {
-  const DecisionJustification({required this.activeReadBadge, required this.mathRationale, required this.activeCloserRule});
+  const DecisionJustification({
+    required this.activeReadBadge,
+    required this.mathRationale,
+    required this.activeCloserRule,
+    this.villainReadExplanation = '',
+    this.evWhyExplanation = '',
+    this.nextStreetPlan = '',
+  });
   final String activeReadBadge, mathRationale, activeCloserRule;
 
-  Map<String, String> toJson() => {'activeReadBadge': activeReadBadge, 'mathRationale': mathRationale, 'activeCloserRule': activeCloserRule};
+  /// ProCoachNarrativeBuilder: ¿qué tiene el rival y por qué? / ¿por qué esta acción gana más? / plan siguiente calle.
+  final String villainReadExplanation, evWhyExplanation, nextStreetPlan;
+
+  Map<String, String> toJson() => {
+        'activeReadBadge': activeReadBadge,
+        'mathRationale': mathRationale,
+        'activeCloserRule': activeCloserRule,
+        'villainReadExplanation': villainReadExplanation,
+        'evWhyExplanation': evWhyExplanation,
+        'nextStreetPlan': nextStreetPlan,
+      };
 }

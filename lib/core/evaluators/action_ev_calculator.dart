@@ -45,7 +45,9 @@ class ActionEvCalculator {
 
   /// Caché O(1) de showdowns por (rango del nodo, mano de Hero): la puerta de EV, el ancla Nash y exploitDeltaEV
   /// reutilizan el mismo muestreo determinista dentro de una decisión (resultado idéntico, sin recomputar Monte Carlo).
-  static final _shotCache = <String, List<(int, double)>>{};
+  // Expando: clave por identidad exacta y débil del rango del nodo (sin colisiones de hash ni retención de memoria).
+  static final _shotCache = Expando<Map<String, List<(int, double)>>>();
+  static final _orderCache = Expando<List<int>>();
 
   /// ¿El villano continúa contra una apuesta de fracción [f] del bote con este tier? (perfil: station/fish pagan con
   /// cualquier par; maniac paga showdown hasta bote).
@@ -141,9 +143,9 @@ class ActionEvCalculator {
     final vc = RangeEquity.villainCombos(s, valuePrior: multiwayCbet ? MDAParameters.flopCbetHonestyMultiway : null);
     final secondBarrel = s.street == Street.turn && toCall == 0 &&
         s.actions.any((a) => a.street == Street.flop && a.actor == s.heroPosition && a.isAggressive);
-    final shotKey = '${identityHashCode(vc.combos)}|${s.hero!.mask}|$samples';
-    final shots = _shotCache[shotKey] ??= RangeEquity.sampleShowdowns(s, vc.combos, vc.weights, samples);
-    if (_shotCache.length > 64) _shotCache.remove(_shotCache.keys.first);
+    final perNode = _shotCache[vc.combos] ??= <String, List<(int, double)>>{};
+    final shots = perNode['${s.hero!.mask}|${s.board.length}'] ??= RangeEquity.sampleShowdowns(s, vc.combos, vc.weights, samples);
+    if (perNode.length > 64) perNode.remove(perNode.keys.first);
     final ip = s.heroPosition.isInPositionVs(s.villainPosition!);
     final spr = (s.effectiveStackBb ?? 100) / (s.potBb ?? 1);
     final eqr = EqrTable.factor(s.hero!.index169, ip: ip, spr: spr);
@@ -154,7 +156,9 @@ class ActionEvCalculator {
     final capped = s.board.length >= 3 && RangeFunnel.track(s).isCapped;
     final vp = s.villainProfile;
 
-    final order = List<int>.generate(vc.combos.length, (k) => k)..sort((a, b) => _ord(vc.tiers[a]).compareTo(_ord(vc.tiers[b])));
+    // Orden por tier cacheado por identidad del rango del nodo (determinista; evita re-ordenar ~1000 combos por llamada).
+    final order = _orderCache[vc.combos] ??=
+        List<int>.generate(vc.combos.length, (k) => k)..sort((a, b) => _ord(vc.tiers[a]).compareTo(_ord(vc.tiers[b])));
 
     /// EV de apostar/subir a [size] (bb): fold equity = combos que foldean (los más débiles primero) => equity vs el resto.
     (double, double, double) betEv(double size) {

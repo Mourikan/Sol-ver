@@ -151,7 +151,12 @@ class VillainRangeInspector {
     final v = s.villainPosition!;
     Float32List range;
     if (s.preflopAggressor != null) {
-      range = DefenseBudget.villainPreflopRange(s);
+      try {
+        range = DefenseBudget.villainPreflopRange(s);
+      } on Object {
+        // Nodos sin tabla postflop (3-bet+/4-bet multiway preflop): rango de apertura del villano como cota superior.
+        range = PreflopRangesDb.rfi(v, s.rakeTier).weights[PreflopAction.raise] ?? Float32List(169);
+      }
     } else {
       range = PreflopRangesDb.rfi(v, s.rakeTier).weights[PreflopAction.raise] ?? Float32List(169);
     }

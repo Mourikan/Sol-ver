@@ -4,9 +4,9 @@ import '../core/models/cards.dart';
 
 class AppColors {
   AppColors._();
-  static const bg = Color(0xFF0B0D10);
-  static const surface = Color(0xFF151A21);
-  static const surfaceHi = Color(0xFF1F2630);
+  static const bg = Color(0xFF0B0E14);
+  static const surface = Color(0xFF151A24);
+  static const surfaceHi = Color(0xFF262F40);
   static const text = Color(0xFFF2F5F8);
   static const muted = Color(0xFF8A96A6);
   static const accent = Color(0xFF00E5A0);
@@ -15,11 +15,18 @@ class AppColors {
   static const raise = Color(0xFFFF9F1C);
   static const call = Color(0xFF3FA7FF);
 
+  // Paleta Obsidian (GTO Wizard / GG): acciones.
+  static const border = Color(0xFF262F40);
+  static const emerald = Color(0xFF10B981);
+  static const cyan = Color(0xFF06B6D4);
+  static const amber = Color(0xFFF59E0B);
+  static const crimson = Color(0xFFEF4444);
+
   static Color suit(Suit s) => switch (s) {
-        Suit.spades => const Color(0xFFD9DEE5),
-        Suit.hearts => const Color(0xFFFF4D4D),
-        Suit.diamonds => const Color(0xFF4DA3FF),
-        Suit.clubs => const Color(0xFF3DDC84),
+        Suit.spades => const Color(0xFFE5E7EB),
+        Suit.hearts => const Color(0xFFFF6B6B),
+        Suit.diamonds => const Color(0xFF3B82F6),
+        Suit.clubs => const Color(0xFF10B981),
       };
 
   static String suitGlyph(Suit s) => switch (s) {

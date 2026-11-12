@@ -31,6 +31,37 @@ class SeatState {
 
   /// Último diagnóstico SmartHUD (stats GGPoker + etiqueta) del asiento.
   SmartHudDeviation? hud;
+
+  SeatState clone() => SeatState(position, stack)
+    ..committed = committed
+    ..alive = alive
+    ..allIn = allIn
+    ..profile = profile
+    ..labeled = labeled
+    ..nextTiming = nextTiming
+    ..hud = hud;
+}
+
+class _Snap {
+  const _Snap({
+    required this.heroCards,
+    required this.board,
+    required this.actions,
+    required this.seats,
+    required this.phase,
+    required this.currentActor,
+    required this.needsToAct,
+    required this.currentBet,
+    required this.lastRaise,
+    required this.potStart,
+  });
+  final List<Card> heroCards, board;
+  final List<PlayerAction> actions;
+  final Map<Position, SeatState> seats;
+  final HandPhase phase;
+  final Position? currentActor;
+  final Set<Position> needsToAct;
+  final double currentBet, lastRaise, potStart;
 }
 
 class IllegalAction implements Exception {
@@ -76,6 +107,63 @@ class HandFlowFSM extends ChangeNotifier {
   /// Villano seleccionado en la UI (timing / presets) y presets manuales de la mano actual.
   Position? selectedVillain;
   final Map<Position, List<AnonymousReadPreset>> manualPresets = {};
+
+  /// Inversión de cada asiento en la calle actual y apuesta más alta a igualar (Action_Closure_Invariant).
+  Map<Position, double> get streetInvestedBB => {for (final s in seats.values) s.position: s.committed};
+  double get currentHighBetBB => _currentBet;
+  double get totalPotBB => pot;
+
+  /// La calle se cierra solo si todos los vivos no all-in actuaron y han igualado la apuesta más alta.
+  bool get isBettingRoundClosed =>
+      phase == HandPhase.flopCards || phase == HandPhase.turnCards || phase == HandPhase.riverCards || phase == HandPhase.handOver;
+
+  // ---- Undo (pila de snapshots en memoria de la mano actual; no es historial persistente) ----
+  final List<_Snap> _undo = [];
+  bool get canUndo => _undo.isNotEmpty;
+
+  void _push() {
+    _undo.add(_Snap(
+      heroCards: List.of(heroCards),
+      board: List.of(board),
+      actions: List.of(actions),
+      seats: {for (final e in seats.entries) e.key: e.value.clone()},
+      phase: phase,
+      currentActor: currentActor,
+      needsToAct: Set.of(_needsToAct),
+      currentBet: _currentBet,
+      lastRaise: _lastRaiseSize,
+      potStart: _potStartStreet,
+    ));
+    if (_undo.length > 64) _undo.removeAt(0);
+  }
+
+  /// Deshace el último paso (acción o carta) de la mano en curso.
+  void undo() {
+    if (_undo.isEmpty) throw const IllegalAction('Nada que deshacer');
+    final s = _undo.removeLast();
+    heroCards
+      ..clear()
+      ..addAll(s.heroCards);
+    board
+      ..clear()
+      ..addAll(s.board);
+    actions
+      ..clear()
+      ..addAll(s.actions);
+    seats
+      ..clear()
+      ..addAll(s.seats);
+    phase = s.phase;
+    currentActor = s.currentActor;
+    _needsToAct
+      ..clear()
+      ..addAll(s.needsToAct);
+    _currentBet = s.currentBet;
+    _lastRaiseSize = s.lastRaise;
+    _potStartStreet = s.potStart;
+    _refreshRecommendation();
+    notifyListeners();
+  }
 
   /// Bote total, stack efectivo restante (Hero vs villano principal) y SPR en vivo.
   double get currentPotBB => pot;
@@ -180,6 +268,7 @@ class HandFlowFSM extends ChangeNotifier {
   }
 
   void reset() {
+    _undo.clear();
     heroCards.clear();
     board.clear();
     actions.clear();
@@ -250,6 +339,7 @@ class HandFlowFSM extends ChangeNotifier {
   void addCard(Card c) {
     if (!awaitingCards) throw const IllegalAction('Street_Gate cerrado: la acción de la calle no ha terminado');
     if (deadCardIds.contains(c.id)) throw IllegalAction('Carta muerta: $c');
+    _push();
     if (phase == HandPhase.setup) {
       heroCards.add(c);
       if (heroCards.length == 2) _startPreflop();
@@ -342,6 +432,7 @@ class HandFlowFSM extends ChangeNotifier {
   /// Aplica una acción. [amountBb] = total "to" de la calle para bet/raise.
   void act(Position p, ActionType type, {double amountBb = 0}) {
     if (phase == HandPhase.setup || awaitingCards || phase == HandPhase.handOver) throw const IllegalAction('No hay acción pendiente');
+    _push();
     if (p != currentActor) {
       // Implicit_Fast_Forward: los asientos omitidos entre el turno actual y el actor foldean (o pasan si no deben nada).
       final o = _order;

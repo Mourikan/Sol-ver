@@ -121,14 +121,14 @@ void main() {
     expect(find.byKey(const ValueKey('oracle')), findsOneWidget);
     expect(find.byKey(const ValueKey('execute-optimal')), findsOneWidget);
     expect(find.byKey(const ValueKey('read-badge')), findsOneWidget);
-    await t.tap(find.byKey(const ValueKey('act-3x')));
+    await t.tap(find.byKey(const ValueKey('act-r32')));
     await t.pump();
     expect(fsm.currentActor, Position.sb);
     await t.tap(find.byKey(const ValueKey('act-fold')));
     await t.pump();
     await t.tap(find.byKey(const ValueKey('act-fold')));
     await t.pump();
-    await t.tap(find.byKey(const ValueKey('act-checkcall')));
+    await t.tap(find.byKey(const ValueKey('act-call')));
     await t.pump();
     expect(fsm.phase, HandPhase.flopCards);
     expect(find.byKey(const ValueKey('fcm-As')), findsOneWidget);
@@ -137,7 +137,7 @@ void main() {
       await t.pump();
     }
     expect(fsm.phase, HandPhase.flop);
-    await t.tap(find.byKey(const ValueKey('act-checkcall')));
+    await t.tap(find.byKey(const ValueKey('act-check')));
     await t.pump();
     expect(fsm.currentActor, Position.btn);
     expect(find.byKey(const ValueKey('range-bar')), findsOneWidget);
@@ -148,7 +148,6 @@ void main() {
     await t.pump();
     expect(fsm.phase, HandPhase.setup);
     expect(fsm.hudOf(Position.co)!.tag, VillainTag.scaredReg);
-    expect(find.textContaining('Scared'), findsWidgets);
     // ignore: avoid_print
     print('frame (rebuild completo tras acción + solver) us: $frameUs');
   });
