@@ -6,6 +6,7 @@ import '../models/decision_output.dart';
 import '../models/game_state.dart';
 import '../reads/gg_profiler.dart';
 import '../reads/unmapped_spots_resolver.dart';
+import '../reads/freak_fish_sizing_decoder.dart';
 import 'sandwich_squeeze_exploit.dart';
 import '../reads/villain_range_inspector.dart';
 import '../evaluators/decision_justifier.dart';
@@ -118,8 +119,11 @@ class FullTreePreflop {
 
   DecisionOutput _decideRaw(GameState s, {ReadProfile? read}) {
     if (s.hero == null) throw const MissingInputs(['hero']);
-    final spot = classify(s);
     final hand = HandNormalizer.normalize(s.hero!);
+    // Fase 9.85: min-3bet / click-back (fuera del árbol estándar) => matemática exacta de pot odds.
+    final freak = FreakFishSizingDecoder.preflopResponse(s, hand.index);
+    if (freak != null) return freak;
+    final spot = classify(s);
     if (spot.scenario == TreeScenario.standard4Bet &&
         (isLimpReraise(s) || read?.archetype == GgArchetype.trapperLimpReraiser)) {
       if (s.effectiveStackBb == null) throw const MissingInputs(['effectiveStackBb']);

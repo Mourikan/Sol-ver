@@ -26,6 +26,7 @@ import 'bait_induce_engine.dart';
 import 'next_street_runout_predictor.dart';
 import '../evaluators/reverse_implied_odds_guard.dart';
 import '../reads/mental_state_modulator.dart';
+import '../reads/freak_fish_sizing_decoder.dart';
 import '../evaluators/decision_justifier.dart';
 import '../reads/villain_range_inspector.dart';
 import 'turn_river_solver.dart';
@@ -121,6 +122,14 @@ class PostflopHeuristicEngine {
     final passiveLoses = toCall == 0 && d.action == DecisionAction.check && base.action == DecisionAction.betRaise && !lock;
     // Call explotativo por encima del ancla (el ancla foldea) con Δ < 0 => no se aplica (la defensa no baja del MDF del ancla).
     final callBeyondAnchor = toCall > 0 && d.action == DecisionAction.call && base.action == DecisionAction.fold && !lock;
+    // Call explotativo donde el ancla sube con Δ < 0 => se mantiene la subida del ancla (la defensa no baja).
+    final callUnderRaise = toCall > 0 && d.action == DecisionAction.call && base.action == DecisionAction.betRaise && !lock;
+    if (delta < 0 && callUnderRaise) {
+      return base.copyWith(
+          exploitDeltaEV: 0,
+          ajusteExplotativoRead: '[EV_ANCHOR] call vs ${rp.archetype.name} con Δ EV ${delta.toStringAsFixed(2)}bb <= 0: se mantiene la subida del ancla. '
+              '${d.ajusteExplotativoRead}');
+    }
     if (delta < 0 && callBeyondAnchor) {
       return base.copyWith(
           exploitDeltaEV: 0,
@@ -378,6 +387,9 @@ class PostflopHeuristicEngine {
       return FourBetPotSolver.decide(s, h,
           pot: pot, stack: stack, toCall: toCall, potBeforeBet: pot - villainIn + heroIn, heroIsPfa: s.preflopAggressor == s.heroPosition);
     }
+    // Fase 9.85: sizings anómalos (nano-bet / min-raise) en todas las calles; preceden a las terminaciones (lectura más específica).
+    final freak = FreakFishSizingDecoder.postflopPlan(s, rp, h, potBefore: pot - villainIn + heroIn, toCall: toCall);
+    if (freak != null) return _spot(freak, pot, stack, toCall, pot - villainIn + heroIn, metrics);
     if (s.street != Street.flop) {
       final potBefore = pot - villainIn + heroIn;
       // Fase 9.8: guardia RIO (protector) y anzuelo con Nuts preceden a las terminaciones.
@@ -589,7 +601,7 @@ class PostflopHeuristicEngine {
         return _check(m, sp.why, read);
       case DecisionAction.betRaise:
         if (toCall > 0) {
-          var to = toCall * (sp.raiseMult ?? 3.0);
+          var to = sp.raiseToBb ?? toCall * (sp.raiseMult ?? 3.0);
           if (to >= stack * 0.9) to = stack;
           return DecisionOutput(
               action: DecisionAction.betRaise,

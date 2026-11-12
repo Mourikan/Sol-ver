@@ -80,6 +80,20 @@ class ProCoachNarrativeBuilder {
       return 'Sizing anzuelo (25% Pot) con Nuts para inducir spazz-raise del perfil agresivo '
           '(+${bait.group(1)} bb extra vs apuesta grande que lo haría foldear su aire).$ruleTxt';
     }
+    final cbk = RegExp(r'Min-3Bet de recreativo \(Pot Odds regaladas del ([0-9.]+)%\)').firstMatch(txt);
+    if (cbk != null) {
+      return 'Min-3Bet de recreativo (Pot Odds regaladas del ${cbk.group(1)}%): '
+          '${d.action == DecisionAction.betRaise ? '4-bet grande de castigo con premium para cobrar de su rango medio inelástico' : 'Call obligatorio por odds directas/implícitas con todo tu rango jugable'}; '
+          'precaución postflop ante posible trampa AA/KK si mete pot-bet.';
+    }
+    if (txt.contains('MIN-RAISE TURN/RIVER')) {
+      return 'Min-raise en Turn/River de un perfil pasivo en microlímites: su rango es >82% dos pares/set/color (no re-farolea). '
+          '${d.action == DecisionAction.fold ? 'El top pair solo gana a sus pocos faroles: fold disciplinado.' : 'Solo seguimos porque las odds directas pagan nuestro proyecto.'}$ruleTxt';
+    }
+    if (txt.contains('nano-bet')) {
+      return '1bb / nano-bet = check disfrazado con dinero muerto: '
+          '${d.action == DecisionAction.betRaise ? 'subimos al ~80% del bote total para cobrar valor y negar equidad (3x de 1bb no cobraría nada).' : 'pagamos porque las odds directas son mínimas frente a nuestra equidad.'}$ruleTxt';
+    }
     if (txt.contains('RIESGO RIO')) {
       return 'Kicker dominado: la mayor parte de su rango de valor tras varios barriles tiene nuestro mismo par con mejor kicker o '
           'dos pares+; pagar regala el stack (Reverse Implied Odds). ${d.action == DecisionAction.fold ? 'Fold' : 'Check'} ahorra la diferencia.$ruleTxt';

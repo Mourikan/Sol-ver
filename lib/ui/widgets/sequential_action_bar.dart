@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../application/hand_flow_fsm.dart';
 import '../../core/models/game_state.dart';
@@ -33,6 +34,33 @@ class _SequentialActionBarState extends State<SequentialActionBar> {
     widget.act(() => fsm.act(p, to >= allIn ? ActionType.allIn : (fsm.currentBet == 0 ? ActionType.bet : ActionType.raise), amountBb: to));
   }
 
+  double _dragDx = 0;
+  int _lastStep = 0;
+
+  /// Custom_BB_Quick_Scrubber: mantener y deslizar horizontalmente sobre un botón de apuesta => +-0.5bb por paso (14px),
+  /// háptica selectionClick por paso; al soltar se ejecuta el tamaño elegido.
+  Widget _scrub(Position p, SeatState s, double base, Widget child) => GestureDetector(
+        onHorizontalDragStart: (_) {
+          _dragDx = 0;
+          _lastStep = 0;
+          setState(() => custom = base);
+        },
+        onHorizontalDragUpdate: (d) {
+          _dragDx += d.delta.dx;
+          final step = (_dragDx / 14).round();
+          if (step != _lastStep) {
+            _lastStep = step;
+            HapticFeedback.selectionClick();
+            setState(() => custom = _clampTo((base + 0.5 * step).clamp(2.0, s.committed + s.stack).toDouble(), s));
+          }
+        },
+        onHorizontalDragEnd: (_) {
+          final v = custom;
+          if (v != null && fsm.canRaise(p)) _aggr(p, v);
+        },
+        child: child,
+      );
+
   @override
   Widget build(BuildContext context) {
     final p = fsm.currentActor;
@@ -51,15 +79,19 @@ class _SequentialActionBarState extends State<SequentialActionBar> {
       final s = fsm.seats[p]!;
       final toCall = fsm.currentBet - s.committed;
       final pre = fsm.street == Street.preflop;
+      final raiseOk = fsm.canRaise(p);
+      Widget agg(String l, String k, double to) => _scrub(p, s, to, _B(l, AppColors.emerald, raiseOk ? () => _aggr(p, to) : null, k));
+      final raisesPre = fsm.actions.where((a) => a.street == Street.preflop && a.isAggressive).length;
       if (toCall <= 0) {
         buttons.add(_B('Check', AppColors.amber, () => widget.act(() => fsm.act(p, ActionType.check)), 'act-check'));
         if (pre) {
           for (final (l, k, x) in [('Raise 2.5x', 'act-r25', 2.5), ('Raise 3.2x', 'act-r32', 3.2)]) {
-            buttons.add(_B(l, AppColors.emerald, () => _aggr(p, _clampTo(fsm.currentBet * x, s)), k));
+            buttons.add(agg(l, k, _clampTo(fsm.currentBet * x, s)));
           }
         } else {
+          buttons.add(agg('🐟 1 bb', 'act-fish-1bb', _clampTo(1.0, s)));
           for (final (l, k, x) in [('Bet 25%', 'act-bet25', .25), ('Bet 33%', 'act-bet33', .33), ('Bet 50%', 'act-bet50', .5), ('Bet 75%', 'act-bet75', .75), ('Overbet 125%', 'act-ob125', 1.25)]) {
-            buttons.add(_B(l, AppColors.emerald, () => _aggr(p, _clampTo(fsm.pot * x, s)), k));
+            buttons.add(agg(l, k, _clampTo(fsm.pot * x, s)));
           }
         }
       } else {
@@ -67,12 +99,16 @@ class _SequentialActionBarState extends State<SequentialActionBar> {
           ..add(_B('Fold', AppColors.crimson, () => widget.act(() => fsm.act(p, ActionType.fold)), 'act-fold'))
           ..add(_B('Call ${(toCall < s.stack ? toCall : s.stack).toStringAsFixed(1)}bb', AppColors.cyan, () => widget.act(() => fsm.act(p, ActionType.call)), 'act-call'));
         if (s.stack > toCall) {
-          for (final (l, k, x) in [('Raise 2.5x', 'act-r25', 2.5), ('Raise 3.2x', 'act-r32', 3.2)]) {
-            buttons.add(_B(l, AppColors.emerald, () => _aggr(p, _clampTo(fsm.currentBet * x, s)), k));
+          if (pre && raisesPre == 1) buttons.add(agg('🐟 Min-3Bet', 'act-fish-min3b', _clampTo(fsm.minRaiseTo, s)));
+          if (!pre) buttons.add(agg('🐟 Min-Raise 2x', 'act-fish-minraise', _clampTo(fsm.currentBet * 2, s)));
+          for (final (l, k, x) in [(pre && raisesPre == 1 ? '3-Bet Estándar' : 'Raise 2.5x', 'act-r25', 2.5), ('Raise 3.2x', 'act-r32', 3.2)]) {
+            buttons.add(agg(l, k, _clampTo(fsm.currentBet * x, s)));
           }
         }
       }
-      buttons.add(_B(toCall > 0 ? '4-Bet / All-In' : 'All-In', const Color(0xFFF97316), () => widget.act(() => fsm.act(p, ActionType.allIn)), 'act-allin'));
+      if (raiseOk || s.stack <= toCall) {
+        buttons.add(_B(toCall > 0 ? '4-Bet / All-In' : 'All-In', const Color(0xFFF97316), () => widget.act(() => fsm.act(p, ActionType.allIn)), 'act-allin'));
+      }
     }
     final s = p == null ? null : fsm.seats[p];
     final val = s == null ? 0.0 : _clampTo(custom ?? fsm.minRaiseTo, s);
@@ -92,7 +128,7 @@ class _SequentialActionBarState extends State<SequentialActionBar> {
           child: Row(children: [
             if (s != null && !fsm.awaitingCards) ...[
               SizedBox(width: 34, child: _B('−', AppColors.muted, () => setState(() => custom = val - 0.5), 'act-custom-minus')),
-              Expanded(flex: 3, child: _B('${fsm.currentBet == 0 ? 'Bet' : 'Raise'} ${val.toStringAsFixed(1)}', AppColors.emerald, () => _aggr(p!, val), 'act-custom-go')),
+              Expanded(flex: 3, child: _B('${fsm.currentBet == 0 ? 'Bet' : 'Raise'} ${val.toStringAsFixed(1)}', AppColors.emerald, fsm.canRaise(p!) ? () => _aggr(p, val) : null, 'act-custom-go')),
               SizedBox(width: 34, child: _B('+', AppColors.muted, () => setState(() => custom = val + 0.5), 'act-custom-plus')),
             ] else
               const Spacer(flex: 3),

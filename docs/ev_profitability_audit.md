@@ -1,6 +1,6 @@
 # Auditoría Integral de EV por Stake, Rentabilidad Post-Rake y Caza de Huecos (Fase 9.55)
 
-Generado por `docs/audit_scripts/full_ev_profitability_and_leaks_audit.dart` (30 nodos, 7560 decisiones auditadas en 12092 ms).
+Generado por `docs/audit_scripts/full_ev_profitability_and_leaks_audit.dart` (30 nodos, 7560 decisiones auditadas en 11736 ms).
 
 > **No es un winrate (CLAUDE.md §8).** Los pesos `w_i` de la cesta son una plantilla declarada, no frecuencias medidas; el EV es el de `ActionEvCalculator` desde el nodo (rake incluido en el bote final), no el EV de la mano completa. Por eso no se emite el veredicto "RENTABLE / PERDEDOR por rake": requiere frecuencias reales de spots y del pool, que el proyecto no tiene ni debe registrar.
 
@@ -8,9 +8,9 @@ Generado por `docs/audit_scripts/full_ev_profitability_and_leaks_audit.dart` (30
 
 | Stake | Rake del bote en nodo (bb/100 nodos) | EV Ancla GTO (bb/100 nodos) | EV Full-Exploit (bb/100 nodos) | Ganancia Pura Exploit (+bb/100 nodos) | Estado |
 |---|---|---|---|---|---|
-| NL2 | 36.5 | 342.2 | 362.2 | +19.9 | EXPLOIT +EV (Δ>0) |
-| NL5 | 36.5 | 342.4 | 362.4 | +19.9 | EXPLOIT +EV (Δ>0) |
-| NL10 | 36.5 | 336.1 | 348.3 | +12.1 | EXPLOIT +EV (Δ>0) |
+| NL2 | 36.5 | 342.2 | 362.2 | +20.0 | EXPLOIT +EV (Δ>0) |
+| NL5 | 36.5 | 342.4 | 362.4 | +20.0 | EXPLOIT +EV (Δ>0) |
+| NL10 | 36.5 | 336.1 | 348.3 | +12.2 | EXPLOIT +EV (Δ>0) |
 | NL25 | 36.5 | 335.1 | 347.6 | +12.5 | EXPLOIT +EV (Δ>0) |
 | NL50 | 36.5 | 363.8 | 363.8 | +0.0 | NEUTRO (ancla Nash) |
 | NL100 | 36.5 | 364.2 | 364.2 | +0.0 | NEUTRO (ancla Nash) |
@@ -22,12 +22,12 @@ NL50-NL200: sin lectura individual el motor usa Reg_GTO/Unknown_Reg con escudo (
 
 | Arquetipo | Desviaciones vs ancla | Desviaciones con Δ < 0 | Δ medio por desviación (bb) |
 |---|---|---|---|
-| Fish | 315 | 0 | 2.74 |
-| Nit | 175 | 0 | 2.06 |
-| Scared_Reg | 129 | 0 | 2.42 |
-| Maniac | 156 | 0 | 4.16 |
-| Trapper | 344 | 0 | 5.81 |
-| Pool_Default | 125 | 0 | 2.21 |
+| Fish | 322 | 0 | 2.73 |
+| Nit | 182 | 0 | 1.99 |
+| Scared_Reg | 136 | 0 | 2.30 |
+| Maniac | 160 | 0 | 4.08 |
+| Trapper | 344 | 0 | 5.79 |
+| Pool_Default | 132 | 0 | 2.11 |
 
 ## Tabla 2 — Aporte de EV por bloque explotativo (+bb por spot desviado, todos los arquetipos y stakes)
 
@@ -36,9 +36,9 @@ NL50-NL200: sin lectura individual el motor usa Reg_GTO/Unknown_Reg con escudo (
 | SmartHUD Tags (perfil) | 708 | 3.24 | 2291.5 |
 | Terminaciones T1-T6 | 249 | 3.54 | 882.1 |
 | Geo-2E / Monocolor / Squeeze | 90 | 7.38 | 663.8 |
-| Guardas (Sanity/Ancla/Gate) | 38 | 11.12 | 422.7 |
-| Presets / Spots sin HUD | 81 | 1.36 | 109.8 |
+| Guardas (Sanity/Ancla/Gate) | 77 | 5.95 | 458.1 |
 | Timing Tells | 78 | 1.18 | 92.3 |
+| Presets / Spots sin HUD | 74 | 1.18 | 87.5 |
 
 ## Tabla 3 — Mapa de huecos y colisiones auditadas
 

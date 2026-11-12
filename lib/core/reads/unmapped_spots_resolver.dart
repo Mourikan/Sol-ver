@@ -31,11 +31,11 @@ class LineFacts {
 
 /// Plan de acción de un spot no cubierto + contexto de EV (prior) compartido con el ancla.
 class SpotPlan {
-  const SpotPlan(this.name, this.action, this.why, {this.sizePct, this.raiseMult, this.bluffShare, this.foldEquityOverride});
+  const SpotPlan(this.name, this.action, this.why, {this.sizePct, this.raiseMult, this.bluffShare, this.foldEquityOverride, this.raiseToBb});
   final String name;
   final DecisionAction action;
   final String why;
-  final double? sizePct, raiseMult, bluffShare, foldEquityOverride;
+  final double? sizePct, raiseMult, bluffShare, foldEquityOverride, raiseToBb;
 }
 
 class UnmappedSpotsResolver {
@@ -98,7 +98,7 @@ class UnmappedSpotsResolver {
   }
 
   /// Apuesta del villano que lidera contra la iniciativa de Hero en la calle (donk).
-  static bool _isDonk(GameState s) {
+  static bool isDonk(GameState s) {
     final cur = _st(s, s.street);
     final first = cur.where((a) => a.isAggressive).firstOrNull;
     if (first == null || first.actor != s.villainPosition) return false;
@@ -180,7 +180,7 @@ class UnmappedSpotsResolver {
       }
     }
     // 1. Micro_Block_And_MinBet_Punisher (los min-donks contra nuestra iniciativa los resuelve DonkTellDecoder).
-    if (f.microBet && !_isDonk(s)) {
+    if (f.microBet && !isDonk(s)) {
       final (blocks, _, _) = s.street == Street.flop ? (false, false, '') : TurnRiverSolver.keyBlockers(s, h);
       if (value || t == HandTier.highEquityComboDraw || (blocks && t == HandTier.backdoorBlockerBluff)) {
         return SpotPlan('Micro_Block_Punisher', DecisionAction.betRaise,

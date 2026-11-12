@@ -11,6 +11,7 @@ import '../postflop/terminal_exploit_closers.dart';
 import '../preflop/preflop_ranges_db.dart';
 import '../preflop/range_notation.dart';
 import 'gg_profiler.dart';
+import 'freak_fish_sizing_decoder.dart';
 import 'read_presets_catalog.dart';
 
 /// Inspector de rango percibido: radiografía del rango que el motor asigna al villano principal en el nodo
@@ -160,7 +161,10 @@ class VillainRangeInspector {
   static VillainPerceivedRange _preflop(GameState s) {
     final v = s.villainPosition!;
     Float32List range;
-    if (s.preflopAggressor != null) {
+    final cb = FreakFishSizingDecoder.clickBackRange(s, s.villainProfile);
+    if (cb != null) {
+      range = Float32List.fromList(cb);
+    } else if (s.preflopAggressor != null) {
       try {
         range = DefenseBudget.villainPreflopRange(s);
       } on Object {

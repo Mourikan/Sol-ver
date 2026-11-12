@@ -54,6 +54,8 @@ class _Snap {
     required this.currentBet,
     required this.lastRaise,
     required this.potStart,
+    required this.noReraise,
+    required this.reopens,
   });
   final List<Card> heroCards, board;
   final List<PlayerAction> actions;
@@ -62,6 +64,8 @@ class _Snap {
   final Position? currentActor;
   final Set<Position> needsToAct;
   final double currentBet, lastRaise, potStart;
+  final Set<Position> noReraise;
+  final bool reopens;
 }
 
 class IllegalAction implements Exception {
@@ -168,6 +172,8 @@ class HandFlowFSM extends ChangeNotifier {
       currentBet: _currentBet,
       lastRaise: _lastRaiseSize,
       potStart: _potStartStreet,
+      noReraise: Set.of(_noReraise),
+      reopens: reopensBettingForPriorActors,
     ));
     if (_undo.length > 64) _undo.removeAt(0);
   }
@@ -203,6 +209,10 @@ class HandFlowFSM extends ChangeNotifier {
     _currentBet = s.currentBet;
     _lastRaiseSize = s.lastRaise;
     _potStartStreet = s.potStart;
+    _noReraise
+      ..clear()
+      ..addAll(s.noReraise);
+    reopensBettingForPriorActors = s.reopens;
   }
 
   /// Bote total, stack efectivo restante (Hero vs villano principal) y SPR en vivo.
@@ -448,11 +458,15 @@ class HandFlowFSM extends ChangeNotifier {
     _needsToAct
       ..clear()
       ..addAll(preflopOrder);
+    _noReraise.clear();
+    reopensBettingForPriorActors = true;
     currentActor = hasStraddle ? Position.mp : Position.utg;
     _refreshRecommendation();
   }
 
   void _startStreet() {
+    _noReraise.clear();
+    reopensBettingForPriorActors = true;
     _potStartStreet = pot;
     for (final s in seats.values) {
       s.committed = 0;
@@ -481,18 +495,24 @@ class HandFlowFSM extends ChangeNotifier {
     return null;
   }
 
+  /// Jugadores que ya actuaron antes de un all-in incompleto: solo fold/call.
+  final Set<Position> _noReraise = {};
+  bool reopensBettingForPriorActors = true;
+  bool canRaise(Position p) => !_noReraise.contains(p);
+
   /// Acciones legales para el jugador en turno.
   Set<ActionType> legalActions() {
     final p = currentActor;
     if (p == null) return {};
     final s = seats[p]!;
     final toCall = _currentBet - s.committed;
+    final raiseOk = canRaise(p);
     return {
       if (toCall > 0) ActionType.fold,
       if (toCall <= 0) ActionType.check,
       if (toCall > 0) ActionType.call,
-      if (s.stack > toCall) _currentBet == 0 ? ActionType.bet : ActionType.raise,
-      ActionType.allIn,
+      if (s.stack > toCall && raiseOk) _currentBet == 0 ? ActionType.bet : ActionType.raise,
+      if (raiseOk || s.stack <= toCall) ActionType.allIn,
     };
   }
 
@@ -507,6 +527,9 @@ class HandFlowFSM extends ChangeNotifier {
   }
 
   void _act(Position p, ActionType type, double amountBb) {
+    if (!canRaise(p) && (type == ActionType.bet || type == ActionType.raise || (type == ActionType.allIn && seats[p]!.stack > _currentBet - seats[p]!.committed))) {
+      throw IllegalAction('${p.name.toUpperCase()}: el all-in incompleto no reabre la subida (solo fold/call)');
+    }
     if (p != currentActor) {
       // Implicit_Fast_Forward: los asientos omitidos entre el turno actual y el actor foldean (o pasan si no deben nada).
       final o = _order;
@@ -559,11 +582,24 @@ class HandFlowFSM extends ChangeNotifier {
         s.committed += pay;
         if (s.stack <= 1e-9) s.allIn = true;
         if (s.committed > _currentBet) {
-          _lastRaiseSize = math.max(_lastRaiseSize, s.committed - _currentBet);
+          final increment = s.committed - _currentBet;
+          final full = increment >= _lastRaiseSize - 1e-9;
+          final pending = Set.of(_needsToAct);
           _currentBet = s.committed;
+          final others = [for (final q in _order) if (q != p && seats[q]!.alive && !seats[q]!.allIn) q];
+          if (full) {
+            _lastRaiseSize = math.max(_lastRaiseSize, increment);
+            _noReraise.clear();
+            reopensBettingForPriorActors = true;
+          } else {
+            // Incomplete_ShortStack_AllIn_Rule (GGPoker): un all-in que no completa la subida mínima NO reabre la apuesta
+            // para quien ya actuó en la ronda: solo puede foldear o pagar la diferencia.
+            reopensBettingForPriorActors = false;
+            _noReraise.addAll([for (final q in others) if (!pending.contains(q)) q]);
+          }
           _needsToAct
             ..clear()
-            ..addAll([for (final q in _order) if (q != p && seats[q]!.alive && !seats[q]!.allIn) q]);
+            ..addAll(others);
         }
         final priorAgg = actions.any((a) => a.street == st && a.isAggressive);
         final t = type == ActionType.allIn ? ActionType.allIn : (st == Street.preflop || priorAgg ? ActionType.raise : ActionType.bet);
