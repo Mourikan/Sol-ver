@@ -4,6 +4,7 @@ import '../models/decision_output.dart';
 import '../models/game_state.dart';
 import '../models/action_mixer.dart';
 import '../reads/gg_profiler.dart';
+import '../reads/unmapped_spots_resolver.dart';
 import '../postflop/postflop_ranges.dart';
 import 'hand_normalizer.dart';
 import 'structure_modifier.dart';
@@ -318,7 +319,7 @@ class PreflopSolverEngine {
     }
 
     final base = ctx.limpers > 0
-        ? (ip ? 3.5 : 4.5) + ctx.limpers
+        ? UnmappedSpotsResolver.isoSize(ip: ip, limpers: ctx.limpers)
         : StructureModifier.openSize(s, PreflopRangesDb.openSizeBb[hero]!);
     final f = {PreflopAction.raise: w, PreflopAction.fold: 1 - w};
     final (a, roll, norm) = _pick(f, s);

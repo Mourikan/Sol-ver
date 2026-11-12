@@ -11,6 +11,7 @@ class VillainPerceivedRange {
     required this.predictedFoldFreq,
     required this.predictedBluffFreq,
     this.heroBlockedNutsCombos = 0,
+    this.activePresets = const [],
   });
 
   static const empty = VillainPerceivedRange(
@@ -33,6 +34,9 @@ class VillainPerceivedRange {
   /// Combos de nuts/monsters del villano eliminados por las cartas de Hero (blocker).
   final double heroBlockedNutsCombos;
 
+  /// Presets de lectura sin HUD activos (Equilibrium_Deviation_Read).
+  final List<String> activePresets;
+
   Map<String, Object> toJson() => {
         'totalActiveCombos': totalActiveCombos,
         'isCapped': isCapped,
@@ -46,6 +50,7 @@ class VillainPerceivedRange {
         'predictedFoldFreq': predictedFoldFreq,
         'predictedBluffFreq': predictedBluffFreq,
         'heroBlockedNutsCombos': heroBlockedNutsCombos,
+        'activePresets': activePresets,
       };
 }
 

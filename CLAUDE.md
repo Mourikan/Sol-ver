@@ -83,3 +83,16 @@ Nunca vs `Reg_GTO` (ancla intacta). Implementación: `lib/core/postflop/terminal
 - **T5 Small River Bet-Fold** (NL2-NL100, rango condensado): 25% con Marginal_Made_Showdown; si resube => fold (T2).
 - **T6 Delayed Probe OOP** (NL50-NL200, flop X-X, turn sin completar): probe 70% con valor/draws + ~55% del resto (mezcla determinista).
 Auditoría: tabla T1-T6 en `docs/cold_numbers_audit.md` (barrido exhaustivo de combos; 0 desviaciones con Δ <= 0 exigido).
+
+## 11. SKILL INTERNA: [PURE_READ_AND_BAYESIAN_FUNNEL_ENGINE]
+Inferencia sin HUD por desequilibrio acción/sizing vs equilibrio (`Equilibrium_Deviation_Read`), activa con `Pool_Default` y perfiles etiquetados (nunca vs `Reg_GTO`).
+Multiplicadores por tier = priors declarados por el usuario; se combinan con `min()` (sin cascada) y piso 0.05. Implementación: `lib/core/reads/read_presets_catalog.dart`,
+`lib/core/reads/unmapped_spots_resolver.dart`, `VillainRangeInspector`.
+1. `Sizing_Compression_Law`: apuesta < 25% (Turn/River; 10-22% en cualquier calle) => nuts x0.10, faroles puros x0.15 => `Capped_Block_Or_Draw_Price`.
+2. `Polarization_Truncated_Law`: River >= 90% en NL2-NL50 => faroles <= 12% salvo `Busted_Draws_Present` (flop coordinado + turn/river brick).
+3. `Inaction_Cap_Law`: PFA hace check-back en flop/turn A-high/K-high/seco => nuts (y overpair/TPTK) x0.20.
+**5 spots:** Micro_Block_Punisher (raise 3.8x con TopPair+/semifarol/blocker), PFA_Missed_CBet_Cap (Turn_Probe 70% + River_Follow_Up),
+Busted_Draw_Runout (+/-14pp aire según blocker de Hero; decisión por `Bluff_Combo_Audit`; T2 cede), ThreeBet_Underpair_Pain_Guard (TT-QQ en A/K-x-x 3BP:
+<=33% call, >=65% fold en NL2-NL50 salvo veto de `EV_Sanity_Guard`), Multi_Limper_Iso (3.5+1.2N IP / 4.5+1.5N OOP; limp-caller sin AA-JJ/AK).
+**8 presets:** CAPPED_BY_CHECKBACK, MINBET_WEAKNESS, POLAR_NUTTED_BARREL, BUSTED_FD_BLUFF_HEAVY, COMPLETED_DRAW_DANGER, 3BP_BIG_SIZING_HONESTY, LIMP_CALL_CAPPED, FLOAT_AND_STAB.
+Toda acción de spot pasa por `exploitDeltaEV` (ancla Nash) y `EV_Sanity_Guard`.

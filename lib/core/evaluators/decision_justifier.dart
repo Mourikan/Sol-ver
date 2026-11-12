@@ -21,8 +21,12 @@ class DecisionJustifier {
 
   static String activeRule(DecisionOutput d) {
     final txt = '${d.justificacionGto} ${d.ajusteExplotativoRead}';
+    if (txt.contains(EvSanityGuard.tag)) return 'EV_Sanity_Guard';
+    if (txt.contains('[EV_ANCHOR]')) return 'Nash_Anchor';
     final m = RegExp(r'Terminal_Closer (T\d)').firstMatch(txt);
     if (m != null) return m.group(1)!;
+    final u = RegExp(r'Unmapped_Spot (\w+)').firstMatch(txt);
+    if (u != null) return u.group(1)!;
     if (txt.contains(EvSanityGuard.tag)) return 'EV_Sanity_Guard';
     if (txt.contains('[EV_ANCHOR]')) return 'Nash_Anchor';
     if (txt.contains('[EV_GATE]')) return 'EV_Gate';
@@ -47,7 +51,8 @@ class DecisionJustifier {
             : fish
                 ? 'Inelástico (${_p(r.predictedFoldFreq)} Fold)'
                 : 'Nuts ${_p(r.nutsAndMonstersPct)} / Aire ${_p(r.pureAirAndBluffsPct)}';
-    final badge = '[READ: ${profileLabel(rp, s.villainProfile)}$tell -> $rangeTag]';
+    final pre = r.activePresets.isEmpty ? '' : ' | ${r.activePresets.join(' + ')}';
+    final badge = '[READ: ${profileLabel(rp, s.villainProfile)}$tell$pre -> $rangeTag]';
 
     final rule = activeRule(d);
     final range = r.totalActiveCombos == 0
@@ -77,6 +82,7 @@ class DecisionJustifier {
       final evs = ev == null ? '' : ' | EV(Check): ${_bb(pass)} vs EV(Bet): ${_bb(bet)}$ex';
       math = '${d.action.name} | $range$blk$evs';
     }
+    if (r.topRepresentativeHands.isNotEmpty) math = '$math | Top: ${r.topRepresentativeHands.take(3).join(', ')}';
     return DecisionJustification(activeReadBadge: badge, mathRationale: math, activeCloserRule: rule);
   }
 }

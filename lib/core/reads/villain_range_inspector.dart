@@ -11,6 +11,7 @@ import '../postflop/terminal_exploit_closers.dart';
 import '../preflop/preflop_ranges_db.dart';
 import '../preflop/range_notation.dart';
 import 'gg_profiler.dart';
+import 'read_presets_catalog.dart';
 
 /// Inspector de rango percibido: radiografía del rango que el motor asigna al villano principal en el nodo
 /// (RangeFunnel/line weights + remoción de cartas de Hero + timing + prior de línea T2). Multiway: villano principal.
@@ -46,6 +47,17 @@ class VillainRangeInspector {
     // no apuestan grande (principio de sizing polar, mismo supuesto que el EV de bluff-catcher de T2).
     final vBet = street.where((a) => a.isAggressive).lastOrNull;
     final polar = s.street == Street.river && vBet != null && toCall > 0 && potBefore > 0 && toCall / potBefore >= polarSizing;
+    // Equilibrium_Deviation_Read: presets sin HUD (nunca vs Reg_GTO etiquetado). Por tier: min() de multiplicadores, piso.
+    final presets = rp.archetype == GgArchetype.unknownReg
+        ? const <AnonymousReadPreset>[]
+        : ReadPresetsCatalog.detect(s, potBefore: potBefore, toCall: toCall);
+    final effects = [for (final p in presets) ReadPresetsCatalog.effect(p, s)];
+    final mult = <HandTier, double>{};
+    for (final e in effects) {
+      e.tierMult.forEach((t, m) => mult[t] = mult[t] == null || m < mult[t]! ? m : mult[t]!);
+    }
+    mult.updateAll((_, m) => m < ReadPresetsCatalog.floor ? ReadPresetsCatalog.floor : m);
+    final dropMedium = polar || effects.any((e) => e.dropMedium);
     var nuts = 0.0, med = 0.0, draws = 0.0, air = 0.0, blockedNuts = 0.0;
     final w = <double>[], t = <HandTier>[], cls = <int>[];
     for (var k = 0; k < vc.combos.length; k++) {
@@ -56,8 +68,9 @@ class VillainRangeInspector {
         continue;
       }
       final medium = tier == HandTier.strongTopPairOverpair || tier == HandTier.marginalMadeShowdown;
-      if (polar && medium) continue;
-      final x = tier == HandTier.nutsMonster ? vc.weights[k] * nutsMult : vc.weights[k];
+      if (dropMedium && medium) continue;
+      final pm = mult[tier] ?? 1.0;
+      final x = (tier == HandTier.nutsMonster ? vc.weights[k] * nutsMult : vc.weights[k]) * pm;
       w.add(x);
       t.add(tier);
       cls.add(_idx169(a, b));
@@ -82,6 +95,23 @@ class VillainRangeInspector {
       airScale = share * rest / ((1 - share) * air);
       air *= airScale;
     }
+    // Truncado polar (tope de aire) y desplazamiento por proyectos fallidos.
+    final caps = [for (final e in effects) if (e.airCap != null) e.airCap!];
+    final shift = effects.fold<double>(0, (a, e) => a + e.airShift);
+    if (caps.isNotEmpty || shift != 0) {
+      final total = nuts + med + draws + air;
+      if (total > 0) {
+        var target = air / total + shift;
+        if (caps.isNotEmpty) target = target.clamp(0.0, caps.reduce((a, b) => a < b ? a : b));
+        target = target.clamp(0.02, 0.95);
+        final rest = nuts + med + draws;
+        if (air > 0 && rest > 0) {
+          final newAir = target * rest / (1 - target);
+          airScale *= newAir / air;
+          air = newAir;
+        }
+      }
+    }
     final tot = nuts + med + draws + air;
     if (tot <= 0) return VillainPerceivedRange.empty;
     final byClass = <int, double>{};
@@ -94,7 +124,7 @@ class VillainRangeInspector {
       if (!ActionEvCalculator.continues(t[k], f, river: river, vp: s.villainProfile)) folds += x;
     }
     final nutsPct = nuts / tot;
-    final capped = nutsPct < cappedNutsShare;
+    final capped = nutsPct < cappedNutsShare || effects.any((e) => e.forceCapped);
     final fe = ctx?.foldEquityOverride ??
         ActionEvCalculator.foldEquity(folds / tot, f / (1 + f), rp, s.villainProfile, river: river, capped: capped, betFraction: f);
     return VillainPerceivedRange(
@@ -108,6 +138,7 @@ class VillainRangeInspector {
       predictedFoldFreq: fe,
       predictedBluffFreq: air / tot,
       heroBlockedNutsCombos: blockedNuts,
+      activePresets: [for (final p in presets) ReadPresetsCatalog.label(p)],
     );
   }
 

@@ -161,13 +161,13 @@ void main() {
   });
 
   group('PRO: árbol preflop restante', () {
-    test('Iso vs limpers: 3.5bb IP / 4.5bb OOP + 1bb por limper', () {
-      expect(FullTreePreflop.isoSize(Position.btn, 2), 5.5);
-      expect(FullTreePreflop.isoSize(Position.sb, 3), 7.5);
+    test('Iso vs limpers (Fase 9.4): 3.5bb + 1.2bb x N IP / 4.5bb + 1.5bb x N OOP', () {
+      expect(FullTreePreflop.isoSize(Position.btn, 2), closeTo(5.9, 1e-9));
+      expect(FullTreePreflop.isoSize(Position.sb, 3), closeTo(9.0, 1e-9));
       final d = tree.decide(GameState(stake: Stake.nl10, heroPosition: Position.co, hero: HoleCards.parse('AhQd'),
           actions: [pf(Position.utg, ActionType.call, 1), pf(Position.mp, ActionType.call, 1)]));
       expect(d.action, DecisionAction.betRaise);
-      expect(d.sizing!.bb, 5.5);
+      expect(d.sizing!.bb, closeTo(5.9, 1e-9));
     });
     test('Iso range lineal: sin bluffs bajos sin EQR', () {
       for (final h in [Position.mp, Position.co, Position.btn, Position.sb]) {

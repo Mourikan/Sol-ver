@@ -6,6 +6,7 @@ import '../models/game_state.dart';
 import '../preflop/range_notation.dart';
 import '../discipline/timing_tells_matrix.dart';
 import '../reads/gg_profiler.dart';
+import '../reads/unmapped_spots_resolver.dart';
 import '../evaluators/board_analyzer.dart';
 import 'flop_lookup_table.dart';
 import 'geometry.dart';
@@ -90,6 +91,17 @@ class DefenseBudget {
   }
 
   static Float32List villainPreflopRange(GameState s) {
+    final r = _villainPreflopRange(s);
+    if (!UnmappedSpotsResolver.villainLimped(s)) return r;
+    // Multi_Limper_Iso_And_Cap_Filter: el limp-caller no tiene el top 8% (AA-JJ, AK) => rango truncado.
+    final out = Float32List.fromList(r);
+    for (final l in UnmappedSpotsResolver.limpCallerTop) {
+      out[Matrix169.indexOf(l)] = 0;
+    }
+    return out;
+  }
+
+  static Float32List _villainPreflopRange(GameState s) {
     if (s.potType == PotType.limped) return Float32List(169)..fillRange(0, 169, 1);
     final pfa = s.preflopAggressor!;
     final other = pfa == s.villainPosition ? s.heroPosition : s.villainPosition!;

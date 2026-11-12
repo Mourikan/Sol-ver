@@ -5,6 +5,7 @@ import '../models/action_mixer.dart';
 import '../models/decision_output.dart';
 import '../models/game_state.dart';
 import '../reads/gg_profiler.dart';
+import '../reads/unmapped_spots_resolver.dart';
 import '../reads/villain_range_inspector.dart';
 import '../evaluators/decision_justifier.dart';
 import 'hand_normalizer.dart';
@@ -230,7 +231,7 @@ class FullTreePreflop {
   }
 
   static double isoSize(Position hero, int limpers) =>
-      (hero == Position.sb || hero == Position.bb ? isoOop : isoIp) + limpers;
+      UnmappedSpotsResolver.isoSize(ip: !(hero == Position.sb || hero == Position.bb), limpers: limpers);
 
   static double squeezeSize(double open, int callers, {required bool ip}) =>
       open * (ip ? squeezeIp : squeezeOop) + open * callers;
@@ -247,7 +248,7 @@ class FullTreePreflop {
       sizing: raise ? Sizing(bb: size, potPct: size / spot.potBb * 100) : null,
       metrics: [KeyMetric(MetricType.eqr, hand.eqr)],
       justificacionGto: '${hand.label} iso vs ${spot.limpers} limper(s) | ${ip ? 'IP' : 'OOP'} | rango lineal depurado '
-          '(${Matrix169.percent(r).toStringAsFixed(1)}%, sin bluffs bajos sin EQR) | sizing ${ip ? isoIp : isoOop}bb + ${spot.limpers}bb',
+          '(${Matrix169.percent(r).toStringAsFixed(1)}%, sin bluffs bajos sin EQR) | sizing ${ip ? isoIp : isoOop}bb + ${ip ? UnmappedSpotsResolver.isoIpPerLimper : UnmappedSpotsResolver.isoOopPerLimper}bb x ${spot.limpers} limper(s)',
       ajusteExplotativoRead: station
           ? 'Fish limper: iso lineal ancho (rango del limper capado e inelástico) con sizing punitivo.'
           : 'Limpers = rango capado; iso para jugar HU con iniciativa.',
