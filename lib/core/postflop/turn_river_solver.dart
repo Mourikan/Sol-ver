@@ -10,6 +10,8 @@ import 'geometry.dart';
 import 'defense_budget.dart';
 import 'exploit_modifier.dart';
 import 'hand_tier.dart';
+import 'geometric_2e_planner.dart';
+import 'monotone_fourflush_solver.dart';
 
 enum CardShift { brickTotal, rankShift, flushOrStraightCompletes }
 
@@ -199,6 +201,12 @@ class TurnRiverSolver {
       line = '$line | Greedy_Value_Sizing vs Inelastic-Caller (80-125%, TPGK+)';
     }
     if (delayedProbe) line = '$line | Delayed_Turn_Probe vs Over-Folder (factor ${overFolderMin}x)';
+    // Geo-2E: Turn con SPR 1.6-3.8 => sizing geométrico de 2 calles (River all-in limpio). Nunca en barrel de rango 33%.
+    final geo = street == Street.turn && !(shift == CardShift.rankShift && heroHadInitiative) ? Geometric2EPlanner.plan(pot, stack) : null;
+    if (geo != null) {
+      size = geo.$1;
+      line = '$line | ${Geometric2EPlanner.note(geo.$1, geo.$2)}';
+    }
     final allIn = pot * size / 100 >= stack * 0.9 || (street == Street.river && spr <= 1.25);
     if (allIn) size = stack / pot * 100;
 
@@ -212,6 +220,9 @@ class TurnRiverSolver {
     final String why;
     if (vr != null) {
       (role, why) = vr;
+    } else if (sel.selected.contains(heroKey) && MonotoneFourFlushSolver.killNoSuitBluff(s, read)) {
+      role = HandRole.check;
+      why = 'Four_To_A_Flush: 0% farol sin carta del palo.';
     } else if (sel.selected.contains(heroKey)) {
       role = sel.thinGroup.contains(heroKey) ? HandRole.thinBluff : HandRole.bluff;
       why = rangeBet

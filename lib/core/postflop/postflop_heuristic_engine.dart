@@ -21,6 +21,7 @@ import 'postflop_ranges.dart';
 import 'range_equity.dart';
 import 'terminal_exploit_closers.dart';
 import '../reads/unmapped_spots_resolver.dart';
+import 'monotone_fourflush_solver.dart';
 import '../evaluators/decision_justifier.dart';
 import '../reads/villain_range_inspector.dart';
 import 'turn_river_solver.dart';
@@ -75,13 +76,15 @@ class PostflopHeuristicEngine {
     final (potBefore, toCall) = _potAndCall(s);
     // Terminaciones T1-T6: el mismo contexto de línea (prior del perfil) evalúa la línea explotativa y el ancla.
     final closer = TerminalExploitClosers.context(s, rp, potBefore: potBefore, toCall: toCall);
-    final spotShare = closer != null
+    final ht = HandTierClassifier.classify(s.hero!.high.id, s.hero!.low.id, [for (final c in s.board) c.id]);
+    final spot = closer != null
         ? null
-        : UnmappedSpotsResolver.plan(s, rp, HandTierClassifier.classify(s.hero!.high.id, s.hero!.low.id, [for (final c in s.board) c.id]),
-                potBefore: potBefore, toCall: toCall)
-            ?.bluffShare;
-    final delta = evOfDecision(s, rp, d, potBefore: potBefore, toCall: toCall, closer: closer, bluffShare: spotShare) -
-        evOfDecision(s, rp, base, potBefore: potBefore, toCall: toCall, closer: closer, bluffShare: spotShare);
+        : (UnmappedSpotsResolver.plan(s, rp, ht, potBefore: potBefore, toCall: toCall) ??
+            MonotoneFourFlushSolver.plan(s, rp, ht, potBefore: potBefore, toCall: toCall));
+    final delta = evOfDecision(s, rp, d,
+            potBefore: potBefore, toCall: toCall, closer: closer, bluffShare: spot?.bluffShare, feOverride: spot?.foldEquityOverride) -
+        evOfDecision(s, rp, base,
+            potBefore: potBefore, toCall: toCall, closer: closer, bluffShare: spot?.bluffShare, feOverride: spot?.foldEquityOverride);
     // Regla explotativa con Δ < 0 en apuesta propia => no se aplica (vuelve al ancla Nash). Los calls quedan bajo MDF.
     // Check explotativo (sin apuesta enfrente) con Δ < 0 frente a la apuesta del ancla => tampoco se aplica, salvo candados
     // del EV_Sanity_Guard y del Profile_Gate (Fish/Station inelástico y Trapper: farol 0% por candado de perfil).
@@ -124,14 +127,14 @@ class PostflopHeuristicEngine {
 
   /// EV (bb) de la acción de una decisión con `ActionEvCalculator` bajo el read dado (mismo modelo para exploit y GTO).
   static double evOfDecision(GameState s, ReadProfile rp, DecisionOutput d,
-      {required double potBefore, required double toCall, CloserContext? closer, double? bluffShare}) {
+      {required double potBefore, required double toCall, CloserContext? closer, double? bluffShare, double? feOverride}) {
     final size = d.action == DecisionAction.betRaise && d.sizing != null ? d.sizing!.bb : (toCall > 0 ? toCall * 3 : potBefore * 0.5);
     final ev = ActionEvCalculator.postflop(s, rp,
         potBefore: potBefore,
         toCall: toCall,
         betSizeBb: size,
         exactSize: true,
-        foldEquityOverride: closer?.foldEquityOverride,
+        foldEquityOverride: closer?.foldEquityOverride ?? feOverride,
         villainBluffShare: closer?.villainBluffShare ?? bluffShare);
     return switch (d.action) {
       DecisionAction.fold => toCall > 0 ? ev.fold : ev.checkCall,
@@ -349,6 +352,8 @@ class PostflopHeuristicEngine {
     }
     final sp = UnmappedSpotsResolver.plan(s, rp, h, potBefore: pot - villainIn + heroIn, toCall: toCall);
     if (sp != null) return _spot(sp, pot, stack, toCall, pot - villainIn + heroIn, metrics);
+    final mono = MonotoneFourFlushSolver.plan(s, rp, h, potBefore: pot - villainIn + heroIn, toCall: toCall);
+    if (mono != null) return _spot(mono, pot, stack, toCall, pot - villainIn + heroIn, metrics);
     if (toCall > 0) {
       final firstAgg = street.where((a) => a.isAggressive).firstOrNull;
       final donk = firstAgg != null && firstAgg.actor == villain && hadInitiative;

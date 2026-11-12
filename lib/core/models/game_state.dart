@@ -78,7 +78,9 @@ class GameState {
     List<VillainSeatState> activeVillains = const [],
     this.anteBb = 0.0,
     this.hasStraddle = false,
-  })  : activeVillains = List.unmodifiable(activeVillains),
+    Map<Position, double> seatStacksBb = const {},
+  })  : seatStacksBb = Map.unmodifiable(seatStacksBb),
+        activeVillains = List.unmodifiable(activeVillains),
         board = List.unmodifiable(board),
         actions = List.unmodifiable(actions) {
     if (board.length > 5 || board.length == 1 || board.length == 2) {
@@ -113,6 +115,9 @@ class GameState {
   late final int deadMask;
 
   /// Dinero muerto adicional a las ciegas (antes de 6 jugadores + straddle).
+  /// Stacks por asiento (bb) cuando se conocen (topología de stacks / amenaza de squeeze detrás).
+  final Map<Position, double> seatStacksBb;
+
   double get extraDeadMoneyBb => anteBb * 6 + (hasStraddle ? 2.0 : 0.0);
 
   GameState copyWith({VillainProfile? villainProfile, List<PlayerAction>? actions, HoleCards? hero, Position? villainPosition,
@@ -131,6 +136,7 @@ class GameState {
         activeVillains: activeVillains ?? this.activeVillains,
         anteBb: anteBb,
         hasStraddle: hasStraddle,
+        seatStacksBb: seatStacksBb,
       );
 
   RakeTier get rakeTier => stake.rakeTier;

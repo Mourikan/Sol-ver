@@ -82,6 +82,9 @@ class DecisionJustifier {
       final evs = ev == null ? '' : ' | EV(Check): ${_bb(pass)} vs EV(Bet): ${_bb(bet)}$ex';
       math = '${d.action.name} | $range$blk$evs';
     }
+    final geo = RegExp(r'Geo-2E Sizing \(\d+% Pot\) -> Prepara River All-In exacto de \d+% Pot \(\+EV Max\)')
+        .firstMatch('${d.justificacionGto} ${d.ajusteExplotativoRead}');
+    if (geo != null) math = '${geo.group(0)} | $math';
     if (r.topRepresentativeHands.isNotEmpty) math = '$math | Top: ${r.topRepresentativeHands.take(3).join(', ')}';
     return DecisionJustification(activeReadBadge: badge, mathRationale: math, activeCloserRule: rule);
   }

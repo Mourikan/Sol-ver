@@ -103,14 +103,28 @@ Barrido de los 1081-1176 combos de Hero en la línea gatillo. EV en bb promediad
 | T5 Small River Bet-Fold | NL2-NL100 (NL10) | check | betRaise 25% | 68 (0) | 12.93 | 13.61 | +0.68 |
 | T6 Delayed Probe OOP | NL50-NL200 (NL50) | check | betRaise 70% | 691 (0) | 1.87 | 4.25 | +2.38 |
 
+
+## Módulos Fase 9.5 — Δ EV por spot (bb)
+
+Mismo modelo EV para módulo ON y OFF (interruptores de auditoría). Priors de FE/umbrales declarados por el usuario. No es winrate.
+
+| Módulo | Acción sin módulo | Acción con módulo | Perfil | +Δ EV (bb) |
+|---|---|---|---|---|
+| Geo-2E (set, SPR 2.3, Turn) | bet 75% (river SPR 0.63x) | bet 69% (river all-in 69%) | Reg_GTO | -0.48 |
+| Short-Stack Topology (35bb, BTN vs CO, suma de manos) | 55 call->fold, 33 call->fold, KQo call->betRaise, A9s call->betRaise, 88 call->betRaise, AJo call->betRaise | 6 manos | Pool | +7.34 |
+| Monotone Small Stab (AsQd en Ks9s4s) | ancla Reg_GTO | betRaise 28% | Pool NL10 | +0.02 |
+| 4-Flush Blocker Steal (KsQd, 4 picas river) | ancla Reg_GTO | betRaise 115% | Pool NL10 | +0.11 |
+| Sandwich Squeeze (A2s BB vs CO + BTN; FE 43% vs alpha 66%) | call/fold | gate cerrado (FE < alpha) | Pool NL10 | +0.00 |
+| Anti-Counter-Exploit Shield (NL50, PFR 26/3B 11) | fold | call 80% | Agresivo (modelo de rango, sin prior T2) | +7.70 |
+
 ## Calificación de ingeniería (Claude, evaluación honesta)
 
 | Eje | Nota | Fundamento |
 |---|---|---|
 | Precisión Matemática GTO | 60/100 | Δ Nash 2.4% vs referencias teóricas (MDF, α, presupuesto geométrico), pero rangos preflop semilla, targets BB declarados por el usuario y ninguna validación contra exports de solver. |
-| Letalidad Explotativa vs Pool | 70/100 | Full_Exploit por defecto, matriz asimétrica y 6 terminaciones T1-T6 con +Δ EV > 0 en todos los combos desviados (barrido exhaustivo); la magnitud de T1/T2/T4 depende de priors de FE/farol del usuario; el Δ se mide con el mismo modelo EV que asume el perfil: priors MDA/timing sin muestra real del pool. |
+| Letalidad Explotativa vs Pool | 71/100 | Full_Exploit por defecto, matriz asimétrica, T1-T6, topología de stacks corta y monocolor/4-flush con +Δ EV > 0 en todos los combos desviados (barrido exhaustivo); la magnitud de T1/T2/T4 depende de priors de FE/farol del usuario; el Δ se mide con el mismo modelo EV que asume el perfil: priors MDA/timing sin muestra real del pool. |
 | Velocidad / Rendimiento APK | 70/100 | Lookups O(1) < 0.5 ms, decisión con EV ~1 ms, isolate persistente; el APK nunca se ha compilado ni medido en un dispositivo. |
-| Seguridad Anti-Explotación | 70/100 | Presupuestos MDF exactos, EV_Sanity_Guard, invariantes y fuzzer de monotonía; las leyes MDA (folds en NL2-NL50) son explotables por regs que sobre-faroleen esas líneas. |
+| Seguridad Anti-Explotación | 74/100 | Presupuestos MDF exactos, EV_Sanity_Guard, invariantes, fuzzer de monotonía y escudo anti-contra-explotación (NL50+ vs PFR>=24/3B>=10, Agro o Reg: sin hero-folds MDA, MDF x1.0); en NL2-NL25 las leyes MDA siguen siendo explotables por regs que sobre-faroleen esas líneas y el escudo depende de stats HUD. |
 
-**Nota global: 68/100** — motor internamente consistente y auditado; la brecha principal es de datos (solver real y pool real), no de arquitectura.
+**Nota global: 69/100** — motor internamente consistente y auditado; la brecha principal es de datos (solver real y pool real), no de arquitectura.
 

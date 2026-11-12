@@ -6,6 +6,7 @@ import '../models/decision_output.dart';
 import '../models/game_state.dart';
 import '../reads/gg_profiler.dart';
 import '../reads/unmapped_spots_resolver.dart';
+import 'sandwich_squeeze_exploit.dart';
 import '../reads/villain_range_inspector.dart';
 import '../evaluators/decision_justifier.dart';
 import 'hand_normalizer.dart';
@@ -260,13 +261,32 @@ class FullTreePreflop {
     final ip = hero.isInPositionVs(opener) && hero != Position.sb && hero != Position.bb;
     final value = RangeNotation.union([PreflopRangesDb.threeBetValue[opener] ?? '', squeezeExtra]);
     final raise = value[hand.index] > 0 && !_lowNoEqr(hand.index);
+    var size = squeezeSize(spot.openBb, spot.callers, ip: ip);
+    final allIn = s.effectiveStackBb != null && size >= s.effectiveStackBb!;
+    if (allIn) size = s.effectiveStackBb!;
+    // Sandwich_Squeeze: caller capado (sin AA-QQ/AK) => FE combinada; candidatos con blocker si FE > alpha.
+    final caller = s.actions.where((a) => a.street == Street.preflop && a.type == ActionType.call && a.actor != opener && a.actor != hero).firstOrNull?.actor;
+    final sw = !raise && caller != null && SandwichSqueezeExploit.candidates[hand.index] > 0
+        ? SandwichSqueezeExploit.evaluate(s, opener: opener, caller: caller, sizeBb: size, potBb: spot.potBb)
+        : null;
+    if (sw != null && sw.$1 > sw.$2 && sw.$3 > 0) {
+      return DecisionOutput(
+        action: DecisionAction.betRaise,
+        sizing: Sizing(bb: size, potPct: size / spot.potBb * 100),
+        freqGto: const {DecisionAction.betRaise: 1.0},
+        freqSource: FreqSource.pure,
+        exploitDeltaEV: sw.$3,
+        metrics: [KeyMetric(MetricType.eqr, hand.eqr), KeyMetric(MetricType.blocker, hand.blockerWeight), KeyMetric(MetricType.alpha, sw.$2, 'FE requerida squeeze')],
+        justificacionGto: '${hand.label} Sandwich_Squeeze vs open ${opener.name.toUpperCase()} + caller capado ${caller!.name.toUpperCase()} (sin AA-QQ/AK) | '
+            'FE combinada ${(sw.$1 * 100).toStringAsFixed(1)}% > alpha ${(sw.$2 * 100).toStringAsFixed(1)}%',
+        ajusteExplotativoRead: 'Sandwich_Squeeze: robo del dinero muerto +${sw.$3.toStringAsFixed(2)}bb vs fold (equity 0 si pagan: cota inferior). '
+            'Sizing ${size.toStringAsFixed(2)}bb.',
+      );
+    }
     if (!raise && (hero == Position.bb || hero == Position.btn)) {
       final oc = overcall(s, spot, hand);
       if (oc != null) return oc;
     }
-    var size = squeezeSize(spot.openBb, spot.callers, ip: ip);
-    final allIn = s.effectiveStackBb != null && size >= s.effectiveStackBb!;
-    if (allIn) size = s.effectiveStackBb!;
     return DecisionOutput(
       action: raise ? DecisionAction.betRaise : DecisionAction.fold,
       sizing: raise ? Sizing(bb: size, potPct: size / spot.potBb * 100) : null,

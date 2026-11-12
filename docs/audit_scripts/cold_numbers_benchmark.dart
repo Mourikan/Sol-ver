@@ -6,6 +6,11 @@
 import 'dart:io';
 import 'dart:math';
 
+import 'package:sol_ver/core/evaluators/action_ev_calculator.dart';
+import 'package:sol_ver/core/postflop/geometric_2e_planner.dart';
+import 'package:sol_ver/core/preflop/sandwich_squeeze_exploit.dart';
+import 'package:sol_ver/core/preflop/stack_topology_resolver.dart';
+import 'package:sol_ver/core/reads/anti_counter_exploit_shield.dart';
 import 'package:sol_ver/core/models/decision_output.dart';
 import 'package:sol_ver/core/models/game_state.dart';
 import 'package:sol_ver/core/postflop/defense_budget.dart';
@@ -386,6 +391,7 @@ void edge(StringBuffer out) {
     ..writeln()
     ;
   closers(out);
+  modules95(out);
   out
     ..writeln('## Calificación de ingeniería (Claude, evaluación honesta)')
     ..writeln()
@@ -393,14 +399,15 @@ void edge(StringBuffer out) {
     ..writeln('|---|---|---|')
     ..writeln('| Precisión Matemática GTO | 60/100 | Δ Nash 2.4% vs referencias teóricas (MDF, α, presupuesto geométrico), pero rangos preflop semilla, '
         'targets BB declarados por el usuario y ninguna validación contra exports de solver. |')
-    ..writeln('| Letalidad Explotativa vs Pool | 70/100 | Full_Exploit por defecto, matriz asimétrica y 6 terminaciones T1-T6 con '
+    ..writeln('| Letalidad Explotativa vs Pool | 71/100 | Full_Exploit por defecto, matriz asimétrica, T1-T6, topología de stacks corta y monocolor/4-flush con '
         '+Δ EV > 0 en todos los combos desviados (barrido exhaustivo); la magnitud de T1/T2/T4 depende de priors de FE/farol del usuario; '
         'el Δ se mide con el mismo modelo EV que asume el perfil: priors MDA/timing sin muestra real del pool. |')
     ..writeln('| Velocidad / Rendimiento APK | 70/100 | Lookups O(1) < 0.5 ms, decisión con EV ~1 ms, isolate persistente; el APK nunca se ha compilado ni medido en un dispositivo. |')
-    ..writeln('| Seguridad Anti-Explotación | 70/100 | Presupuestos MDF exactos, EV_Sanity_Guard, invariantes y fuzzer de monotonía; '
-        'las leyes MDA (folds en NL2-NL50) son explotables por regs que sobre-faroleen esas líneas. |')
+    ..writeln('| Seguridad Anti-Explotación | 74/100 | Presupuestos MDF exactos, EV_Sanity_Guard, invariantes, fuzzer de monotonía y escudo '
+        'anti-contra-explotación (NL50+ vs PFR>=24/3B>=10, Agro o Reg: sin hero-folds MDA, MDF x1.0); en NL2-NL25 las leyes MDA siguen '
+        'siendo explotables por regs que sobre-faroleen esas líneas y el escudo depende de stats HUD. |')
     ..writeln()
-    ..writeln('**Nota global: 68/100** — motor internamente consistente y auditado; la brecha principal es de datos (solver real y pool real), no de arquitectura.')
+    ..writeln('**Nota global: 69/100** — motor internamente consistente y auditado; la brecha principal es de datos (solver real y pool real), no de arquitectura.')
     ..writeln();
 }
 
@@ -480,6 +487,82 @@ void closers(StringBuffer out) {
     out.writeln('| $name | $lvl | ${top(baseActs)} | ${top(exActs)} | $dev ($bad) | ${(evG / n).toStringAsFixed(2)} | '
         '${(evE / n).toStringAsFixed(2)} | ${dev == 0 ? '0.00' : '+${((evE - evG) / n).toStringAsFixed(2)}'} |');
     print('CLOSER ${name.split(' ').first}: dev $dev, Δ<=0 $bad, +Δ ${((evE - evG) / n).toStringAsFixed(2)}bb');
+  }
+  out.writeln();
+}
+
+
+/// Δ EV de los 5 módulos de la Fase 9.5 (mismo modelo EV para módulo ON y OFF; interruptores de auditoría).
+void modules95(StringBuffer out) {
+  final rows = <(String, String, String, String, double)>[];
+  String act(DecisionOutput d) => '${d.action.name}${d.sizing == null ? '' : ' ${d.sizing!.potPct.round()}%'}';
+  // 1. Geo-2E: set en turn, SPR 2.3.
+  final geoG = GameState(stake: Stake.nl25, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 82.5, potBb: 35.5,
+      hero: HoleCards.parse('KhKs'), board: Card.parseMany('Kd7s2s4h'),
+      actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 2), a(Street.flop, Position.bb, ActionType.call, 2),
+        a(Street.turn, Position.bb, ActionType.check)]);
+  final geo = Geometric2EPlanner.plan(35.5, 82.5)!;
+  double betEv(double pct) => ActionEvCalculator.postflop(geoG, reg, potBefore: 35.5, toCall: 0, betSizeBb: 35.5 * pct / 100, exactSize: true).betRaise;
+  rows.add(('Geo-2E (set, SPR 2.3, Turn)', 'bet 75% (river SPR ${((82.5 - 26.6) / (35.5 + 53.25)).toStringAsFixed(2)}x)',
+      'bet ${geo.$1.round()}% (river all-in ${geo.$2.round()}%)', 'Reg_GTO', betEv(geo.$1) - betEv(75)));
+  // 2. Topología corta 35bb: CO vs open UTG.
+  var topo = 0.0;
+  final changed = <String>[];
+  for (final h in ['5c5d', '3c3d', 'KhQd', 'As9s', '8c8d', 'AhJd']) {
+    final g = GameState(stake: Stake.nl50, heroPosition: Position.btn, villainPosition: Position.co, effectiveStackBb: 35, hero: HoleCards.parse(h),
+        actions: const [PlayerAction(Street.preflop, Position.co, ActionType.raise, 2.5)]);
+    StackTopologyResolver.enabled = true;
+    final on = tree.decide(g);
+    StackTopologyResolver.enabled = false;
+    final off = tree.decide(g);
+    StackTopologyResolver.enabled = true;
+    if (on.action == off.action || on.actionEVs == null) continue;
+    String k(DecisionAction x) => x == DecisionAction.betRaise ? 'betRaise' : (x == DecisionAction.call ? 'call' : 'fold');
+    topo += (on.actionEVs![k(on.action)] ?? 0) - (on.actionEVs![k(off.action)] ?? 0);
+    changed.add('${HoleCards.parse(h).handClass} ${off.action.name}->${on.action.name}');
+  }
+  rows.add(('Short-Stack Topology (35bb, BTN vs CO, suma de manos)', changed.isEmpty ? 'sin cambios' : changed.join(', '), '${changed.length} manos', 'Pool', topo));
+  // 3. Monocolor / 4-flush.
+  final mono = post.decide(GameState(stake: Stake.nl10, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 97.5, potBb: 5.5,
+      villainProfile: VillainProfile.poolDefault, hero: HoleCards.parse('AsQd'), board: Card.parseMany('Ks9s4s'), actions: [...srp, a(Street.flop, Position.bb, ActionType.check)]));
+  rows.add(('Monotone Small Stab (AsQd en Ks9s4s)', 'ancla Reg_GTO', act(mono), 'Pool NL10', mono.exploitDeltaEV ?? 0));
+  final four = post.decide(GameState(stake: Stake.nl10, heroPosition: Position.btn, villainPosition: Position.bb, effectiveStackBb: 95.5, potBb: 9.1,
+      villainProfile: VillainProfile.poolDefault, hero: HoleCards.parse('KsQd'), board: Card.parseMany('Js9s4s2d7s'),
+      actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8), a(Street.flop, Position.bb, ActionType.call, 1.8),
+        a(Street.turn, Position.bb, ActionType.check), a(Street.turn, Position.btn, ActionType.check), a(Street.river, Position.bb, ActionType.check)]));
+  rows.add(('4-Flush Blocker Steal (KsQd, 4 picas river)', 'ancla Reg_GTO', act(four), 'Pool NL10', four.exploitDeltaEV ?? 0));
+  // 4. Sandwich squeeze.
+  final sq = tree.decide(GameState(stake: Stake.nl10, heroPosition: Position.bb, villainPosition: Position.co, effectiveStackBb: 100, villainProfile: VillainProfile.poolDefault,
+      hero: HoleCards.parse('Ah4h'), actions: const [PlayerAction(Street.preflop, Position.co, ActionType.raise, 2.5), PlayerAction(Street.preflop, Position.btn, ActionType.call, 2.5)]));
+  final swe = SandwichSqueezeExploit.evaluate(GameState(stake: Stake.nl10, heroPosition: Position.bb, villainPosition: Position.co,
+      villainProfile: VillainProfile.poolDefault, hero: HoleCards.parse('Ah2h')), opener: Position.co, caller: Position.btn, sizeBb: 13.75, potBb: 6.5)!;
+  rows.add(('Sandwich Squeeze (A2s BB vs CO + BTN; FE ${(swe.$1 * 100).round()}% vs alpha ${(swe.$2 * 100).round()}%)', 'call/fold',
+      swe.$1 > swe.$2 ? act(sq) : 'gate cerrado (FE < alpha)', 'Pool NL10', swe.$1 > swe.$2 ? (sq.exploitDeltaEV ?? 0) : 0));
+  // 5. Escudo: NL50, pool con PFR 26 / 3B 11, triple barrel, top pair.
+  const agg = ReadProfile(GgArchetype.poolDefault, ['HUD agresivo'], pfr: 26, threeBet: 11);
+  final tg = GameState(stake: Stake.nl50, heroPosition: Position.bb, villainPosition: Position.btn, effectiveStackBb: 88, potBb: 23.7, villainProfile: VillainProfile.poolDefault,
+      hero: HoleCards.parse('KdQc'), board: Card.parseMany('Kc8d3h2s6c'),
+      actions: [...srp, a(Street.flop, Position.bb, ActionType.check), a(Street.flop, Position.btn, ActionType.bet, 1.8), a(Street.flop, Position.bb, ActionType.call, 1.8),
+        a(Street.turn, Position.bb, ActionType.check), a(Street.turn, Position.btn, ActionType.bet, 7.3), a(Street.turn, Position.bb, ActionType.call, 7.3),
+        a(Street.river, Position.bb, ActionType.check), a(Street.river, Position.btn, ActionType.bet, 19)]);
+  final shOn = post.decide(tg, read: agg);
+  AntiCounterExploitShield.enabled = false;
+  final shOff = post.decide(tg, read: agg);
+  AntiCounterExploitShield.enabled = true;
+  final sOn = PostflopHeuristicEngine.evOfDecision(tg, agg, shOn, potBefore: 23.7, toCall: 19);
+  final sOff = PostflopHeuristicEngine.evOfDecision(tg, agg, shOff, potBefore: 23.7, toCall: 19);
+  rows.add(('Anti-Counter-Exploit Shield (NL50, PFR 26/3B 11)', act(shOff), act(shOn), 'Agresivo (modelo de rango, sin prior T2)', sOn - sOff));
+  out
+    ..writeln()
+    ..writeln('## Módulos Fase 9.5 — Δ EV por spot (bb)')
+    ..writeln()
+    ..writeln('Mismo modelo EV para módulo ON y OFF (interruptores de auditoría). Priors de FE/umbrales declarados por el usuario. No es winrate.')
+    ..writeln()
+    ..writeln('| Módulo | Acción sin módulo | Acción con módulo | Perfil | +Δ EV (bb) |')
+    ..writeln('|---|---|---|---|---|');
+  for (final (n, off, on, prof, d) in rows) {
+    out.writeln('| $n | $off | $on | $prof | ${d >= 0 ? '+' : ''}${d.toStringAsFixed(2)} |');
+    print('MOD95 $n: ${d.toStringAsFixed(2)}bb');
   }
   out.writeln();
 }

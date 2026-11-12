@@ -43,9 +43,9 @@ Generado por `docs/audit_scripts/metric_audit.dart` simulando el motor combo a c
 
 | Spot/Nodo | Stake/Perfil | Métrica Teórica (MDF/α) | Métrica del Motor | Explotabilidad (Δ Nash %) | Estado |
 |---|---|---|---|---|---|
-| Double barrel 80% Kd7s2s-4h (semi 36 / puro 48 / valor 79) | Reg | geo2 = 51.5% | 51.5% | 0.0 | OK |
-| Double barrel 80% Kd7s2s-4h (semi 36 / puro 276 / valor 79) | Scared (pot>35bb, capado) | geo2 = 51.5% x 2.0 = 100.0% | 79.7% | 20.3 | Justificado: Exploit_Bluff_Factor 2.0 (scaredMoneyReg) |
-| Double barrel 100% Kd7s2s-4h (semi 28 / puro 49 / valor 79) | Fish | geo2 = 53.3% x 0.5 = 26.7% | 49.4% | 22.7 | Justificado: Exploit_Bluff_Factor 0.5 (recPassiveFish) |
+| Double barrel 69% Kd7s2s-4h (semi 36 / puro 45 / valor 79) | Reg | geo2 = 50.3% | 50.4% | 0.1 | OK |
+| Double barrel 69% Kd7s2s-4h (semi 36 / puro 251 / valor 79) | Scared (pot>35bb, capado) | geo2 = 50.3% x 2.0 = 100.0% | 78.3% | 21.7 | Justificado: Exploit_Bluff_Factor 2.0 (scaredMoneyReg) |
+| Double barrel 100% Kd7s2s-4h (semi 27 / puro 49 / valor 79) | Fish | geo2 = 53.3% x 0.5 = 26.7% | 49.0% | 22.4 | Justificado: Exploit_Bluff_Factor 0.5 (recPassiveFish) |
 | Fold BB vs barrel 75% (As7d2c5h) | nl100 Reg | 1-MDF = 42.8% | 42.3% | 0.5 | OK |
 | Fold BB vs barrel 75% (Qc7h2dKs) | nl100 Reg | 1-MDF = 42.8% | 42.4% | 0.4 | OK |
 | Fold BB vs barrel 75% (Kd8s3s4c) | nl100 Reg | 1-MDF = 42.8% | 41.0% | 1.8 | OK |

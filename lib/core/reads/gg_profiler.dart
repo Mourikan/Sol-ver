@@ -16,12 +16,15 @@ class SmartHudInput {
 
 /// Read resultante. Los priors (85%, 70%) son lecturas poblacionales especificadas por el usuario, no frecuencias de solver.
 class ReadProfile {
-  const ReadProfile(this.archetype, this.reasons, {this.threeBet, this.foldTo4Bet});
+  const ReadProfile(this.archetype, this.reasons, {this.threeBet, this.foldTo4Bet, this.pfr});
 
   final GgArchetype archetype;
   final List<String> reasons;
   final double? threeBet;
   final double? foldTo4Bet;
+
+  /// PFR del SmartHUD (escudo anti-contra-explotación).
+  final double? pfr;
 
   /// 4-bet bluff habilitado: reg/GTO con fold-to-4bet >= 45% (o desconocido); nunca vs fish/station/trapper/3-bettor < 4%.
   bool get allows4BetBluff {
@@ -62,7 +65,7 @@ class GgProfiler {
 
   static ReadProfile classify(SmartHudInput h, [Set<ActionTag> tags = const {}]) {
     final r = _classify(h, tags);
-    return ReadProfile(r.archetype, r.reasons, threeBet: h.threeBet, foldTo4Bet: h.foldTo4Bet);
+    return ReadProfile(r.archetype, r.reasons, threeBet: h.threeBet, foldTo4Bet: h.foldTo4Bet, pfr: h.pfr);
   }
 
   static ReadProfile _classify(SmartHudInput h, Set<ActionTag> tags) {

@@ -8,6 +8,7 @@ import '../reads/unmapped_spots_resolver.dart';
 import '../postflop/postflop_ranges.dart';
 import 'hand_normalizer.dart';
 import 'structure_modifier.dart';
+import 'stack_topology_resolver.dart';
 import 'preflop_ranges_db.dart';
 import 'range_notation.dart';
 
@@ -217,6 +218,9 @@ class PreflopSolverEngine {
   /// EQR por profundidad: >120bb premia suited/pares (nutted), <60bb premia pares y high cards.
   static double stackEqrMultiplier(int i, double? stack) {
     if (stack == null) return 1.0;
+    // Topología corta 20-48bb: sustituye (no apila) el ajuste de profundidad.
+    final topo = StackTopologyResolver.eqrMultiplier(i, stack);
+    if (topo != null) return topo;
     if (stack > StructureModifier.ultraDeepBb) return StructureModifier.ultraDeepEqr(i, stack) * (Matrix169.isPair(i) || Matrix169.isSuited(i) ? 1.05 : 0.97);
     final pair = Matrix169.isPair(i), suited = Matrix169.isSuited(i);
     final high = Matrix169.highRank(i), low = Matrix169.lowRank(i);
@@ -404,6 +408,27 @@ class PreflopSolverEngine {
       f3 = 1;
       fc = 0;
       notes.add('Maniac ATS>=55%: 3-bet Def +${(maniac3BetExpansion * 100).round()}% lineal (${Matrix169.percent(maniacDefense3Bet(hero, opener, tier)).toStringAsFixed(1)}%).');
+    }
+
+    // Short_Mid_Stack (20-48bb): decisión por EV con el EQR de topología (sin implícitas para set-mining/flushes).
+    if (StackTopologyResolver.shortMid(s.effectiveStackBb) && fc > 0) {
+      final evs = preflopEVs(s, ctx, hand);
+      final evCall = evs['call'] ?? 0, ev3 = evs['betRaise'] ?? 0;
+      if (StackTopologyResolver.eqrMultiplier(i, s.effectiveStackBb) == StackTopologyResolver.bonus && ev3 > evCall && ev3 > 0) {
+        f3 = (f3 + fc).clamp(0.0, 1.0);
+        fc = 0;
+        notes.add('Short_Stack_Topology: broadway/par alto => 3-Bet Linear Commit (EV 3-bet ${ev3.toStringAsFixed(2)} > call ${evCall.toStringAsFixed(2)}bb).');
+      } else if (evCall <= 0) {
+        fc = 0;
+        if (ev3 <= 0 && StackTopologyResolver.eqrMultiplier(i, s.effectiveStackBb) == StackTopologyResolver.cut) f3 = 0;
+        notes.add('Short_Stack_Topology: EV(call) ${evCall.toStringAsFixed(2)}bb <= 0 sin implícitas (stack ${s.effectiveStackBb!.round()}bb).');
+      }
+    }
+    // Behind_Squeeze_Threat: ciega >= 100bb por hablar => cold call exige +6% de equity.
+    if (fc > 0 && hero != Position.bb && hero != Position.sb && StackTopologyResolver.behindSqueezeThreat(s) &&
+        eq < req + StackTopologyResolver.behindMargin) {
+      fc = 0;
+      notes.add('Behind_Squeeze_Threat: stack >= 100bb en ciegas => cold call exige +${(StackTopologyResolver.behindMargin * 100).round()}% (eq ${_p(eq)} < ${_p(req + StackTopologyResolver.behindMargin)}).');
     }
 
     final f = {PreflopAction.raise: f3, PreflopAction.call: fc, PreflopAction.fold: 1 - f3 - fc};

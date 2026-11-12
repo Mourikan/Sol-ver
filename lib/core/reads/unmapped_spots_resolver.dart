@@ -4,6 +4,7 @@ import '../models/game_state.dart';
 import '../postflop/defense_budget.dart';
 import '../postflop/hand_tier.dart';
 import '../postflop/turn_river_solver.dart';
+import 'anti_counter_exploit_shield.dart';
 import 'gg_profiler.dart';
 
 /// Hechos de línea (detección O(acciones)) para los 5 spots no cubiertos y los presets sin HUD.
@@ -30,11 +31,11 @@ class LineFacts {
 
 /// Plan de acción de un spot no cubierto + contexto de EV (prior) compartido con el ancla.
 class SpotPlan {
-  const SpotPlan(this.name, this.action, this.why, {this.sizePct, this.raiseMult, this.bluffShare});
+  const SpotPlan(this.name, this.action, this.why, {this.sizePct, this.raiseMult, this.bluffShare, this.foldEquityOverride});
   final String name;
   final DecisionAction action;
   final String why;
-  final double? sizePct, raiseMult, bluffShare;
+  final double? sizePct, raiseMult, bluffShare, foldEquityOverride;
 }
 
 class UnmappedSpotsResolver {
@@ -163,7 +164,8 @@ class UnmappedSpotsResolver {
     // 4. ThreeBet_Pot_Underpair_Pain_Guard (TT-QQ bajo A/K en 3BP).
     final under = s.hero!.isPair && s.hero!.high.rank.value >= Rank.ten.value && s.hero!.high.rank.value <= Rank.queen.value &&
         s.board.take(3).any((c) => c.rank.value > s.hero!.high.rank.value);
-    if (under && toCall > 0 && s.potType == PotType.threeBet && s.preflopAggressor == s.villainPosition) {
+    if (under && toCall > 0 && s.potType == PotType.threeBet && s.preflopAggressor == s.villainPosition &&
+        !AntiCounterExploitShield.active(s.stake, r)) {
       if (s.street == Street.flop && f.threeBetBigCbetHighBoard) {
         return const SpotPlan('ThreeBet_Underpair_Pain_Guard', DecisionAction.fold,
             'Nutted_Ax_Commitment: c-bet >= 65% en A/K-x-x (3BP, NL2-NL50) => aire < 10% => Immediate_Flop_Fold.',

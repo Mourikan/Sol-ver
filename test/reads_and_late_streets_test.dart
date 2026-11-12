@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sol_ver/core/postflop/geometric_2e_planner.dart';
 import 'package:sol_ver/core/models/decision_output.dart';
 import 'package:sol_ver/core/models/game_state.dart';
 import 'package:sol_ver/core/postflop/postflop_heuristic_engine.dart';
@@ -106,7 +107,8 @@ void main() {
     test('Turn: línea de valor (set) + farol con blocker As, overbet geométrico 75-85%, factor 2.0', () {
       final p = solver.plan(turn('KhKs'), scared, heroHadInitiative: true, pot: 35.5, stack: 82.5);
       expect(p.exploitFactor, 2.0);
-      expect(p.sizePct, inInclusiveRange(75, 85));
+      // Fase 9.5: SPR 2.3 en ventana Geo-2E => sizing geométrico de 2 calles (sustituye el 75-85%).
+      expect(p.sizePct, closeTo(Geometric2EPlanner.plan(35.5, 82.5)!.$1, 1e-9));
       // Turn: presupuesto geométrico de 2 calles x factor 2.0 (acotado a 100%: se usan todos los candidatos disponibles).
       expect(p.targetBluffShare, closeTo(min(1.0, TurnRiverSolver.twoStreetTurnShare(p.sizePct) * 2), 1e-12));
       expect(p.bluffShare, lessThanOrEqualTo(p.targetBluffShare + 0.05));
@@ -115,7 +117,7 @@ void main() {
       final b = post.decide(turn('AsQd'), read: scared);
       expect(v.action, DecisionAction.betRaise);
       expect(b.action, DecisionAction.betRaise);
-      expect(b.sizing!.potPct, inInclusiveRange(75, 85));
+      expect(b.sizing!.potPct, closeTo(Geometric2EPlanner.plan(35.5, 82.5)!.$1, 0.01));
       expect(v.sizing!.bb, closeTo(b.sizing!.bb, 1e-9));
     });
     test('River: valor + farol con key blocker (As al color) all-in/presión máxima', () {

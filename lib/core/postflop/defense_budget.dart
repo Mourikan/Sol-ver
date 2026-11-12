@@ -6,6 +6,7 @@ import '../models/game_state.dart';
 import '../preflop/range_notation.dart';
 import '../discipline/timing_tells_matrix.dart';
 import '../reads/gg_profiler.dart';
+import '../reads/anti_counter_exploit_shield.dart';
 import '../reads/unmapped_spots_resolver.dart';
 import '../evaluators/board_analyzer.dart';
 import 'flop_lookup_table.dart';
@@ -69,7 +70,13 @@ class DefenseBudget {
 
   static const tankFloor = 0.25;
 
-  static double factor(ReadProfile r, Stake stake) => switch (r.archetype) {
+  static double factor(ReadProfile r, Stake stake) {
+    final f = _factor(r, stake);
+    // Escudo anti-contra-explotación: nunca por debajo de MDF x1.0 en NL50+ vs agresivos.
+    return AntiCounterExploitShield.active(stake, r) && f < 1.0 ? 1.0 : f;
+  }
+
+  static double _factor(ReadProfile r, Stake stake) => switch (r.archetype) {
         GgArchetype.agroSpewy => 1.18,
         GgArchetype.recPassiveFish when stake.index <= Stake.nl50.index => 0.82,
         GgArchetype.scaredMoneyReg when stake.index <= Stake.nl50.index => 0.90,
