@@ -124,7 +124,7 @@ class PreflopRangesDb {
 
   static const _rfiMicro = {
     Position.utg: '22+,A2s+,KTs+,QTs+,JTs,T9s,98s,AJo+,KQo',
-    Position.mp: '22+,A2s+,K9s+,Q9s+,J9s+,T9s,98s,87s,ATo+,KJo+',
+    Position.mp: '22+,A2s+,K8s+,Q9s+,J9s+,T9s,98s,87s,76s,A9o+,KJo+,QJo',
     Position.co: '22+,A2s+,K5s+,Q8s+,J8s+,T8s+,97s+,86s+,76s,65s,54s,A9o+,KTo+,QTo+,JTo',
     Position.btn: '22+,A2s+,K2s+,Q4s+,J6s+,T6s+,96s+,85s+,74s+,64s+,53s+,43s,A2o+,K8o+,Q9o+,J9o+,T9o,98o',
     Position.sb: '22+,A2s+,K2s+,Q5s+,J7s+,T7s+,97s+,86s+,75s+,64s+,54s,A2o+,K9o+,Q9o+,J9o+,T9o',

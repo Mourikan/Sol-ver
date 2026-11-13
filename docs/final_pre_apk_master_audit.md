@@ -1,20 +1,20 @@
 # Auditoría Maestra Pre-APK (Fase 9.9)
 
-Generado por `docs/audit_scripts/master_pre_apk_audit.dart` (2026-11-12T19:17 UTC).
+Generado por `docs/audit_scripts/master_pre_apk_audit.dart` (2026-11-13T00:35 UTC).
 
 ## 1. Resumen ejecutivo y veredicto
 
-**Veredicto: READY FOR APK RELEASE (configuración y código certificados).**
+**Veredicto: BLOCKED.**
 
 > El contenedor de auditoría **no tiene Android SDK**: `flutter build apk` no se ejecutó aquí. Código, tests, manifest y Gradle están certificados; el binario debe compilarse en una máquina con Android SDK (comando en §5).
 
 | Vector | Estado | Detalle |
 |---|---|---|
-| V1 | PASS | analyze: 0 errors, 0 warnings, 0 infos | tests: 234/234 PASS | manifest main: sin permisos | pubspec: solo Flutter SDK | release: key.properties o firma debug |
+| V1 | PASS | analyze: 0 errors, 0 warnings, 0 infos | tests: 227/227 PASS | manifest main: sin permisos | pubspec: solo Flutter SDK | release: key.properties o firma debug |
 | V2 | PASS | Δ Nash 2.4% | metric_audit fallos 0 | Coverage 10/10 | monotonía 169x7 OK | buckets fuera 0/7308 | NL50+ Unknown_Reg+escudo ON |
 | V3 | PASS | exploitDeltaEV<0: 0 (6 arquetipos x 7 stakes) | colisiones abiertas 0 | módulos dev 1669, Δ<=0 0 | T1-T6 6/6 sin Δ<=0 |
 | V4 | PASS | FSM tortura OK (closures=4 pot=119.00), Action_Closure_Invariant y rewind exacto |
-| V5 | PASS | 0 overflows en 360x780, 390x844, 412x915 | narrativa 555/555 | RunoutForecast 370/370 | latencia p50 0.47 ms p99 1.75 ms | PackedLookupRepository 4.91 ms |
+| V5 | FAIL | 0 overflows en 360x780, 390x844, 412x915 | narrativa 555/555 | RunoutForecast 370/370 | latencia p50 0.53 ms p99 2.00 ms | PackedLookupRepository 3.79 ms |
 | V6 | PASS | 0 persistencia/red en lib/ (sin Hand History, sin BD, sin HTTP/sockets) |
 
 ## 2. Salud técnica
@@ -22,12 +22,12 @@ Generado por `docs/audit_scripts/master_pre_apk_audit.dart` (2026-11-12T19:17 UT
 | Ítem | Resultado |
 |---|---|
 | `flutter analyze --no-pub` | 0 errors, 0 warnings, 0 infos |
-| `flutter test` | 234 PASS / 0 FAIL |
-| Latencia evaluación completa (370 decisiones postflop, 5 perfiles) | p50 0.47 ms · p99 1.75 ms |
-| Arranque `PackedLookupRepository` | 4.91 ms |
+| `flutter test` | 227 PASS / 0 FAIL |
+| Latencia evaluación completa (370 decisiones postflop, 5 perfiles) | p50 0.53 ms · p99 2.00 ms |
+| Arranque `PackedLookupRepository` | 3.79 ms |
 | Manifest release (`src/main`) | sin permisos (100% offline; INTERNET solo en debug/profile para hot reload) |
 | Dependencias `pubspec.yaml` | solo Flutter SDK (0 paquetes externos) |
-| Firma release | `android/key.properties` si existe (gitignored); si no, firma debug (sideload) |
+| Firma release | firma debug en release (APK instalable por sideload; para Play Store añadir keystore propio) |
 | Android SDK en el entorno | ausente (build no ejecutado aquí) |
 
 ## 3. Certificación matemática y explotativa

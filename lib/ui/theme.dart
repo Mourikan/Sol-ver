@@ -4,24 +4,24 @@ import '../core/models/cards.dart';
 
 class AppColors {
   AppColors._();
-  static const bg = Color(0xFF05070A);
-  static const surface = Color(0xFF0F141C);
-  static const surfaceHi = Color(0xFF2A3446);
-  static const text = Color(0xFFF2F5F8);
-  static const muted = Color(0xFF8A96A6);
-  static const accent = Color(0xFF00E5A0);
-  static const turn = Color(0xFFFFD54A);
-  static const danger = Color(0xFFFF5A5F);
+  static const bg = Color(0xFF111315);
+  static const surface = Color(0xFF1A1D21);
+  static const surfaceHi = Color(0xFF2B3036);
+  static const text = Color(0xFFF1F5F9);
+  static const muted = Color(0xFF94A3B8);
+  static const accent = Color(0xFF16A34A);
+  static const turn = Color(0xFFD97706);
+  static const danger = Color(0xFFDC2626);
   static const raise = Color(0xFFFF9F1C);
-  static const call = Color(0xFF3FA7FF);
+  static const call = Color(0xFF2563EB);
 
   // Paleta Obsidian (GTO Wizard / GG): acciones.
-  static const border = Color(0xFF2A3446);
-  static const emerald = Color(0xFF00F59B);
-  static const cyan = Color(0xFF00D2FF);
-  static const amber = Color(0xFFFFB800);
-  static const crimson = Color(0xFFFF2E54);
-  static const violet = Color(0xFFB86BFF);
+  static const border = Color(0xFF2B3036);
+  static const emerald = Color(0xFF16A34A);
+  static const cyan = Color(0xFF2563EB);
+  static const amber = Color(0xFFD97706);
+  static const crimson = Color(0xFFDC2626);
+  static const violet = Color(0xFF7C6FB0);
 
   static Color suit(Suit s) => switch (s) {
         Suit.spades => const Color(0xFFE5E7EB),

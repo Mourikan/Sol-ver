@@ -67,6 +67,15 @@ class PreflopContext {
 }
 
 class PreflopSolverEngine {
+  /// Manos con fold 0% vs cualquier open simple (todas las posiciones y rake tiers).
+  static final neverFoldVsRfi = RangeNotation.parse('88+,AKs,AKo,AQs,KQs');
+
+  /// Flat IP permitido incluso en high-rake vs UTG/MP (el 3-bet aislaría contra un rango demasiado fuerte).
+  static final microFlatVsEarly = RangeNotation.parse('77-TT,AQs,KQs');
+
+  /// BTN/BB vs open <= 3bb con >= 80bb: pares bajos y suited connectors por implícitas/EQR.
+  static final impliedOddsCalls = RangeNotation.parse('22-88,JTs,T9s,98s,87s');
+
   /// Expansión del 3-bet de defensa vs Maniac (prior del usuario, Fase 9.1).
   static const maniac3BetExpansion = 0.12;
 
@@ -481,6 +490,26 @@ class PreflopSolverEngine {
         eq < req + StackTopologyResolver.behindMargin) {
       fc = 0;
       notes.add('Behind_Squeeze_Threat: stack >= 100bb en ciegas => cold call exige +${(StackTopologyResolver.behindMargin * 100).round()}% (eq ${_p(eq)} < ${_p(req + StackTopologyResolver.behindMargin)}).');
+    }
+
+    // Never_Fold_Vs_RFI_Floor (Fase 11.0): frente a un open simple 2.0-3.5bb, el fold de estas manos es 0% en cualquier
+    // posición y rake tier. IP => flat (protegido) o el 3-bet que ya tuviera; SB (sin cold call) => 3-bet lineal; BB => call.
+    final simpleOpen = ctx.coldCallers == 0 && ctx.raiseSizeBb >= 2.0 && ctx.raiseSizeBb <= 3.5;
+    if (simpleOpen && 1 - f3 - fc > 1e-9) {
+      final floor = neverFoldVsRfi[i] > 0;
+      final deep = (s.effectiveStackBb ?? 100) >= 80 && ctx.raiseSizeBb <= 3.0;
+      final speculative = deep && (hero == Position.btn || hero == Position.bb) && impliedOddsCalls[i] > 0;
+      final ipFlat = hero != Position.sb && hero != Position.bb && (opener == Position.utg || opener == Position.mp) && microFlatVsEarly[i] > 0;
+      if (floor || speculative || ipFlat) {
+        final rest = 1 - f3 - fc;
+        if (hero == Position.sb) {
+          f3 += rest;
+        } else {
+          fc += rest;
+        }
+        notes.add('Never_Fold_Vs_RFI_Floor: ${hand.label} no se foldea vs open ${ctx.raiseSizeBb}bb '
+            '(${hero == Position.sb ? '3-bet lineal (SB sin cold call)' : (speculative && !floor ? 'call por implícitas/EQR' : 'flat protegido')}).');
+      }
     }
 
     final f = {PreflopAction.raise: f3, PreflopAction.call: fc, PreflopAction.fold: 1 - f3 - fc};

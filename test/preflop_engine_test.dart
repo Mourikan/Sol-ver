@@ -61,13 +61,14 @@ void main() {
   });
 
   group('2. Rake Tier: MP/CO vs UTG open', () {
-    test('NL10: 0% cold call en MP y CO (169 manos)', () {
+    test('NL10: tabla 3-bet-or-fold en MP/CO; cold call solo con el piso anti-fold (Fase 11.0: 77-TT, AQs, KQs)', () {
       for (final h in [Position.mp, Position.co]) {
         expect(PreflopRangesDb.vsRfi(h, Position.utg, RakeTier.microHighRake).percent(PreflopAction.call), 0);
       }
-      for (final c in ['8h8d', 'KhQd']) {
-        expect(vsOpen(Stake.nl10, Position.co, Position.utg, c).action, DecisionAction.fold);
-        expect(vsOpen(Stake.nl10, Position.mp, Position.utg, c).action, DecisionAction.fold);
+      for (final pos in [Position.co, Position.mp]) {
+        expect(vsOpen(Stake.nl10, pos, Position.utg, '8h8d').action, isNot(DecisionAction.fold));
+        expect(vsOpen(Stake.nl10, pos, Position.utg, 'KhQd').action, DecisionAction.fold);
+        expect(vsOpen(Stake.nl10, pos, Position.utg, '5h5d').action, DecisionAction.fold);
       }
     });
     test('NL100: CO flat 88 IP (alta EQR), KQo sigue fold (dominada)', () {
@@ -175,7 +176,7 @@ void main() {
       double p(Position x, RakeTier t) => PreflopRangesDb.rfi(x, t).percent(PreflopAction.raise);
       const hr = RakeTier.microHighRake, mr = RakeTier.midRake;
       expect(p(Position.utg, hr), inInclusiveRange(14, 17));
-      expect(p(Position.mp, hr), inInclusiveRange(17.5, 20.5));
+      expect(p(Position.mp, hr), inInclusiveRange(20, 22)); // Fase 11.0: MP ~21%
       expect(p(Position.co, hr), inInclusiveRange(25.5, 28.5));
       expect(p(Position.btn, hr), inInclusiveRange(42, 46));
       expect(p(Position.sb, hr), inInclusiveRange(38.5, 41.5));

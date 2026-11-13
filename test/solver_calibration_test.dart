@@ -87,13 +87,13 @@ void main() {
       expect(micro[DecisionAction.betRaise], closeTo(.75, 1e-6));
       expect(micro[DecisionAction.fold], closeTo(.25, 1e-6));
     });
-    test('CO vs MP 88: [35,65,0] mid / [35,0,65] micro', () {
+    test('CO vs MP 88: [35,65,0] mid y micro (Fase 11.0: Never_Fold_Vs_RFI_Floor, 88 nunca foldea)', () {
       final mid = vs(Stake.nl100, Position.co, Position.mp, '8h8d').frequencies;
       expect(mid[DecisionAction.betRaise], closeTo(.35, 1e-6));
       expect(mid[DecisionAction.call], closeTo(.65, 1e-6));
       final micro = vs(Stake.nl10, Position.co, Position.mp, '8h8d').frequencies;
       expect(micro[DecisionAction.betRaise], closeTo(.35, 1e-6));
-      expect(micro[DecisionAction.fold], closeTo(.65, 1e-6));
+      expect(micro[DecisionAction.call], closeTo(.65, 1e-6));
     });
     test('BB vs BTN: fronteras mezcladas (bluffs polares 3-bet/call y calls marginales)', () {
       final mixes = <String>[];

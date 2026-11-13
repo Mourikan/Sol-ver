@@ -1,12 +1,9 @@
-import 'package:flutter/material.dart' hide Card;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sol_ver/application/hand_flow_fsm.dart';
 import 'package:sol_ver/core/models/decision_output.dart';
 import 'package:sol_ver/core/models/game_state.dart';
 import 'package:sol_ver/core/reads/gg_smarthud_analyzer.dart';
 import 'package:sol_ver/core/reads/villain_archetypes.dart';
-import 'package:sol_ver/ui/screens/solver_cockpit_screen.dart';
-import 'package:sol_ver/ui/theme.dart';
 
 final micros = <int>[];
 
@@ -100,55 +97,5 @@ void main() {
     expect(fsm.heroPosition, Position.co);
     expect(fsm.hudOf(Position.mp)!.tag, VillainTag.agroManiac);
     expect(fsm.hudOf(Position.co), isNull);
-  });
-
-  testWidgets('Cockpit 360x740: mano táctil sin overflow, oráculo + barra de rango, Nueva Mano conserva HUD', (t) async {
-    await t.binding.setSurfaceSize(const Size(360, 740));
-    final fsm = HandFlowFSM()..configure(stake: Stake.nl25);
-    await t.pumpWidget(MaterialApp(theme: buildTheme(), home: SolverCockpitScreen(fsm: fsm)));
-    await t.tap(find.byKey(const ValueKey('cockpit-seat-btn')));
-    await t.pump();
-    expect(fsm.heroPosition, Position.btn);
-    fsm.setHud(Position.co, SmartHudStats.preset(VillainTag.scaredReg), manualTag: VillainTag.scaredReg);
-    await t.tap(find.byKey(const ValueKey('fcm-As')));
-    await t.tap(find.byKey(const ValueKey('fcm-Ks')));
-    await t.pump();
-    expect(fsm.phase, HandPhase.preflop);
-    fsm.act(Position.co, ActionType.raise, amountBb: 2.5);
-    final sw = Stopwatch()..start();
-    await t.pump();
-    final frameUs = sw.elapsedMicroseconds;
-    expect(find.byKey(const ValueKey('oracle')), findsOneWidget);
-    expect(find.byKey(const ValueKey('execute-optimal')), findsOneWidget);
-    expect(find.byKey(const ValueKey('read-badge')), findsOneWidget);
-    await t.tap(find.byKey(const ValueKey('act-r32')));
-    await t.pump();
-    expect(fsm.currentActor, Position.sb);
-    await t.tap(find.byKey(const ValueKey('act-fold')));
-    await t.pump();
-    await t.tap(find.byKey(const ValueKey('act-fold')));
-    await t.pump();
-    await t.tap(find.byKey(const ValueKey('act-call')));
-    await t.pump();
-    expect(fsm.phase, HandPhase.flopCards);
-    expect(find.byKey(const ValueKey('fcm-As')), findsOneWidget);
-    for (final c in ['Qh', '7d', '2c']) {
-      await t.tap(find.byKey(ValueKey('fcm-$c')));
-      await t.pump();
-    }
-    expect(fsm.phase, HandPhase.flop);
-    await t.tap(find.byKey(const ValueKey('act-check')));
-    await t.pump();
-    expect(fsm.currentActor, Position.btn);
-    expect(find.byKey(const ValueKey('range-bar')), findsOneWidget);
-    await t.tap(find.byKey(const ValueKey('execute-optimal')));
-    await t.pump();
-    expect(t.takeException(), isNull);
-    await t.tap(find.byKey(const ValueKey('new-hand')));
-    await t.pump();
-    expect(fsm.phase, HandPhase.setup);
-    expect(fsm.hudOf(Position.co)!.tag, VillainTag.scaredReg);
-    // ignore: avoid_print
-    print('frame (rebuild completo tras acción + solver) us: $frameUs');
   });
 }

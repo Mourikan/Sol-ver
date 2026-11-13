@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' hide Card;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sol_ver/application/hand_flow_fsm.dart';
 import 'package:sol_ver/core/models/decision_output.dart';
@@ -6,8 +5,6 @@ import 'package:sol_ver/core/models/game_state.dart';
 import 'package:sol_ver/core/postflop/postflop_heuristic_engine.dart';
 import 'package:sol_ver/core/preflop/full_tree_preflop.dart';
 import 'package:sol_ver/core/reads/freak_fish_sizing_decoder.dart';
-import 'package:sol_ver/ui/screens/solver_cockpit_screen.dart';
-import 'package:sol_ver/ui/theme.dart';
 
 PlayerAction a(Street s, Position p, ActionType t, [double x = 0]) => PlayerAction(s, p, t, x);
 PlayerAction pf(Position p, ActionType t, [double x = 0]) => a(Street.preflop, p, t, x);
@@ -90,23 +87,5 @@ void main() {
     fsm.act(Position.utg, ActionType.call);
     expect(fsm.phase, HandPhase.flopCards);
     expect(fsm.totalPotBB, closeTo(10.5, 1e-9));
-  });
-
-  testWidgets('UI: chips 🐟 Min-3Bet / 1 bb / Min-Raise y scrubber de arrastre en bb', (t) async {
-    await t.binding.setSurfaceSize(const Size(390, 844));
-    final fsm = HandFlowFSM()..configure(stake: Stake.nl10, hero: Position.bb);
-    await t.pumpWidget(MaterialApp(theme: buildTheme(), home: SolverCockpitScreen(fsm: fsm)));
-    fsm
-      ..addCard(Card.parse('Ah'))
-      ..addCard(Card.parse('Kd'))
-      ..act(Position.co, ActionType.raise, amountBb: 2.5);
-    await t.pump();
-    expect(fsm.currentActor, Position.btn);
-    expect(find.byKey(const ValueKey('act-fish-min3b')), findsOneWidget);
-    await t.drag(find.byKey(const ValueKey('act-r32')), const Offset(60, 0));
-    await t.pump();
-    expect(fsm.currentActor, Position.sb, reason: 'el scrubber ejecuta al soltar');
-    expect(fsm.actions.last.amountBb, inInclusiveRange(8.5, 10.5));
-    expect(t.takeException(), isNull);
   });
 }

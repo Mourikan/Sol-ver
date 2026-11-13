@@ -34,11 +34,11 @@ void main() {
     expect(fsm.phase, HandPhase.setup);
   });
 
-  testWidgets('App arranca en dark mode con el cockpit y el teclado 4x13', (t) async {
+  testWidgets('App arranca en dark mode con el flujo lineal y el selector Rango -> Palo', (t) async {
     await t.binding.setSurfaceSize(const Size(360, 740));
     await t.pumpWidget(const SolVerApp());
     expect(find.byType(SolverCockpitScreen), findsOneWidget);
-    expect(find.byKey(const ValueKey('fcm-As')), findsOneWidget);
+    expect(find.byKey(const ValueKey('rank-A')), findsOneWidget);
     expect(Theme.of(t.element(find.byType(SolverCockpitScreen))).brightness, Brightness.dark);
   });
 }

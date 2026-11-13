@@ -26,13 +26,13 @@ Rake: plantilla editable `RakeConfig.byStake` (no corresponde a una sala concret
 
 | Stake | Tier | Rake % / cap | Rake efectivo SRP / 3BP | VPIP / PFR first-in (aprox) | Defensa BB vs BTN 2.5x | 3-Bet global | EV medio nodo flop BB (bb) | Δ Nash flop / turn |
 |---|---|---|---|---|---|---|---|---|
-| NL2 | High-Rake | 5.0% / 20.0bb | 5.0% / 5.0% | 32.1% / 25.5% | 48.3% | 9.0% | 1.31 | 4.6 / 1.7 |
-| NL5 | High-Rake | 5.0% / 9.0bb | 4.8% / 4.8% | 32.2% / 25.5% | 48.7% | 9.0% | 1.31 | 4.6 / 1.7 |
-| NL10 | High-Rake | 5.0% / 8.0bb | 4.5% / 4.6% | 32.2% / 25.5% | 48.8% | 9.0% | 1.31 | 4.6 / 1.7 |
-| NL25 | High-Rake | 5.0% / 4.0bb | 3.6% / 3.4% | 32.5% / 25.5% | 50.5% | 9.0% | 1.31 | 4.6 / 1.7 |
-| NL50 | Mid/Low | 5.0% / 3.0bb | 3.4% / 3.0% | 35.0% / 27.7% | 52.9% | 8.7% | 1.30 | 3.0 / 3.8 |
-| NL100 | Mid/Low | 5.0% / 2.5bb | 3.0% / 2.6% | 35.1% / 27.7% | 53.5% | 8.7% | 1.30 | 3.0 / 3.8 |
-| NL200 | Mid/Low | 5.0% / 1.5bb | 2.4% / 1.8% | 35.3% / 27.7% | 54.5% | 8.7% | 1.30 | 3.0 / 3.8 |
+| NL2 | High-Rake | 5.0% / 20.0bb | 5.0% / 5.0% | 32.5% / 25.9% | 48.3% | 9.0% | 1.31 | 4.6 / 1.7 |
+| NL5 | High-Rake | 5.0% / 9.0bb | 4.8% / 4.8% | 32.6% / 25.9% | 48.7% | 9.0% | 1.31 | 4.6 / 1.7 |
+| NL10 | High-Rake | 5.0% / 8.0bb | 4.5% / 4.6% | 32.6% / 25.9% | 48.8% | 9.0% | 1.31 | 4.6 / 1.7 |
+| NL25 | High-Rake | 5.0% / 4.0bb | 3.6% / 3.4% | 32.9% / 25.9% | 50.5% | 9.0% | 1.31 | 4.6 / 1.7 |
+| NL50 | Mid/Low | 5.0% / 3.0bb | 3.4% / 3.0% | 35.4% / 28.1% | 52.9% | 8.7% | 1.30 | 3.0 / 3.8 |
+| NL100 | Mid/Low | 5.0% / 2.5bb | 3.0% / 2.6% | 35.5% / 28.1% | 53.5% | 8.7% | 1.30 | 3.0 / 3.8 |
+| NL200 | Mid/Low | 5.0% / 1.5bb | 2.4% / 1.8% | 35.7% / 28.1% | 54.5% | 8.7% | 1.30 | 3.0 / 3.8 |
 
 Nota: NL2–NL25 comparten cifras porque con la plantilla de rake el cap no se alcanza en botes SRP (E=22bb) ni 3BP (E=55bb): el rake efectivo es 5% en los cuatro y comparten tier (rangos High-Rake). La diferencia real entre esos niveles depende de la estructura de rake de cada sala, que el proyecto no tiene; con caps reales más altos en bb el resultado sería el mismo (5% sin tope).
 
@@ -46,7 +46,7 @@ Muestra: 960 decisiones de flop (PFA BTN con iniciativa y BB enfrentando c-bet 3
 | Apuestas finales con EV(bet) < EV(check) − banda (tras la puerta) | 0.0% |
 | Calls con EV(call) < −banda según el modelo de 1 calle (mantenidos por MDF) | 0.4% |
 | Decisiones protegidas por intervención documentada (guard, trap, gates de perfil) | 1.3% |
-| Latencia mediana / p95 por decisión con EV | 0.43 ms / 1.07 ms |
+| Latencia mediana / p95 por decisión con EV | 0.46 ms / 1.01 ms |
 
 Corrección aplicada: la puerta de EV des-escala apuestas propias −EV a check (o raise −EV a call). No convierte calls en folds: con ese modelo la defensa caía a 22–30% vs MDF 50% en River (Δ hasta 28%), es decir, el modelo de 1 calle infravalora los faroles del rival. Esos calls se reportan aquí pero los gobierna DefenseBudget / Bluff_Combo_Audit.
 

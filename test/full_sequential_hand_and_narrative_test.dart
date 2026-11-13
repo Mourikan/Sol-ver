@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart' hide Card;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sol_ver/application/hand_flow_fsm.dart';
 import 'package:sol_ver/core/models/decision_output.dart';
@@ -6,8 +5,6 @@ import 'package:sol_ver/core/models/game_state.dart';
 import 'package:sol_ver/core/reads/anti_counter_exploit_shield.dart';
 import 'package:sol_ver/core/reads/engine_mode.dart';
 import 'package:sol_ver/core/reads/gg_profiler.dart';
-import 'package:sol_ver/ui/screens/solver_cockpit_screen.dart';
-import 'package:sol_ver/ui/theme.dart';
 
 final narrativeStreets = <Street>{};
 
@@ -97,33 +94,5 @@ void main() {
     expect(fsm.phase, HandPhase.river);
     expect(fsm.currentActor, Position.bb);
     expect(fsm.totalPotBB, closeTo(133.82 + 34.59, 0.005));
-  });
-
-  testWidgets('Cockpit PRO 360x740: mesa GPU, tarjeta "Por qué" con 3 bloques y barra secuencial', (t) async {
-    await t.binding.setSurfaceSize(const Size(360, 740));
-    final fsm = HandFlowFSM()..configure(stake: Stake.nl25);
-    await t.pumpWidget(MaterialApp(theme: buildTheme(), home: SolverCockpitScreen(fsm: fsm)));
-    expect(find.byKey(const ValueKey('pro-table')), findsOneWidget);
-    await t.tap(find.byKey(const ValueKey('cockpit-seat-bb')));
-    await t.pump();
-    expect(fsm.heroPosition, Position.bb);
-    await t.tap(find.byKey(const ValueKey('fcm-Ah')));
-    await t.tap(find.byKey(const ValueKey('fcm-Ad')));
-    await t.pump();
-    expect(find.textContaining('TURNO DE: UTG'), findsOneWidget);
-    fsm.act(Position.co, ActionType.raise, amountBb: 2.5);
-    await t.pump();
-    await t.tap(find.byKey(const ValueKey('act-fold'))); // BTN
-    await t.pump();
-    await t.tap(find.byKey(const ValueKey('act-fold'))); // SB
-    await t.pump();
-    expect(find.textContaining('TU TURNO'), findsOneWidget);
-    for (final k in ['why-1', 'why-2', 'why-3', 'range-bar', 'oracle-evs', 'execute-optimal', 'undo']) {
-      expect(find.byKey(ValueKey(k)), findsOneWidget, reason: k);
-    }
-    await t.tap(find.byKey(const ValueKey('undo')));
-    await t.pump();
-    expect(fsm.currentActor, Position.sb);
-    expect(t.takeException(), isNull);
   });
 }

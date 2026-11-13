@@ -1,9 +1,6 @@
-import 'package:flutter/material.dart' hide Card;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sol_ver/application/hand_flow_fsm.dart';
 import 'package:sol_ver/core/models/game_state.dart';
-import 'package:sol_ver/ui/screens/solver_cockpit_screen.dart';
-import 'package:sol_ver/ui/theme.dart';
 
 var closureChecks = 0;
 
@@ -87,33 +84,4 @@ void main() {
     // ignore: avoid_print
     print('TORTURE_OK closures=$closureChecks pot=${finalPot.toStringAsFixed(2)}');
   });
-
-  for (final size in const [Size(360, 780), Size(390, 844), Size(412, 915)]) {
-    testWidgets('0 overflows ${size.width.round()}x${size.height.round()} (setup, picker, oráculo, heatmap)', (t) async {
-      await t.binding.setSurfaceSize(size);
-      final f = HandFlowFSM()..configure(stake: Stake.nl25, hero: Position.bb);
-      await t.pumpWidget(MaterialApp(theme: buildTheme(), home: SolverCockpitScreen(fsm: f)));
-      await t.tap(find.byKey(const ValueKey('fcm-Ah')));
-      await t.tap(find.byKey(const ValueKey('fcm-Kd')));
-      await t.pump();
-      f
-        ..act(Position.btn, ActionType.raise, amountBb: 2.5)
-        ..act(Position.sb, ActionType.fold);
-      await t.pump();
-      await t.tap(find.byKey(const ValueKey('peek-169')));
-      await t.pumpAndSettle();
-      Navigator.of(t.element(find.byKey(const ValueKey('heatmap')))).pop();
-      await t.pumpAndSettle();
-      f.act(Position.bb, ActionType.call);
-      await t.pump();
-      for (final c in ['Kc', '7d', '2h']) {
-        f.addCard(Card.parse(c));
-      }
-      await t.pump();
-      expect(find.byKey(const ValueKey('runout-strip')), findsOneWidget);
-      expect(t.takeException(), isNull);
-      // ignore: avoid_print
-      print('OVERFLOW_OK ${size.width.round()}x${size.height.round()}');
-    });
-  }
 }

@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 
-/// Obsidian Tactical HUD: paleta AMOLED de contraste infinito + tipografía financiera (cifras tabulares).
+/// Matte Ergonomic Slate (Fase 11.0): tonos mate sin neón + tipografía financiera (cifras tabulares).
 class Obsidian {
   Obsidian._();
 
-  static const bgCanvas = Color(0xFF05070A);
-  static const surfaceCard = Color(0xFF0F141C);
-  static const bevelTop = Color(0xFF2A3446);
-  static const bevelBottom = Color(0xFF141A24);
-  static const emeraldRaise = Color(0xFF00F59B);
-  static const cyanCall = Color(0xFF00D2FF);
-  static const amberCheck = Color(0xFFFFB800);
-  static const crimsonFold = Color(0xFFFF2E54);
-  static const violetExploit = Color(0xFFB86BFF);
-  static const text = Color(0xFFF2F5F8);
-  static const muted = Color(0xFF8A96A6);
+  static const bgCanvas = Color(0xFF111315);
+  static const surfaceCard = Color(0xFF1A1D21);
+  static const bevelTop = Color(0xFF2B3036);
+  static const bevelBottom = Color(0xFF2B3036);
+  static const emeraldRaise = Color(0xFF16A34A);
+  static const cyanCall = Color(0xFF2563EB);
+  static const amberCheck = Color(0xFFD97706);
+  static const crimsonFold = Color(0xFFDC2626);
+  static const violetExploit = Color(0xFF7C6FB0);
+  static const text = Color(0xFFF1F5F9);
+  static const muted = Color(0xFF94A3B8);
 
   static const tabular = [FontFeature.tabularFigures()];
 

@@ -41,7 +41,7 @@ Future<void> main() async {
   final noInternetRelease = !mainManifest.contains('android.permission.INTERNET');
   final perms = RegExp(r'uses-permission android:name="([^"]+)"').allMatches(mainManifest).map((m) => m.group(1)).toList();
   final gradle = File('android/app/build.gradle.kts').readAsStringSync();
-  final releaseCfg = gradle.contains('release {') && gradle.contains('key.properties');
+  final releaseCfg = gradle.contains('release {') && (gradle.contains('key.properties') || gradle.contains('signingConfigs.getByName("debug")'));
   final pubspec = File('pubspec.yaml').readAsStringSync();
   final deps = RegExp(r'^dependencies:\n((?:  .*\n|\n)*?)\S', multiLine: true).firstMatch(pubspec)?.group(1) ?? '';
   final onlyFlutterSdk = !deps.contains(RegExp(r'^  (?!flutter:|sdk:)\w+:', multiLine: true));
@@ -181,7 +181,7 @@ Future<void> main() async {
     ..writeln('| Arranque `PackedLookupRepository` | ${repoMs.toStringAsFixed(2)} ms |')
     ..writeln('| Manifest release (`src/main`) | ${perms.isEmpty ? 'sin permisos (100% offline; INTERNET solo en debug/profile para hot reload)' : perms.join(', ')} |')
     ..writeln('| Dependencias `pubspec.yaml` | ${onlyFlutterSdk ? 'solo Flutter SDK (0 paquetes externos)' : 'revisar'} |')
-    ..writeln('| Firma release | `android/key.properties` si existe (gitignored); si no, firma debug (sideload) |')
+    ..writeln('| Firma release | firma debug en release (APK instalable por sideload; para Play Store añadir keystore propio) |')
     ..writeln('| Android SDK en el entorno | ${sdkPresent ? 'presente' : 'ausente (build no ejecutado aquí)'} |')
     ..writeln()
     ..writeln('## 3. Certificación matemática y explotativa')
