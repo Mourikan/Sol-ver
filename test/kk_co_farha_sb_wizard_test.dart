@@ -39,29 +39,27 @@ void main() {
       expect(fsm.startingStackBb, 100);
 
       // PASO 2: antes de Hero (MP no se toca => Fold).
-      expect(step('before'), findsOneWidget);
+      expect(find.byKey(const ValueKey('preflop-table')), findsOneWidget);
       expect(step('handAndSeat'), findsNothing, reason: 'One_Step_Per_Screen');
-      expect(find.text('¿Quién entró a la mano antes de CO?'), findsOneWidget);
-      expect(find.byKey(const ValueKey('who-btn')), findsNothing, reason: 'solo asientos previos a Hero');
-      await tapKey(t, 'who-utg');
-      expect(find.text('Tamaño de apuesta de UTG: 2.5 bb'), findsOneWidget);
-      await tapKey(t, 'see-solver');
+      expect(find.text('★ TÚ (CO)'), findsOneWidget);
+      await tapKey(t, 'act-utg-or');
+      expect(find.text('Ajustar tamaño de UTG: 2.5 bb'), findsOneWidget);
+      if (find.byKey(const ValueKey('hero-go')).evaluate().isNotEmpty) await tapKey(t, 'hero-go');
       expect(fsm.seats[Position.mp]!.alive, isFalse);
 
       // PASO 3: jugada auto-aplicada + quién entró después.
-      expect(step('heroAndAfter'), findsOneWidget);
+      expect(find.byKey(const ValueKey('preflop-table')), findsOneWidget);
       expect(flow.lastHero!.action, DecisionAction.betRaise);
       expect(fsm.currentHighBetBB, closeTo(7.5, 1e-9), reason: '3-Bet ~7.5bb IP');
       expect(find.textContaining('✓ El solver asume que hiciste esta jugada'), findsOneWidget);
       expect(find.byKey(const ValueKey('override')), findsOneWidget);
-      expect(find.textContaining('Después de tu Raise a 7.5 bb'), findsOneWidget);
+      expect(find.text('3-Bet 7.5 (Auto)'), findsOneWidget);
       for (final p in ['utg', 'btn', 'sb', 'bb']) {
-        expect(find.byKey(ValueKey('paid-$p')), findsOneWidget, reason: p);
+        expect(find.byKey(ValueKey('row-$p')), findsOneWidget, reason: p);
       }
-      await tapKey(t, 'paid-sb');
-      await tapKey(t, 'paid-utg');
-      expect(find.text('Ir al Flop (3 Jugadores) ➔'), findsOneWidget);
-      await tapKey(t, 'go-flop');
+      await tapKey(t, 'act-sb-call');
+      await tapKey(t, 'act-utg-call');
+      if (find.byKey(const ValueKey('advance-flop')).evaluate().isNotEmpty) await tapKey(t, 'advance-flop');
 
       // PASO 4: cartas del flop.
       expect(step('boardCards'), findsOneWidget);

@@ -13,6 +13,7 @@ import '../widgets/decision_and_why_panel.dart';
 import '../widgets/peek_169_heatmap.dart';
 import '../widgets/playing_card_widget.dart';
 import '../widgets/bet_size_scrubber_bar.dart';
+import '../widgets/preflop_ordered_table_view.dart';
 import '../widgets/wizard_step_views.dart';
 import '../widgets/two_step_card_picker.dart';
 
@@ -184,6 +185,7 @@ class _TablePaneState extends State<TablePane> {
       builder: (context, _) {
         _autoScroll();
         _syncScrub();
+        if (fsm.phase == HandPhase.setup) positionChosen = false; // cada mano: 1° mano -> 2° posición
         final step = WizardSteps.of(flow, positionChosen: positionChosen);
         if (step != _lastStep) {
           _lastStep = step;
@@ -210,6 +212,9 @@ class _TablePaneState extends State<TablePane> {
                 ],
               ),
             ),
+            // Bottom-Docked Thumb Keypad: el teclado de cartas siempre anclado abajo.
+            if (fsm.awaitingCards)
+              Container(key: const ValueKey('picker-dock'), color: Obsidian.surfacePanel, padding: const EdgeInsets.fromLTRB(8, 0, 8, 6), child: _picker()),
           ],
         );
       },
@@ -224,15 +229,17 @@ class _TablePaneState extends State<TablePane> {
   Widget _stepView(WizardStep step) {
     final oracle = flow.lastHero != null && flow.lastHeroStreet == fsm.street ? _result(flow.lastHero!) : null;
     return switch (step) {
-      WizardStep.handAndSeat => Column(children: [_step1(), if (fsm.awaitingCards) _picker()]),
-      WizardStep.before => BeforeHeroStep(flow: flow, scrub: scrub, onScrub: _setScrub, act: _do),
-      WizardStep.heroAndAfter => Column(
+      WizardStep.handAndSeat => _step1(),
+      WizardStep.preflopTable => Column(
         children: [
           ?oracle,
-          AfterHeroStep(flow: flow, scrub: scrub, onScrub: _setScrub, act: _do),
+          PreflopOrderedTableView(flow: flow, act: _do),
         ],
       ),
-      WizardStep.boardCards => Column(children: [_boardRow(), _picker()]),
+      // Si la acción de Hero cerró la calle, su jugada + porqué siguen visibles mientras se piden las cartas.
+      WizardStep.boardCards => Column(
+        children: [if (flow.lastHero != null && fsm.actions.isNotEmpty && fsm.actions.last.actor == fsm.heroPosition) _result(flow.lastHero!), _boardRow()],
+      ),
       WizardStep.streetAction => Column(
         children: [
           _boardRow(),
@@ -414,7 +421,7 @@ class _TablePaneState extends State<TablePane> {
     final setup = fsm.phase == HandPhase.setup;
     final hero = [...fsm.heroCards, ...List<Card?>.filled(2 - fsm.heroCards.length, null)];
     return _section(
-      'PASO 1 · TU MANO Y TU POSICIÓN',
+      fsm.heroCards.length < 2 ? 'PASO 1 · 1° ELIGE TU MANO (teclado abajo)' : 'PASO 1 · 2° ELIGE TU POSICIÓN',
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -439,7 +446,7 @@ class _TablePaneState extends State<TablePane> {
                   key: const ValueKey('pos-grid'),
                   children: [
                     for (final row in [HandFlowFSM.preflopOrder.sublist(0, 3), HandFlowFSM.preflopOrder.sublist(3)])
-                      Row(children: [for (final p in row) Expanded(child: _posBtn(p, setup || flow.preflopUntouched))]),
+                      Row(children: [for (final p in row) Expanded(child: _posBtn(p, fsm.heroCards.length == 2 && flow.preflopUntouched))]),
                   ],
                 ),
               ),

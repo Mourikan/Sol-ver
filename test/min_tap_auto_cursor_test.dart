@@ -41,7 +41,7 @@ Future<LinearHandFlow> boot(WidgetTester t) async {
 }
 
 void main() {
-  testWidgets('Velocidad extrema: BTN vs CO open -> 3-Bet auto -> CO call -> flop HU en 9 toques (2 tarjetas)', (t) async {
+  testWidgets('Velocidad extrema: BTN vs CO open -> 3-Bet auto -> CO call -> flop HU en 7 toques (tabla ordenada)', (t) async {
     final flow = await boot(t);
     final fsm = flow.fsm;
     await pick(t, 'Ah');
@@ -50,8 +50,8 @@ void main() {
     expect(taps, 5);
     expect(fsm.currentActorSeat, Position.utg, reason: 'Law_1: el cursor arranca solo en UTG');
     expect(find.byKey(const ValueKey('all-fold')), findsNothing);
-    await tapKey(t, 'who-co');
-    await tapKey(t, 'see-solver');
+    await tapKey(t, 'act-co-or');
+    if (find.byKey(const ValueKey('hero-go')).evaluate().isNotEmpty) await tapKey(t, 'hero-go');
     expect(fsm.seats[Position.utg]!.alive, isFalse);
     expect(fsm.seats[Position.mp]!.alive, isFalse);
     expect(flow.lastHero!.action, DecisionAction.betRaise, reason: 'Law_2: 0 toques en el turno de Hero');
@@ -59,9 +59,9 @@ void main() {
     expect(fsm.currentActorSeat, Position.sb);
     expect(fsm.pendingToAct, containsAll([Position.sb, Position.bb, Position.co]));
     expect(find.textContaining('✓ El solver asume'), findsOneWidget);
-    await tapKey(t, 'paid-co');
-    await tapKey(t, 'go-flop');
-    expect(taps, 9);
+    await tapKey(t, 'act-co-call');
+    if (find.byKey(const ValueKey('advance-flop')).evaluate().isNotEmpty) await tapKey(t, 'advance-flop');
+    expect(taps, 7);
     expect(fsm.seats[Position.sb]!.alive, isFalse);
     expect(fsm.seats[Position.bb]!.alive, isFalse);
     expect(fsm.phase, HandPhase.flopCards, reason: 'Law_3: cierre automático sin botón');
@@ -76,10 +76,10 @@ void main() {
     await pick(t, 'As');
     await pick(t, 'Kd');
     await tapKey(t, 'pos-btn');
-    await tapKey(t, 'nobody-in');
+    if (find.byKey(const ValueKey('hero-go')).evaluate().isNotEmpty) await tapKey(t, 'hero-go');
     expect(flow.lastHero!.action, DecisionAction.betRaise);
-    await tapKey(t, 'paid-bb');
-    await tapKey(t, 'go-flop');
+    await tapKey(t, 'act-bb-call');
+    if (find.byKey(const ValueKey('advance-flop')).evaluate().isNotEmpty) await tapKey(t, 'advance-flop');
     expect(fsm.seats[Position.sb]!.alive, isFalse);
     expect(fsm.phase, HandPhase.flopCards);
     for (final c in ['Kh', '7c', '2d']) {

@@ -40,12 +40,12 @@ Future<LinearHandFlow> toFlop(WidgetTester t) async {
   await pick(t, 'Ks');
   await tapKey(t, 'pos-btn');
   expect(fsm.screenPhase, ScreenPhase.preflopAction);
-  await tapKey(t, 'who-co');
-  await tapKey(t, 'see-solver');
+  await tapKey(t, 'act-co-or');
+  if (find.byKey(const ValueKey('hero-go')).evaluate().isNotEmpty) await tapKey(t, 'hero-go');
   expect(flow.lastHero!.action, DecisionAction.betRaise);
   expect(fsm.currentHighBetBB, closeTo(7.5, 1e-9));
-  await tapKey(t, 'paid-co');
-  await tapKey(t, 'go-flop');
+  await tapKey(t, 'act-co-call');
+  if (find.byKey(const ValueKey('advance-flop')).evaluate().isNotEmpty) await tapKey(t, 'advance-flop');
   expect(fsm.seats[Position.sb]!.alive || fsm.seats[Position.bb]!.alive, isFalse);
   expect(fsm.screenPhase, ScreenPhase.pickFlop, reason: 'salta sola a pedir 3 cartas');
   expect(find.byKey(const ValueKey('street-current')), findsOneWidget);

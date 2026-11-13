@@ -54,13 +54,13 @@ void main() {
     await tapKey(t, 'pos-mp');
     expect(flow.fsm.heroPosition, Position.mp);
     expect(flow.lastHero, isNull, reason: 'sin auto-commit hasta tocar la fila de Hero');
-    expect(find.byKey(const ValueKey('who-utg')), findsOneWidget);
-    await tapKey(t, 'nobody-in');
+    expect(find.byKey(const ValueKey('row-utg')), findsOneWidget);
+    if (find.byKey(const ValueKey('hero-go')).evaluate().isNotEmpty) await tapKey(t, 'hero-go');
     expect(flow.fsm.seats[Position.utg]!.alive, isFalse);
     expect(flow.lastHero!.action, DecisionAction.betRaise);
-    await tapKey(t, 'paid-btn');
-    await tapKey(t, 'paid-bb');
-    await tapKey(t, 'go-flop');
+    await tapKey(t, 'act-btn-call');
+    await tapKey(t, 'act-bb-call');
+    if (find.byKey(const ValueKey('advance-flop')).evaluate().isNotEmpty) await tapKey(t, 'advance-flop');
     expect(flow.fsm.seats[Position.co]!.alive, isFalse);
     expect(flow.fsm.seats[Position.sb]!.alive, isFalse);
     expect(flow.fsm.phase, HandPhase.flopCards);
