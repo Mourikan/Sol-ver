@@ -82,7 +82,7 @@ void main() {
     expect(flow.manualMode, isTrue);
     await tapKey(t, 'hero-passive');
     expect(flow.manualMode, isFalse);
-    await tapKey(t, 'resolve-street');
+    await tapKey(t, 'all-fold');
     expect(flow.fsm.phase, HandPhase.flopCards);
     for (final c in ['Kc', '7d', '2h']) {
       await pick(t, c);

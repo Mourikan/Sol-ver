@@ -515,6 +515,9 @@ class HandFlowFSM extends ChangeNotifier {
   bool reopensBettingForPriorActors = true;
   bool canRaise(Position p) => !_noReraise.contains(p);
 
+  /// Law_1_Deterministic_Auto_Cursor: asiento al que apunta el cursor autónomo (cola circular `pendingToAct`).
+  Position? get currentActorSeat => currentActor;
+
   /// Asientos vivos de la calle en orden de acción (los foldeados se borran de la lista).
   List<Position> get activeSeats => [
     for (final p in _order)

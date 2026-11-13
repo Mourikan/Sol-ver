@@ -1,5 +1,11 @@
 # CLAUDE.md - Directrices del Proyecto APK GTO 6-Max
 
+## 000. SKILL: [MIN_TAP_AUTO_CURSOR_UX] (ley permanente de ergonomía y flujo de mano)
+- `Law_1_Deterministic_Auto_Cursor`: la UI jamás pregunta "¿quién sigue?"; `HandFlowFSM` calcula y resalta siempre `currentActorSeat` según NLHE 6-Max.
+- `Law_2_Zero_Tap_Hero_Turn`: si `currentActorSeat == heroSeat`, el solver emite `DecisionOutput`, se auto-aplica (Auto-Commit) y el cursor pasa al siguiente villano vivo; `[Cambiar mi jugada]` hace rollback en 1 toque.
+- `Law_3_Zero_Confirm_Buttons`: prohibidos botones "Resolver Preflop" / "Siguiente Turno" / "Cerrar Calle"; la calle se cierra sola cuando el último por hablar iguala `currentHighBetBB` o foldea. Única excepción: atajo `[Todos Foldearon]` tras la acción de Hero.
+- `Law_4_Preflop_Jump_Shortcut`: tocar una acción en un asiento posterior `P_k` auto-foldea a los asientos sin inversión entre el cursor y `P_k`, aplica la acción y sitúa el cursor en `P_{k+1}`.
+
 ## 00. SKILL: [CI_CD_SURGICAL_SCOPE_GUARD] (tareas de empaquetado / CI)
 - `Scope_Lock`: prohibido inspeccionar código fuente (`lib/`, `test/`); solo lectura quirúrgica (< 40 líneas) de `android/app/build.gradle*` y creación de `.github/workflows/`.
 - `Zero_Extra_Files`: prohibido generar scripts `.sh`, READMEs o documentación adicional no solicitada.

@@ -62,7 +62,7 @@ void main() {
     await tapKey(t, 'act-btn-call');
     expect(flow.fsm.seats[Position.co]!.alive, isFalse);
     await tapKey(t, 'act-bb-call');
-    if (flow.fsm.phase == HandPhase.preflop) await tapKey(t, 'resolve-street');
+    if (flow.fsm.phase == HandPhase.preflop) await tapKey(t, 'all-fold');
     expect(flow.fsm.seats[Position.sb]!.alive, isFalse);
     expect(flow.fsm.phase, HandPhase.flopCards);
     for (final c in ['Qh', '7d', '2c']) {

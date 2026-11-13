@@ -129,6 +129,13 @@ class TablePane extends StatefulWidget {
 class _TablePaneState extends State<TablePane> {
   LinearHandFlow get flow => widget.flow;
   HandFlowFSM get fsm => flow.fsm;
+  bool positionChosen = false;
+
+  /// Law_2: si Hero abre la acción (UTG) y ya eligió mano + posición, el solver actúa con 0 toques.
+  void _heroFirstIn() {
+    if (positionChosen && flow.preflopUntouched && flow.atHeroTurn && flow.lastHero == null) flow.heroGo();
+  }
+
   final coldCallers = <Position>{};
   final flopCallers = <Position>{};
   String? error;
@@ -338,7 +345,13 @@ class _TablePaneState extends State<TablePane> {
                       _btn(
                         p.name.toUpperCase(),
                         p == fsm.heroPosition ? Obsidian.emeraldRaise : AppColors.surfaceHi,
-                        setup || flow.preflopUntouched ? () => _do(() => flow.setPosition(p)) : null,
+                        setup || flow.preflopUntouched
+                            ? () => _do(() {
+                                flow.setPosition(p);
+                                positionChosen = true;
+                                _heroFirstIn();
+                              })
+                            : null,
                         'pos-${p.name}',
                         small: true,
                       ),
@@ -393,6 +406,7 @@ class _TablePaneState extends State<TablePane> {
         onPick: (c) => _do(() {
           TacticalFeedback.tap();
           flow.pickCard(c);
+          _heroFirstIn();
         }),
       ),
     );
