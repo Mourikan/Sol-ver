@@ -1,6 +1,6 @@
 # Auditoría Integral de EV por Stake, Rentabilidad Post-Rake y Caza de Huecos (Fase 9.55)
 
-Generado por `docs/audit_scripts/full_ev_profitability_and_leaks_audit.dart` (30 nodos, 7560 decisiones auditadas en 10387 ms).
+Generado por `docs/audit_scripts/full_ev_profitability_and_leaks_audit.dart` (30 nodos, 7560 decisiones auditadas en 9898 ms).
 
 > **No es un winrate (CLAUDE.md §8).** Los pesos `w_i` de la cesta son una plantilla declarada, no frecuencias medidas; el EV es el de `ActionEvCalculator` desde el nodo (rake incluido en el bote final), no el EV de la mano completa. Por eso no se emite el veredicto "RENTABLE / PERDEDOR por rake": requiere frecuencias reales de spots y del pool, que el proyecto no tiene ni debe registrar.
 
