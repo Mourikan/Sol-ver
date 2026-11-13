@@ -46,7 +46,7 @@ Muestra: 960 decisiones de flop (PFA BTN con iniciativa y BB enfrentando c-bet 3
 | Apuestas finales con EV(bet) < EV(check) − banda (tras la puerta) | 0.0% |
 | Calls con EV(call) < −banda según el modelo de 1 calle (mantenidos por MDF) | 0.4% |
 | Decisiones protegidas por intervención documentada (guard, trap, gates de perfil) | 1.3% |
-| Latencia mediana / p95 por decisión con EV | 0.33 ms / 1.26 ms |
+| Latencia mediana / p95 por decisión con EV | 0.30 ms / 1.11 ms |
 
 Corrección aplicada: la puerta de EV des-escala apuestas propias −EV a check (o raise −EV a call). No convierte calls en folds: con ese modelo la defensa caía a 22–30% vs MDF 50% en River (Δ hasta 28%), es decir, el modelo de 1 calle infravalora los faroles del rival. Esos calls se reportan aquí pero los gobierna DefenseBudget / Bluff_Combo_Audit.
 

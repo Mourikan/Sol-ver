@@ -49,7 +49,9 @@ class LinearHandFlow extends ChangeNotifier {
 
   /// AUTO-COMMIT: en cuanto el solver emite la recomendación del turno de Hero, se asume ejecutada.
   void _afterChange() {
-    if (!manualMode && atHeroTurn && fsm.activeRecommendation != null) {
+    final waitingSetup = fsm.phase == HandPhase.preflop && fsm.actions.isEmpty && !_heroGo;
+    _heroGo = false;
+    if (!manualMode && !waitingSetup && atHeroTurn && fsm.activeRecommendation != null) {
       lastHero = fsm.activeRecommendation;
       lastHeroStreet = fsm.street;
       fsm.executeRecommendation();
@@ -79,8 +81,34 @@ class LinearHandFlow extends ChangeNotifier {
   void pickCard(Card c) => _step(() => fsm.addCard(c));
 
   // ---------------- Paso 2: escenario preflop (1 toque) ----------------
-  /// [Limpia]: todos los anteriores foldean.
-  void scenarioClean() => _step(() => _resolve());
+  bool _heroGo = false;
+
+  /// [Limpia] / [⭐ TU TURNO]: todos los anteriores foldean y el solver actúa por Hero.
+  void scenarioClean() {
+    _heroGo = true;
+    _step(() => _resolve());
+  }
+
+  void heroGo() => scenarioClean();
+
+  /// Positional_Sequential_Ledger: el asiento [p] actúa (los omitidos antes que él foldean / pasan).
+  void seatAct(Position p, ActionType type, {double amount = 0}) {
+    _heroGo = true;
+    _step(() => fsm.act(p, type, amountBb: amount));
+  }
+
+  /// [✓ Resolver]: los asientos no tocados foldean (o pasan) hasta cerrar la ronda o volver a Hero.
+  void resolveStreet() => _step(() => _resolve());
+
+  /// [↶ Deshacer Último Toque]: si el último paso fue el auto-commit de Hero, deshace también el toque que lo provocó.
+  void undoLast() {
+    if (!fsm.canUndo) return;
+    final heroWasLast = fsm.actions.isNotEmpty && fsm.actions.last.actor == hero && !manualMode;
+    fsm.undo();
+    if (heroWasLast && fsm.canUndo && fsm.actions.isNotEmpty) fsm.undo();
+    manualMode = atHeroTurn;
+    notifyListeners();
+  }
 
   /// [Open de X] + cold callers (multi-select) => squeeze multiway (dinero muerto por caller).
   void scenarioOpen(Position opener, {Position? caller, List<Position> callers = const []}) => _step(() {

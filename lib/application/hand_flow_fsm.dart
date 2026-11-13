@@ -342,9 +342,12 @@ class HandFlowFSM extends ChangeNotifier {
   }
 
   void configure({Stake? stake, Position? hero}) {
-    if (phase != HandPhase.setup) throw const IllegalAction('Stake/posición solo en setup');
+    final untouchedPreflop = phase == HandPhase.preflop && actions.isEmpty;
+    if (phase != HandPhase.setup && !untouchedPreflop) throw const IllegalAction('Stake/posición solo en setup');
     if (stake != null) this.stake = stake;
     if (hero != null) heroPosition = hero;
+    // Orden natural (1° mano -> 2° posición): re-sienta la mesa si la mano aún no tiene acciones.
+    if (untouchedPreflop) _startPreflop();
     notifyListeners();
   }
 
@@ -512,6 +515,23 @@ class HandFlowFSM extends ChangeNotifier {
   bool reopensBettingForPriorActors = true;
   bool canRaise(Position p) => !_noReraise.contains(p);
 
+  /// Asientos vivos de la calle en orden de acción (los foldeados se borran de la lista).
+  List<Position> get activeSeats => [
+    for (final p in _order)
+      if (seats[p]?.alive ?? false) p,
+  ];
+
+  /// Asientos que aún deben actuar en la ronda (Betting_Round_Closure_Gate).
+  Set<Position> get pendingToAct => Set.unmodifiable(_needsToAct);
+
+  /// true => tocar la fila de [p] es legal ahora (turno actual o salto implícito sin saltar a Hero).
+  bool canTap(Position p) {
+    final cur = currentActor;
+    if (cur == null || awaitingCards || phase == HandPhase.setup || phase == HandPhase.handOver) return false;
+    if (p == cur) return true;
+    return _needsToAct.contains(p) && !_skipsHero(p);
+  }
+
   /// Acciones legales para el jugador en turno.
   Set<ActionType> legalActions() {
     final p = currentActor;
@@ -545,11 +565,9 @@ class HandFlowFSM extends ChangeNotifier {
     }
     if (p != currentActor) {
       // Implicit_Fast_Forward: los asientos omitidos entre el turno actual y el actor foldean (o pasan si no deben nada).
-      final o = _order;
-      final ci = o.indexOf(currentActor!), pi = o.indexOf(p);
-      final fastForward = _needsToAct.contains(p) && pi > ci && !_skipsHero(p);
+      final fastForward = _needsToAct.contains(p) && !_skipsHero(p);
       if (!fastForward) throw IllegalAction('Turno de ${currentActor?.name}, no de ${p.name}');
-      for (final q in o.sublist(ci, pi)) {
+      for (final q in _ffPath(p)) {
         if (!_needsToAct.contains(q)) continue;
         final owes = _currentBet - seats[q]!.committed > 0;
         _apply(q, owes ? ActionType.fold : ActionType.check, 0);
@@ -559,11 +577,21 @@ class HandFlowFSM extends ChangeNotifier {
     _advance(p);
   }
 
-  bool _skipsHero(Position target) {
+  /// Asientos desde el actor actual (incluido) hasta [target] (excluido) en orden circular de la calle:
+  /// tras una re-subida la ronda se reabre y el turno da la vuelta a la mesa.
+  List<Position> _ffPath(Position target) {
     final o = _order;
-    final i = o.indexOf(currentActor!), j = o.indexOf(target), h = o.indexOf(heroPosition);
-    return h >= i && h < j && _needsToAct.contains(heroPosition);
+    final ci = o.indexOf(currentActor!);
+    final out = <Position>[];
+    for (var k = 0; k < o.length; k++) {
+      final q = o[(ci + k) % o.length];
+      if (q == target) return out;
+      out.add(q);
+    }
+    return out;
   }
+
+  bool _skipsHero(Position target) => _needsToAct.contains(heroPosition) && _ffPath(target).contains(heroPosition);
 
   void _apply(Position p, ActionType type, double amount) {
     final s = seats[p]!;
