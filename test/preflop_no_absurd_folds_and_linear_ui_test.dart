@@ -23,7 +23,7 @@ Future<void> pick(WidgetTester t, String card) async {
 }
 
 Future<void> tapKey(WidgetTester t, String key) async {
-  await t.ensureVisible(find.byKey(ValueKey(key)));
+  await t.ensureVisible(find.descendant(of: find.byKey(const ValueKey('pane-0')), matching: find.byKey(ValueKey(key), skipOffstage: false), skipOffstage: false));
   await t.pump();
   await t.tap(find.byKey(ValueKey(key)));
   await t.pump();
@@ -69,8 +69,9 @@ void main() {
     final flow = await boot(t, const Size(412, 1800));
     await pick(t, 'Tc');
     await pick(t, 'Td');
+    await tapKey(t, 'pos-btn');
     await tapKey(t, 'who-utg');
-    await tapKey(t, 'act-open');
+    await tapKey(t, 'see-solver');
     expect(flow.lastHero, isNotNull);
     expect(flow.lastHero!.action, isNot(DecisionAction.fold));
     expect(flow.fsm.currentActor, isNot(Position.btn), reason: 'la acción de Hero ya se asumió ejecutada');
@@ -88,8 +89,8 @@ void main() {
       await pick(t, c);
     }
     expect(flow.fsm.phase, HandPhase.flop);
-    expect(find.byKey(const ValueKey('dock-passive')), findsOneWidget, reason: 'UTG actúa primero: 1 toque');
-    await tapKey(t, 'dock-passive');
+    expect(find.byKey(const ValueKey('v-check')), findsOneWidget, reason: 'UTG actúa primero: 1 toque');
+    await tapKey(t, 'v-check');
     expect(flow.lastHeroStreet, Street.flop);
     expect(t.takeException(), isNull);
   });
@@ -99,8 +100,9 @@ void main() {
       final flow = await boot(t, size, hero: Position.bb);
       await pick(t, 'Ah');
       await pick(t, 'Kd');
+      await tapKey(t, 'pos-bb');
       await tapKey(t, 'who-btn');
-      await tapKey(t, 'act-open');
+      await tapKey(t, 'see-solver');
       expect(flow.lastHero, isNotNull);
       final pot = 1.5 + 2.5;
       await tapKey(t, 'peek-169');
@@ -108,12 +110,8 @@ void main() {
       expect(find.byKey(const ValueKey('heatmap')), findsOneWidget);
       Navigator.of(t.element(find.byKey(const ValueKey('heatmap')))).pop();
       await t.pumpAndSettle();
-      // Rewind: el chip del paso de Hero vuelve al estado exacto antes de su acción.
-      final idx = flow.fsm.stepLabels.lastIndexWhere((l) => l.startsWith('BB'));
-      await t.ensureVisible(find.byKey(ValueKey('crumb-$idx')));
-      await t.pump();
-      await t.tap(find.byKey(ValueKey('crumb-$idx')));
-      await t.pump();
+      // [Hice otra cosa]: rollback exacto al estado anterior a la acción de Hero.
+      await tapKey(t, 'override');
       expect(flow.fsm.currentActor, Position.bb);
       expect(flow.fsm.totalPotBB, closeTo(pot, 1e-9));
       expect(flow.fsm.street, Street.preflop);

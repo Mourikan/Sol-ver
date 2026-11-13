@@ -10,13 +10,10 @@ import '../theme.dart';
 import '../theme/obsidian_theme.dart';
 import '../widgets/blocker_xray.dart';
 import '../widgets/decision_and_why_panel.dart';
-import '../widgets/live_line_breadcrumb.dart';
 import '../widgets/peek_169_heatmap.dart';
 import '../widgets/playing_card_widget.dart';
 import '../widgets/bet_size_scrubber_bar.dart';
-import '../widgets/fixed_action_dock.dart';
-import '../widgets/positional_ledger_view.dart';
-import '../widgets/preflop_before_after_cards.dart';
+import '../widgets/wizard_step_views.dart';
 import '../widgets/two_step_card_picker.dart';
 
 /// Matte Linear Flow (Fase 11.0): sin mesa. Paso 1 mano+posición -> Paso 2 qué pasó antes (1 toque) ->
@@ -187,24 +184,24 @@ class _TablePaneState extends State<TablePane> {
       builder: (context, _) {
         _autoScroll();
         _syncScrub();
+        final step = WizardSteps.of(flow, positionChosen: positionChosen);
+        if (step != _lastStep) {
+          _lastStep = step;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (scroll.hasClients) scroll.jumpTo(0);
+          });
+        }
         return Column(
           children: [
             _header(),
-            Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: _step1()),
-            LiveLineBreadcrumb(fsm: fsm, act: _do),
+            _ribbon(),
             Expanded(
               child: ListView(
                 key: const ValueKey('linear-flow'),
                 controller: scroll,
-                padding: const EdgeInsets.fromLTRB(10, 2, 10, 12),
+                padding: const EdgeInsets.fromLTRB(10, 0, 10, 16),
                 children: [
-                  if (fsm.board.isNotEmpty || (fsm.awaitingCards && fsm.phase != HandPhase.setup)) _boardRow(),
-                  if (fsm.awaitingCards) _picker(),
-                  PreflopBeforeAfterCards(flow: flow, scrub: scrub, onScrub: (v) => setState(() => scrub = v), act: _do),
-                  if (fsm.street != Street.preflop && !fsm.awaitingCards && fsm.phase != HandPhase.handOver) PositionalLedgerView(flow: flow, act: _do),
-                  if (flow.manualMode && flow.atHeroTurn) _section('TU TURNO — elige tu acción', _heroManual()),
-                  if (flow.lastHero != null) _result(flow.lastHero!),
-                  if (fsm.phase == HandPhase.handOver) _handOver(),
+                  KeyedSubtree(key: ValueKey('wizard-${step.name}'), child: _stepView(step)),
                   if (error != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
@@ -213,14 +210,61 @@ class _TablePaneState extends State<TablePane> {
                 ],
               ),
             ),
-            if (_dockVisible) FixedActionDock(flow: flow, scrub: scrub, onScrub: (v) => setState(() => scrub = v), act: _do),
           ],
         );
       },
     ),
   );
 
-  bool get _dockVisible => fsm.phase != HandPhase.setup && !fsm.awaitingCards && fsm.phase != HandPhase.handOver;
+  WizardStep? _lastStep;
+
+  void _setScrub(double v) => setState(() => scrub = v);
+
+  /// One_Step_Per_Screen: solo la tarjeta del paso actual.
+  Widget _stepView(WizardStep step) {
+    final oracle = flow.lastHero != null && flow.lastHeroStreet == fsm.street ? _result(flow.lastHero!) : null;
+    return switch (step) {
+      WizardStep.handAndSeat => Column(children: [_step1(), if (fsm.awaitingCards) _picker()]),
+      WizardStep.before => BeforeHeroStep(flow: flow, scrub: scrub, onScrub: _setScrub, act: _do),
+      WizardStep.heroAndAfter => Column(
+        children: [
+          ?oracle,
+          AfterHeroStep(flow: flow, scrub: scrub, onScrub: _setScrub, act: _do),
+        ],
+      ),
+      WizardStep.boardCards => Column(children: [_boardRow(), _picker()]),
+      WizardStep.streetAction => Column(
+        children: [
+          _boardRow(),
+          ?oracle,
+          VillainTurnStep(flow: flow, scrub: scrub, onScrub: _setScrub, act: _do),
+        ],
+      ),
+      WizardStep.heroManual => Column(children: [if (fsm.board.isNotEmpty) _boardRow(), _section('TU TURNO — ¿qué hiciste tú?', _heroManual())]),
+      WizardStep.handOver => Column(children: [?oracle, _handOver()]),
+    };
+  }
+
+  /// Cinta de 1 línea: `Tu Mano + Pos | Bote: X bb | Jugadores vivos`.
+  Widget _ribbon() {
+    final cards = fsm.heroCards.length == 2 ? '${fsm.heroCards[0]}${fsm.heroCards[1]}' : '--';
+    final alive = fsm.phase == HandPhase.setup ? 6 : fsm.activeSeats.length;
+    return Container(
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      alignment: Alignment.centerLeft,
+      color: Obsidian.surfacePanel,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Text(
+          '$cards ${fsm.heroPosition.name.toUpperCase()} | Bote: ${fsm.totalPotBB.toStringAsFixed(1)} bb | $alive vivos',
+          key: const ValueKey('ribbon'),
+          style: Obsidian.num(size: 13, color: Obsidian.textPrimary, weight: FontWeight.w700),
+        ),
+      ),
+    );
+  }
 
   /// Valor por defecto de la barra al cambiar el contexto (calle / nueva acción).
   void _syncScrub() {
@@ -228,7 +272,9 @@ class _TablePaneState extends State<TablePane> {
     if (ctx == _scrubCtx) return;
     _scrubCtx = ctx;
     final raw = fsm.street == Street.preflop ? (fsm.currentBet <= 1 ? 2.5 : fsm.currentBet * 3) : (fsm.currentBet == 0 ? fsm.pot * .5 : fsm.currentBet * 3);
-    final hi = FixedActionDock.maxFor(fsm);
+    final hp = fsm.currentActorSeat ?? fsm.heroPosition;
+    final hs = fsm.seats[hp];
+    final hi = hs == null ? fsm.startingStackBb : hs.committed + hs.stack;
     scrub = BetSizeScrubberBar.snap(raw).clamp(1.0, hi < 1 ? 1.0 : hi).toDouble();
   }
 
@@ -336,7 +382,7 @@ class _TablePaneState extends State<TablePane> {
     final setup = fsm.phase == HandPhase.setup;
     final hero = [...fsm.heroCards, ...List<Card?>.filled(2 - fsm.heroCards.length, null)];
     return _section(
-      '1 · TU MANO Y TU POSICIÓN',
+      'PASO 1 · TU MANO Y TU POSICIÓN',
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -471,7 +517,7 @@ class _TablePaneState extends State<TablePane> {
     final j = d.justification;
     final r = d.perceivedVillainRange;
     return _section(
-      '3 · SOLUCIÓN (${flow.lastHeroStreet?.name.toUpperCase() ?? ''}) — ${flow.manualMode ? 'elige tu acción abajo' : 'asumida como ejecutada'}',
+      'TU JUGADA (${flow.lastHeroStreet?.name.toUpperCase() ?? ''}) — ${flow.manualMode ? 'elige tu acción abajo' : '✓ El solver asume que hiciste esta jugada'}',
       Column(
         key: const ValueKey('hero-result'),
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -507,7 +553,7 @@ class _TablePaneState extends State<TablePane> {
               child: TextButton(
                 key: const ValueKey('override'),
                 onPressed: () => _do(flow.overrideHero),
-                child: const Text('Cambiar mi jugada', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+                child: const Text('Hice otra cosa', style: TextStyle(color: AppColors.muted, fontSize: 12)),
               ),
             ),
           if (j != null) ...[

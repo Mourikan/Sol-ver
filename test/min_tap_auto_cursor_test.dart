@@ -11,7 +11,7 @@ var taps = 0;
 
 Future<void> tapKey(WidgetTester t, String key) async {
   await t.pump();
-  await t.ensureVisible(find.byKey(ValueKey(key)));
+  await t.ensureVisible(find.descendant(of: find.byKey(const ValueKey('pane-0')), matching: find.byKey(ValueKey(key), skipOffstage: false), skipOffstage: false));
   await t.pump();
   await t.tap(find.byKey(ValueKey(key)));
   await t.pump();
@@ -51,14 +51,14 @@ void main() {
     expect(fsm.currentActorSeat, Position.utg, reason: 'Law_1: el cursor arranca solo en UTG');
     expect(find.byKey(const ValueKey('all-fold')), findsNothing);
     await tapKey(t, 'who-co');
-    await tapKey(t, 'act-open');
+    await tapKey(t, 'see-solver');
     expect(fsm.seats[Position.utg]!.alive, isFalse);
     expect(fsm.seats[Position.mp]!.alive, isFalse);
     expect(flow.lastHero!.action, DecisionAction.betRaise, reason: 'Law_2: 0 toques en el turno de Hero');
     expect(fsm.currentHighBetBB, closeTo(7.5, 1e-9));
     expect(fsm.currentActorSeat, Position.sb);
     expect(fsm.pendingToAct, containsAll([Position.sb, Position.bb, Position.co]));
-    expect(find.textContaining('(Auto-Aplicado)'), findsOneWidget);
+    expect(find.textContaining('✓ El solver asume'), findsOneWidget);
     await tapKey(t, 'paid-co');
     await tapKey(t, 'go-flop');
     expect(taps, 9);
@@ -86,16 +86,17 @@ void main() {
       await pick(t, c);
     }
     expect(fsm.currentActorSeat, Position.bb, reason: 'el cursor arranca solo en BB');
-    await tapKey(t, 'dock-passive');
+    await tapKey(t, 'v-check');
     expect(flow.lastHeroStreet, Street.flop);
     expect(flow.lastHero!.action, DecisionAction.betRaise, reason: 'Hero auto c-bet');
     expect(fsm.currentActorSeat, Position.bb, reason: 'el cursor regresa solo a BB');
-    for (final k in ['dock-fold', 'dock-passive', 'dock-bar']) {
+    for (final k in ['v-fold', 'v-call', 'v-raise']) {
       expect(t.widget<FilledButton>(find.byKey(ValueKey(k))).onPressed, isNotNull, reason: k);
     }
     final heroBet = fsm.currentHighBetBB;
+    await tapKey(t, 'v-raise');
     await scrubTo(t, (heroBet * 3 * 2).roundToDouble() / 2);
-    await tapKey(t, 'dock-bar');
+    await tapKey(t, 'v-bar');
     expect(flow.lastHeroStreet, Street.flop);
     expect(fsm.actions.last.actor, Position.btn, reason: 'Hero respondió al check-raise con 0 toques');
     expect(fsm.currentHighBetBB, greaterThanOrEqualTo(heroBet * 3 - .3));

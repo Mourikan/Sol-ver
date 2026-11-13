@@ -9,7 +9,7 @@ import 'package:sol_ver/ui/theme.dart';
 
 Future<void> tapKey(WidgetTester t, String key) async {
   await t.pump();
-  await t.ensureVisible(find.byKey(ValueKey(key)));
+  await t.ensureVisible(find.descendant(of: find.byKey(const ValueKey('pane-0')), matching: find.byKey(ValueKey(key), skipOffstage: false), skipOffstage: false));
   await t.pump();
   await t.tap(find.byKey(ValueKey(key)));
   await t.pump();
@@ -68,9 +68,8 @@ void main() {
       await pick(t, c);
     }
     expect(flow.fsm.activeSeats, [Position.bb, Position.mp, Position.btn]);
-    expect(find.byKey(const ValueKey('row-bb')), findsOneWidget);
-    expect(find.byKey(const ValueKey('row-co')), findsNothing);
-    expect(t.widget<FilledButton>(find.byKey(const ValueKey('dock-passive'))).onPressed, isNotNull);
+    expect(find.textContaining('Turno de BB'), findsOneWidget);
+    expect(find.byKey(const ValueKey('v-check')), findsOneWidget);
     expect(t.takeException(), isNull);
   });
 

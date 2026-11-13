@@ -55,12 +55,12 @@ void main() {
       await pick(t, 'Ah');
       await pick(t, 'Kd');
       await tapKey(t, 'pos-btn');
-      expect(find.byKey(const ValueKey('card-before')), findsOneWidget);
+      expect(find.byKey(const ValueKey('wizard-before')), findsOneWidget);
       await tapKey(t, 'who-co');
-      await tapKey(t, 'act-open');
+      await tapKey(t, 'see-solver');
       expect(flow.lastHero!.action, DecisionAction.betRaise, reason: 'Auto-Commit del 3-Bet');
-      expect(find.byKey(const ValueKey('card-after')), findsOneWidget);
-      expect(find.textContaining('(Auto-Aplicado)'), findsOneWidget);
+      expect(find.byKey(const ValueKey('wizard-heroAndAfter')), findsOneWidget);
+      expect(find.textContaining('✓ El solver asume'), findsOneWidget);
       await tapKey(t, 'paid-co');
       await tapKey(t, 'go-flop');
       expect(fsm.phase, HandPhase.flopCards);
@@ -70,7 +70,7 @@ void main() {
       }
       expect(fsm.currentActorSeat, Position.co);
       await scrubTo(t, 6.5);
-      await tapKey(t, 'dock-bar');
+      await tapKey(t, 'v-bar');
       final bet = fsm.actions.firstWhere((a) => a.street == Street.flop && a.actor == Position.co);
       expect(bet.type, ActionType.bet);
       expect(bet.amountBb, 6.5);
@@ -86,15 +86,15 @@ void main() {
     await pick(t, '9c');
     await tapKey(t, 'pos-btn');
     await tapKey(t, 'who-utg');
-    await tapKey(t, 'mw-mp');
-    await tapKey(t, 'act-open');
+    await tapKey(t, 'mid-mp-call');
+    await tapKey(t, 'see-solver');
     expect(fsm.seats[Position.co]!.alive, isFalse);
     expect(flow.lastHero, isNotNull);
     await tapKey(t, 'override');
     expect(flow.manualMode, isTrue);
     await tapKey(t, 'hero-passive');
     await tapKey(t, 'paid-bb');
-    expect(find.textContaining('(4-Way)'), findsOneWidget);
+    expect(find.text('Ir al Flop (4 Jugadores) ➔'), findsOneWidget);
     await tapKey(t, 'go-flop');
     expect(fsm.phase, HandPhase.flopCards);
     expect(fsm.activeSeats, [Position.bb, Position.utg, Position.mp, Position.btn]);
@@ -110,7 +110,7 @@ void main() {
     await tapKey(t, 'who-co');
     expect(scrubValue(t), 2.5);
     await scrubTo(t, 4.5);
-    await tapKey(t, 'act-open');
+    await tapKey(t, 'see-solver');
     final open = flow.fsm.actions.firstWhere((a) => a.actor == Position.co);
     expect(open.type, ActionType.raise);
     expect(open.amountBb, 4.5);
