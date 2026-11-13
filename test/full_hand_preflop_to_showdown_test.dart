@@ -53,7 +53,7 @@ Future<LinearHandFlow> toFlop(WidgetTester t) async {
     await pick(t, c);
   }
   expect(fsm.screenPhase, ScreenPhase.postflopStreetAction);
-  expect(find.textContaining('FLOP [A♥ 9♦ 4♣] — Turno de CO: ¿Qué hizo?'), findsOneWidget);
+  expect(find.textContaining('FLOP [A♥ 9♦ 4♣] · Turno CO:'), findsOneWidget);
   return flow;
 }
 

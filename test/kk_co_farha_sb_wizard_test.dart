@@ -72,14 +72,14 @@ void main() {
 
       // PASO 5: SB -> UTG -> Hero.
       expect(step('streetAction'), findsOneWidget);
-      expect(find.textContaining('Turno de SB'), findsOneWidget);
+      expect(find.textContaining('Turno SB'), findsOneWidget);
       await tapKey(t, 'v-check');
-      expect(find.textContaining('Turno de UTG'), findsOneWidget);
+      expect(find.textContaining('Turno UTG'), findsOneWidget);
       await tapKey(t, 'v-check');
       expect(flow.lastHeroStreet, Street.flop, reason: 'turno de Hero (CO) auto-ejecutado');
       expect(fsm.actions.last.actor, Position.co);
       if (flow.lastHero!.action == DecisionAction.betRaise) {
-        expect(find.textContaining('Turno de SB'), findsOneWidget, reason: 'pregunta qué respondió SB a tu apuesta');
+        expect(find.textContaining('Turno SB'), findsOneWidget, reason: 'pregunta qué respondió SB a tu apuesta');
         expect(find.byKey(const ValueKey('v-fold')), findsOneWidget);
       }
       expect(find.byKey(const ValueKey('action-dock')), findsNothing, reason: 'dock eliminado');

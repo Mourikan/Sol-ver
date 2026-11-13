@@ -27,7 +27,9 @@ double scrubValue(WidgetTester t) => double.parse(t.widget<Text>(find.byKey(cons
 
 Future<void> scrubTo(WidgetTester t, double v) async {
   for (var i = 0; i < 400 && (scrubValue(t) - v).abs() > 1e-9; i++) {
-    await t.tap(find.byKey(ValueKey(scrubValue(t) < v ? 'scrub-plus' : 'scrub-minus')));
+    final k = find.byKey(ValueKey(scrubValue(t) < v ? 'scrub-plus' : 'scrub-minus'));
+    await t.ensureVisible(k);
+    await t.tap(k);
     await t.pump();
   }
   expect(scrubValue(t), v);

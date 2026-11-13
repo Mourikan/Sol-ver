@@ -221,7 +221,7 @@ class _VillainTurnStepState extends State<VillainTurnStep> with WizardKit {
       ]);
     }
     return card(
-      '$street [$board] — Turno de $pos: ¿Qué hizo?',
+      '$street [$board] · Turno $pos:',
       toCall > 0 ? 'Debe ${toCall.toStringAsFixed(1)} bb' : 'Nadie ha apostado en esta calle',
       body,
       'step-villain',

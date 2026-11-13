@@ -106,6 +106,56 @@ class HandFlowFSM extends ChangeNotifier {
   String? recommendationError;
   int solverMicros = 0;
 
+  int _version = 0;
+  int _projVersion = -1;
+  DecisionOutput? _projCache;
+
+  @override
+  void notifyListeners() {
+    _version++;
+    super.notifyListeners();
+  }
+
+  /// Always_On_Reactive_Oracle (R2/R3/R4): decisión de Hero en el nodo actual SIN tocar [Mi turno].
+  /// Si Hero aún no habla, proyecta como Fold (o Check si no deben nada) a los asientos pendientes antes de Hero,
+  /// evalúa al solver y restaura el estado exacto (sin notificar). Cacheada por versión de estado.
+  DecisionOutput? get projectedHeroDecision {
+    if (_projVersion == _version) return _projCache;
+    _projVersion = _version;
+    _projCache = _project();
+    return _projCache;
+  }
+
+  DecisionOutput? _project() {
+    final hs = seats[heroPosition];
+    if (heroCards.length < 2 || hs == null || !hs.alive || awaitingCards || phase == HandPhase.setup || phase == HandPhase.handOver) return null;
+    if (currentActor == heroPosition) return activeRecommendation;
+    if (currentActor == null || !_needsToAct.contains(heroPosition)) return null;
+    final rec = activeRecommendation, err = recommendationError, micros = solverMicros;
+    _push();
+    DecisionOutput? d;
+    try {
+      for (final q in _ffPath(heroPosition)) {
+        if (!_needsToAct.contains(q)) continue;
+        final owes = _currentBet - seats[q]!.committed > 0;
+        _apply(q, owes ? ActionType.fold : ActionType.check, 0);
+      }
+      if (alive.length >= 2) {
+        currentActor = heroPosition;
+        _refreshRecommendation();
+        d = activeRecommendation;
+      }
+    } on Object {
+      d = null;
+    } finally {
+      _restore(_undo.removeLast());
+      activeRecommendation = rec;
+      recommendationError = err;
+      solverMicros = micros;
+    }
+    return d;
+  }
+
   /// Dinero muerto: ante por jugador y straddle de UTG (2bb).
   double anteBb = 0;
   bool hasStraddle = false;

@@ -1,14 +1,11 @@
 import 'package:flutter/material.dart' hide Card;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sol_ver/application/dual_table_session_manager.dart';
 import 'package:sol_ver/application/hand_flow_fsm.dart';
 import 'package:sol_ver/application/linear_hand_flow.dart';
 import 'package:sol_ver/core/models/decision_output.dart';
 import 'package:sol_ver/core/models/game_state.dart';
 import 'package:sol_ver/core/preflop/full_tree_preflop.dart';
 import 'package:sol_ver/core/reads/multiway_threat_aggregator.dart';
-import 'package:sol_ver/ui/screens/solver_cockpit_screen.dart';
-import 'package:sol_ver/ui/theme.dart';
 
 Future<void> tapKey(WidgetTester t, String key) async {
   await t.ensureVisible(find.byKey(ValueKey(key)));
@@ -69,43 +66,4 @@ void main() {
     expect(flow.fsm.buildGameState().villainPosition, Position.mp);
   });
 
-  testWidgets('Dual-Table: Mesa 1 AsKs flop 18bb intacta tras usar y resetear Mesa 2', (t) async {
-    await t.binding.setSurfaceSize(const Size(412, 1800));
-    final m = DualTableSessionManager(flowA: _flow(Position.btn), flowB: _flow(Position.btn));
-    final a = m.tableSlotA.fsm;
-    a.addCard(Card.parse('As'));
-    a.addCard(Card.parse('Ks'));
-    m.tableSlotA.flow.manualMode = true;
-    m.tableSlotA.flow.scenarioOpen(Position.co);
-    a.act(Position.btn, ActionType.raise, amountBb: 8.25);
-    m.tableSlotA.flow.goToFlop({Position.co});
-    for (final c in ['Qh', '7d', '2c']) {
-      a.addCard(Card.parse(c));
-    }
-    expect(a.street, Street.flop);
-    expect(a.totalPotBB, closeTo(18, .01));
-    await t.pumpWidget(
-      MaterialApp(
-        theme: buildTheme(),
-        home: SolverCockpitScreen(manager: m),
-      ),
-    );
-    expect(find.byKey(const ValueKey('dual-tabs')), findsOneWidget);
-    expect(find.textContaining('AsKs • Flop'), findsOneWidget);
-    await tapKey(t, 'tab-1');
-    expect(m.activeIndex, 1);
-    await pick(t, '9h');
-    await pick(t, '9c');
-    expect(m.tableSlotB.fsm.heroCards.length, 2);
-    expect(m.tableSlotB.fsm.heroPosition, Position.btn);
-    await tapKey(t, 'rush-reset-1');
-    expect(m.tableSlotB.fsm.heroCards, isEmpty);
-    await tapKey(t, 'tab-0');
-    expect(m.activeIndex, 0);
-    expect(a.heroCards.map((c) => '$c').join(), 'AsKs');
-    expect(a.street, Street.flop);
-    expect(a.totalPotBB, closeTo(18, .01));
-    expect(find.textContaining('Bote: 18.0 bb | 2 Jugadores (CO, BTN)'), findsOneWidget);
-    expect(t.takeException(), isNull);
-  });
 }

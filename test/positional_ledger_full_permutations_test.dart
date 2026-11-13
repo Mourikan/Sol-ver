@@ -68,7 +68,7 @@ void main() {
       await pick(t, c);
     }
     expect(flow.fsm.activeSeats, [Position.bb, Position.mp, Position.btn]);
-    expect(find.textContaining('Turno de BB'), findsOneWidget);
+    expect(find.textContaining('Turno BB'), findsOneWidget);
     expect(find.byKey(const ValueKey('v-check')), findsOneWidget);
     expect(t.takeException(), isNull);
   });

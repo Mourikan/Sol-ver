@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart' hide Card;
 
-import '../../application/dual_table_session_manager.dart';
+import '../../application/solver_controller.dart';
 import '../../application/hand_flow_fsm.dart';
 import '../../application/linear_hand_flow.dart';
 import '../../core/models/decision_output.dart';
@@ -11,28 +11,26 @@ import '../theme/obsidian_theme.dart';
 import '../widgets/blocker_xray.dart';
 import '../widgets/decision_and_why_panel.dart';
 import '../widgets/peek_169_heatmap.dart';
+import '../widgets/pinned_oracle_header.dart';
 import '../widgets/playing_card_widget.dart';
 import '../widgets/bet_size_scrubber_bar.dart';
 import '../widgets/preflop_ordered_table_view.dart';
 import '../widgets/wizard_step_views.dart';
 import '../widgets/two_step_card_picker.dart';
 
-/// Matte Linear Flow (Fase 11.0): sin mesa. Paso 1 mano+posición -> Paso 2 qué pasó antes (1 toque) ->
-/// Paso 3 solución + por qué + AUTO-COMMIT -> respuesta del villano / cartas de la siguiente calle en 1 toque.
-/// Fase 11.5: Dual-Table (Mesa 1 / Mesa 2) con IndexedStack => cada mesa conserva su estado al cambiar.
+/// Single-Table (Fase 17.0): una única FSM + SolverController, modo inmersivo y Oráculo reactivo fijo arriba.
 class SolverCockpitScreen extends StatefulWidget {
-  const SolverCockpitScreen({super.key, this.fsm, this.flow, this.manager});
+  const SolverCockpitScreen({super.key, this.fsm, this.flow});
   final HandFlowFSM? fsm;
   final LinearHandFlow? flow;
-  final DualTableSessionManager? manager;
 
   @override
   State<SolverCockpitScreen> createState() => _SolverCockpitScreenState();
 }
 
 class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
-  late final DualTableSessionManager manager =
-      widget.manager ?? DualTableSessionManager(flowA: widget.flow ?? (widget.fsm == null ? null : LinearHandFlow(widget.fsm)));
+  late final LinearHandFlow flow = widget.flow ?? LinearHandFlow(widget.fsm);
+  final controller = SolverController(executor: InlineExecutor());
 
   @override
   void initState() {
@@ -43,77 +41,15 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
   @override
   void dispose() {
     TacticalFeedback.keepScreenOn(false);
+    controller.dispose();
     super.dispose();
-  }
-
-  Widget _tab(int i) {
-    final slot = manager.slots[i];
-    final on = manager.activeIndex == i;
-    const c = Obsidian.buttonActive;
-    return Expanded(
-      child: Material(
-        color: on ? Obsidian.buttonDefault : Obsidian.surfacePanel,
-        child: InkWell(
-          key: ValueKey('tab-$i'),
-          onTap: () => manager.switchTo(i),
-          child: Container(
-            height: 48,
-            padding: const EdgeInsets.only(left: 8),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: on ? c : AppColors.border, width: on ? 3 : 1),
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '${i == 0 ? '🔵' : '🟣'} ${slot.label}: ${slot.summary}',
-                      key: ValueKey('tab-summary-$i'),
-                      style: TextStyle(color: on ? AppColors.text : AppColors.muted, fontWeight: FontWeight.w700, fontSize: 12),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  key: ValueKey('rush-reset-$i'),
-                  tooltip: 'Rush Reset',
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                  onPressed: () {
-                    TacticalFeedback.tap();
-                    manager.rushReset(i);
-                  },
-                  icon: const Text('⚡', style: TextStyle(fontSize: 16)),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: AppColors.bg,
     body: SafeArea(
-      child: ListenableBuilder(
-        listenable: manager,
-        builder: (context, _) => Column(
-          children: [
-            Row(key: const ValueKey('dual-tabs'), children: [_tab(0), _tab(1)]),
-            Expanded(
-              child: IndexedStack(
-                index: manager.activeIndex,
-                children: [for (var i = 0; i < 2; i++) TablePane(key: ValueKey('pane-$i'), flow: manager.slots[i].flow)],
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: TablePane(key: const ValueKey('pane-0'), flow: flow),
     ),
   );
 }
@@ -197,6 +133,7 @@ class _TablePaneState extends State<TablePane> {
           children: [
             _header(),
             _ribbon(),
+            if (step != WizardStep.handAndSeat) _pinnedOracle(),
             Expanded(
               child: ListView(
                 key: const ValueKey('linear-flow'),
@@ -227,19 +164,14 @@ class _TablePaneState extends State<TablePane> {
 
   /// One_Step_Per_Screen: solo la tarjeta del paso actual.
   Widget _stepView(WizardStep step) {
-    final oracle = flow.lastHero != null && flow.lastHeroStreet == fsm.street ? _result(flow.lastHero!) : null;
     return switch (step) {
       WizardStep.handAndSeat => _step1(),
       WizardStep.preflopTable => Column(
-        children: [
-          ?oracle,
-          PreflopOrderedTableView(flow: flow, act: _do),
-        ],
+        children: [PreflopOrderedTableView(flow: flow, act: _do)],
       ),
       // Si la acción de Hero cerró la calle, su jugada + porqué siguen visibles mientras se piden las cartas.
       WizardStep.boardCards => Column(
         children: [
-          if (flow.lastHero != null && fsm.actions.isNotEmpty && fsm.actions.last.actor == fsm.heroPosition) _result(flow.lastHero!),
           if (fsm.board.isEmpty) PreflopOrderedTableView(flow: flow, act: _do, resizeOnly: true),
           _boardRow(),
         ],
@@ -247,12 +179,11 @@ class _TablePaneState extends State<TablePane> {
       WizardStep.streetAction => Column(
         children: [
           _boardRow(),
-          ?oracle,
           VillainTurnStep(flow: flow, scrub: scrub, onScrub: _setScrub, act: _do),
         ],
       ),
       WizardStep.heroManual => Column(children: [if (fsm.board.isNotEmpty) _boardRow(), _section('TU TURNO — ¿qué hiciste tú?', _heroManual())]),
-      WizardStep.handOver => Column(children: [?oracle, _handOver()]),
+      WizardStep.handOver => Column(children: [_handOver()]),
     };
   }
 
@@ -426,7 +357,7 @@ class _TablePaneState extends State<TablePane> {
     final setup = fsm.phase == HandPhase.setup;
     final hero = [...fsm.heroCards, ...List<Card?>.filled(2 - fsm.heroCards.length, null)];
     return _section(
-      fsm.heroCards.length < 2 ? 'PASO 1 · 1° ELIGE TU MANO (teclado abajo)' : 'PASO 1 · 2° ELIGE TU POSICIÓN',
+      fsm.heroCards.length < 2 ? 'Tu mano:' : 'Tu posición:',
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -540,15 +471,102 @@ class _TablePaneState extends State<TablePane> {
     );
   }
 
-  Widget _result(DecisionOutput d) {
-    final c = actionColor(d.action);
-    final sz = d.sizing;
-    final label = switch (d.action) {
-      DecisionAction.betRaise => 'BET / RAISE',
-      DecisionAction.call => 'CALL',
-      DecisionAction.check => 'CHECK',
-      DecisionAction.fold => 'FOLD',
-    };
+  /// Fuente única del Oráculo (R1-R4): manual/turno de Hero -> proyección viva -> decisión vigente.
+  (DecisionOutput, bool)? _oracleDecision() {
+    if (fsm.heroCards.length < 2) return null;
+    final finished = fsm.screenPhase == ScreenPhase.handFinished;
+    if (!finished) {
+      if (fsm.currentActorSeat == fsm.heroPosition && fsm.activeRecommendation != null) return (fsm.activeRecommendation!, false);
+      final p = fsm.projectedHeroDecision;
+      if (p != null) return (p, false);
+    }
+    final last = flow.lastHero;
+    return last == null ? null : (last, true);
+  }
+
+  static String _street(Street s) => switch (s) {
+    Street.preflop => 'PREFLOP',
+    Street.flop => 'FLOP',
+    Street.turn => 'TURN',
+    Street.river => 'RIVER',
+  };
+
+  String _villainActLabel(PlayerAction a) {
+    if (a.street != Street.preflop) {
+      final bet = a.type == ActionType.bet;
+      if (a.type == ActionType.allIn) return 'All-In ${a.amountBb.toStringAsFixed(1)}bb';
+      return '${bet ? 'Bet' : 'Raise'} ${a.amountBb.toStringAsFixed(1)}bb';
+    }
+    var lvl = 0;
+    for (final x in fsm.actions) {
+      if (x.street == Street.preflop && x.isAggressive) lvl++;
+      if (identical(x, a)) break;
+    }
+    final n = a.type == ActionType.allIn
+        ? 'All-In'
+        : switch (lvl) {
+            1 => 'OR',
+            2 => '3-Bet',
+            3 => '4-Bet',
+            _ => '5-Bet',
+          };
+    return '$n ${a.amountBb.toStringAsFixed(1)}bb';
+  }
+
+  /// `ACCIÓN: 3-BET a 7.5 bb` / `ACCIÓN: CALL 7.5 bb` / `ACCIÓN: FOLD`.
+  String _actionText(DecisionOutput d, bool applied, Street st) {
+    final heroAct = applied ? fsm.actions.reversed.where((a) => a.actor == fsm.heroPosition && a.street == st).firstOrNull : null;
+    final hero = fsm.seats[fsm.heroPosition];
+    switch (d.action) {
+      case DecisionAction.fold:
+        return 'ACCIÓN: FOLD';
+      case DecisionAction.check:
+        return 'ACCIÓN: CHECK';
+      case DecisionAction.call:
+        final amt = heroAct?.amountBb ?? (hero == null ? 0.0 : fsm.currentBet);
+        return 'ACCIÓN: CALL ${amt.toStringAsFixed(1)} bb';
+      case DecisionAction.betRaise:
+        final to = heroAct?.amountBb ?? d.sizing?.bb ?? 0;
+        if (st == Street.preflop) {
+          final aggr = fsm.actions.where((a) => a.street == Street.preflop && a.isAggressive).toList();
+          var lvl = aggr.length;
+          if (heroAct != null && heroAct.isAggressive) lvl = aggr.indexOf(heroAct);
+          final limps = fsm.actions.any((a) => a.street == Street.preflop && a.type == ActionType.call);
+          final n = switch (lvl) {
+            0 => limps ? 'ISO' : 'OR',
+            1 => '3-BET',
+            2 => '4-BET',
+            3 => '5-BET',
+            _ => 'ALL-IN',
+          };
+          return 'ACCIÓN: $n a ${to.toStringAsFixed(1)} bb';
+        }
+        final facing = heroAct != null ? heroAct.type == ActionType.raise : fsm.currentHighBetBB > 0;
+        return 'ACCIÓN: ${facing ? 'RAISE a' : 'BET'} ${to.toStringAsFixed(1)} bb${d.sizing == null ? '' : ' (${d.sizing!.potPct.round()}%)'}';
+    }
+  }
+
+  Widget _pinnedOracle() {
+    final o = _oracleDecision();
+    if (o == null) return const SizedBox.shrink();
+    final (d, applied) = o;
+    final st = applied ? (flow.lastHeroStreet ?? fsm.street) : fsm.street;
+    final board = fsm.board
+        .take(switch (st) {
+          Street.preflop => 0,
+          Street.flop => 3,
+          Street.turn => 4,
+          Street.river => 5,
+        })
+        .map((c) => '${c.rank.symbol}${AppColors.suitGlyph(c.suit)}')
+        .join('');
+    final vAgg = fsm.actions.reversed.where((a) => a.street == st && a.actor != fsm.heroPosition && a.isAggressive).firstOrNull;
+    final vs = vAgg == null ? (st == Street.preflop ? 'limpia' : 'sin apuesta') : '${vAgg.actor.name.toUpperCase()} ${_villainActLabel(vAgg)}';
+    final ctx = '[${_street(st)}${board.isEmpty ? '' : ' $board'} • ${fsm.heroPosition.name.toUpperCase()} vs $vs]';
+    final last = fsm.actions.isEmpty ? null : fsm.actions.last;
+    final banner = !applied && last != null && last.actor != fsm.heroPosition && last.isAggressive
+        ? 'ACTUALIZADO VS ${last.actor.name.toUpperCase()} ${_villainActLabel(last)}'
+        : null;
     final ev = d.actionEVs ?? const <String, double>{};
     final evKey = switch (d.action) {
       DecisionAction.betRaise => 'betRaise',
@@ -556,71 +574,56 @@ class _TablePaneState extends State<TablePane> {
       DecisionAction.check => 'check',
       DecisionAction.fold => 'fold',
     };
+    final evLine =
+        'EV ${ev[evKey] == null ? '—' : '${ev[evKey]! >= 0 ? '+' : ''}${ev[evKey]!.toStringAsFixed(2)} bb'}'
+        '${d.exploitDeltaEV == null ? '' : ' · Δ ${d.exploitDeltaEV! >= 0 ? '+' : ''}${d.exploitDeltaEV!.toStringAsFixed(2)}'}';
+    final canOverride = applied && !flow.manualMode && fsm.canUndo && fsm.actions.any((a) => a.actor == fsm.heroPosition);
+    final status = flow.manualMode && fsm.currentActorSeat == fsm.heroPosition
+        ? 'Elige tu acción abajo'
+        : (applied ? '✓ El solver asume que hiciste esta jugada' : '◷ En vivo: asientos sin tocar = Fold');
+    return PinnedOracleHeader(
+      contextLine: ctx,
+      action: _actionText(d, applied, st),
+      evLine: evLine,
+      status: status,
+      updatedBanner: banner,
+      onOverride: canOverride ? () => _do(flow.overrideHero) : null,
+      body: _oracleBody(d),
+    );
+  }
+
+  /// Porqué en español (Lectura / EV / Plan) + rango percibido, sin truncar.
+  Widget _oracleBody(DecisionOutput d) {
     final j = d.justification;
     final r = d.perceivedVillainRange;
-    return _section(
-      'TU JUGADA (${flow.lastHeroStreet?.name.toUpperCase() ?? ''}) — ${flow.manualMode ? 'elige tu acción abajo' : '✓ El solver asume que hiciste esta jugada'}',
-      Column(
-        key: const ValueKey('hero-result'),
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: c.withValues(alpha: .14),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: c),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$label${sz == null ? '' : '  ${sz.bb.toStringAsFixed(1)} bb (${sz.potPct.round()}%)'}',
-                  key: const ValueKey('hero-action'),
-                  style: Obsidian.num(size: 22, color: AppColors.text, weight: FontWeight.w800),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'EV ${ev[evKey] == null ? '—' : '${ev[evKey]! >= 0 ? '+' : ''}${ev[evKey]!.toStringAsFixed(2)} bb'}'
-                  '${d.exploitDeltaEV == null ? '' : '  ·  Δ Exploit ${d.exploitDeltaEV! >= 0 ? '+' : ''}${d.exploitDeltaEV!.toStringAsFixed(2)} bb'}'
-                  '  ·  ${j?.activeCloserRule ?? 'GTO_Baseline'}',
-                  style: Obsidian.num(size: 12, color: AppColors.muted, weight: FontWeight.w600),
-                ),
-              ],
-            ),
-          ),
-          if (!flow.manualMode && fsm.canUndo && fsm.actions.any((a) => a.actor == fsm.heroPosition))
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                key: const ValueKey('override'),
-                onPressed: () => _do(flow.overrideHero),
-                child: const Text('Hice otra cosa', style: TextStyle(color: AppColors.muted, fontSize: 12)),
-              ),
-            ),
-          if (j != null) ...[
-            const SizedBox(height: 8),
-            _why('Lectura del rival', j.villainReadExplanation, 'why-1'),
-            _why('Por qué gana más EV', j.evWhyExplanation, 'why-2'),
-            _why('Plan siguiente calle', j.nextStreetPlan, 'why-3'),
-          ],
-          if (r != null && r.totalActiveCombos > 0) ...[
-            const SizedBox(height: 8),
-            SizedBox(height: 20, child: RangeBar(r)),
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                Expanded(
-                  child: Text('Top: ${r.topRepresentativeHands.join('  ')}', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
-                ),
-                if (r.classWeights.isNotEmpty)
-                  TextButton(key: const ValueKey('peek-169'), onPressed: () => Peek169Heatmap.show(context, r.classWeights), child: const Text('Ver 13x13')),
-              ],
-            ),
-          ],
-          if (d.runoutForecast != null) ...[const SizedBox(height: 6), SizedBox(height: 22, child: RunoutStrip(d.runoutForecast!))],
+    return Column(
+      key: const ValueKey('hero-result'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (j != null) ...[
+          _why('Lectura', j.villainReadExplanation, 'why-1'),
+          _why('EV', j.evWhyExplanation, 'why-2'),
+          _why('Plan', j.nextStreetPlan, 'why-3'),
         ],
-      ),
+        if (r != null && r.totalActiveCombos > 0) ...[
+          SizedBox(height: 20, child: RangeBar(r)),
+          Row(
+            children: [
+              Expanded(
+                child: Text('Top: ${r.topRepresentativeHands.join('  ')}', style: const TextStyle(color: AppColors.muted, fontSize: 12)),
+              ),
+              if (r.classWeights.isNotEmpty)
+                TextButton(
+                  key: const ValueKey('peek-169'),
+                  style: TextButton.styleFrom(minimumSize: const Size(48, 44)),
+                  onPressed: () => Peek169Heatmap.show(context, r.classWeights),
+                  child: const Text('Ver 13x13'),
+                ),
+            ],
+          ),
+        ],
+        if (d.runoutForecast != null) SizedBox(height: 22, child: RunoutStrip(d.runoutForecast!)),
+      ],
     );
   }
 

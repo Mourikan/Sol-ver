@@ -2,7 +2,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart' hide Card;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:sol_ver/application/dual_table_session_manager.dart';
 import 'package:sol_ver/application/hand_flow_fsm.dart';
 import 'package:sol_ver/application/linear_hand_flow.dart';
 import 'package:sol_ver/core/models/decision_output.dart';
@@ -270,11 +269,11 @@ void main() {
     for (final c in ['Kd', '7c', '2h']) {
       await pick(t, c);
     }
-    expect(find.textContaining('Turno de BB'), findsOneWidget);
+    expect(find.textContaining('Turno BB'), findsOneWidget);
     await tapKey(t, 'v-check');
-    expect(find.textContaining('Turno de MP'), findsOneWidget);
+    expect(find.textContaining('Turno MP'), findsOneWidget);
     await tapKey(t, 'v-b50');
-    expect(find.textContaining('Turno de CO'), findsOneWidget);
+    expect(find.textContaining('Turno CO'), findsOneWidget);
     await tapKey(t, 'v-fold');
     expect(fsm.activeSeats, [Position.bb, Position.mp, Position.btn]);
     // Hero responde solo; luego BB.
@@ -296,64 +295,19 @@ void main() {
     expect(t.takeException(), isNull);
   });
 
-  testWidgets('U7 Dual-Table: aislamiento total + cambio < 1 ms', (t) async {
-    await t.binding.setSurfaceSize(const Size(412, 915));
-    final m = DualTableSessionManager(
-      flowA: LinearHandFlow(HandFlowFSM()..configure(stake: Stake.nl50)),
-      flowB: LinearHandFlow(HandFlowFSM()..configure(stake: Stake.nl10)),
-    );
-    await t.pumpWidget(
-      MaterialApp(
-        theme: buildTheme(),
-        home: SolverCockpitScreen(manager: m),
-      ),
-    );
-    await pick(t, 'As');
-    await pick(t, 'Ad');
-    for (var i = 0; i < 10; i++) {
-      m.switchTo(1);
-      m.switchTo(0);
+  testWidgets('U7 Single-Table: sin pestañas, [↶ Deshacer] y [⚡ Nueva Mano] físicos >= 44dp', (t) async {
+    final flow = await start(t, 'As', 'Ad', 'btn');
+    expect(find.byKey(const ValueKey('dual-tabs')), findsNothing);
+    expect(find.byKey(const ValueKey('tab-1')), findsNothing);
+    for (final k in ['undo', 'new-hand']) {
+      expect(t.getSize(find.byKey(ValueKey(k))).height, greaterThanOrEqualTo(44), reason: k);
     }
-    final sw = Stopwatch()..start();
-    for (var i = 0; i < 100; i++) {
-      m.switchTo(1);
-      m.switchTo(0);
-    }
-    sw.stop();
-    // ignore: avoid_print
-    print('SWITCH_UI_US ${(sw.elapsedMicroseconds / 200).toStringAsFixed(0)}');
-    // Estado puro (sin árbol de widgets escuchando): el cambio de mesa es O(1).
-    final pure = DualTableSessionManager();
-    final sw0 = Stopwatch()..start();
-    for (var i = 0; i < 100; i++) {
-      pure.switchTo(1);
-      pure.switchTo(0);
-    }
-    sw0.stop();
-    // ignore: avoid_print
-    print('SWITCH_STATE_US ${(sw0.elapsedMicroseconds / 200).toStringAsFixed(1)}');
-    expect(sw0.elapsedMicroseconds / 200, lessThan(1000), reason: 'cambio de mesa < 1 ms');
-    m.switchTo(1);
-    await t.pump();
-    expect(m.tableSlotB.fsm.heroCards, isEmpty);
-    expect(identical(m.tableSlotA.fsm, m.tableSlotB.fsm), isFalse);
-    expect(m.tableSlotB.fsm.stake, Stake.nl10);
-    m.rushReset(1);
-    final r = DualTableSessionManager();
-    for (var i = 0; i < 10; i++) {
-      r.rushReset(1);
-    }
-    final sw2 = Stopwatch()..start();
-    for (var i = 0; i < 100; i++) {
-      r.rushReset(1);
-    }
-    sw2.stop();
-    // ignore: avoid_print
-    print('RESET_US ${(sw2.elapsedMicroseconds / 100).toStringAsFixed(1)}');
-    expect(sw2.elapsedMicroseconds / 100, lessThan(1000), reason: 'Rush Reset < 1 ms');
-    m.switchTo(0);
-    await t.pump();
-    expect(m.tableSlotA.fsm.heroCards.map((c) => '$c').join(), 'AsAd');
+    await tapKey(t, 'hero-go');
+    final n = flow.fsm.actions.length;
+    await tapKey(t, 'undo');
+    expect(flow.fsm.actions.length, lessThan(n), reason: 'Deshacer físico funciona');
+    await tapKey(t, 'new-hand');
+    expect(flow.fsm.phase, HandPhase.setup);
     expect(t.takeException(), isNull);
   });
 
@@ -402,12 +356,6 @@ void main() {
     expect(flow.fsm.actions.last.actor, Position.co);
     // ignore: avoid_print
     print('TAPS_DEF3B $taps');
-    // Cambio Mesa 1 <-> 2.
-    taps = 0;
-    await t.tap(find.byKey(const ValueKey('tab-1')));
-    await t.pump();
-    taps++;
-    // ignore: avoid_print
-    print('TAPS_SWITCH $taps');
+
   });
 }

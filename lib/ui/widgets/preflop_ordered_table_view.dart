@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' hide Card;
 
 import '../../application/hand_flow_fsm.dart';
 import '../../application/linear_hand_flow.dart';
+import '../../core/models/decision_output.dart';
 import '../../core/models/game_state.dart';
 import '../theme/obsidian_theme.dart';
 import 'bet_size_scrubber_bar.dart';
@@ -31,40 +32,53 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
   double? _resize;
   int _resizeIdx = -1;
 
-  /// Botones contextuales del nivel de apuesta para [p]; [apply] ejecuta (villano: seatAct, Hero manual: heroManual).
-  List<Widget> _levelButtons(Position p, void Function(ActionType t, double amt) apply) {
+  /// Vista del nivel de apuesta (real o proyectada tras la acción de Hero).
+  ({int r, double bet, double minTo, int limps}) _viewNow() => (
+    r: PreflopOrderedTableView.raises(fsm),
+    bet: fsm.currentBet,
+    minTo: fsm.minRaiseTo,
+    limps: fsm.actions.where((a) => a.street == Street.preflop && a.type == ActionType.call).length,
+  );
+
+  /// Proyección del nivel tras la jugada recomendada de Hero (para tocar filas posteriores sin [Mi turno]).
+  ({int r, double bet, double minTo, int limps}) _viewAfterHero(DecisionOutput d) {
+    final v = _viewNow();
+    if (d.action != DecisionAction.betRaise || d.sizing == null) return v;
+    final to = d.sizing!.bb;
+    final inc = to - v.bet > v.minTo - v.bet ? to - v.bet : v.minTo - v.bet;
+    return (r: v.r + 1, bet: to, minTo: to + inc, limps: v.limps);
+  }
+
+  /// Especificación de botones por nivel: (etiqueta, código, tipo, monto).
+  List<(String, String, ActionType, double)> _specs(Position p, ({int r, double bet, double minTo, int limps}) v) {
     final s = fsm.seats[p]!;
-    final n = p.name;
-    final toCall = fsm.currentBet - s.committed;
+    final toCall = v.bet - s.committed;
     final cap = s.committed + s.stack;
-    final r = PreflopOrderedTableView.raises(fsm);
     final can = fsm.canRaise(p);
-    final out = <Widget>[];
-    void b(String label, String code, ActionType t, [double amt = 0]) =>
-        out.add(chip(label, 'act-$n-$code', false, () => widget.act(() => apply(t, amt)), h: 44));
+    final out = <(String, String, ActionType, double)>[];
+    void b(String label, String code, ActionType t, [double amt = 0]) => out.add((label, code, t, amt));
     void raise(String label, String code, double to) {
       if (!can) return;
-      final x = BetSizeScrubberBar.snap(to < fsm.minRaiseTo ? fsm.minRaiseTo : to);
+      final x = BetSizeScrubberBar.snap(to < v.minTo ? v.minTo : to);
       if (x >= cap - 1e-9) return;
       b('$label ${x.toStringAsFixed(1)}', code, ActionType.raise, x);
     }
 
     final blind = p == Position.sb || p == Position.bb;
-    switch (r) {
+    switch (v.r) {
       case 0:
-        final limps = fsm.actions.where((a) => a.street == Street.preflop && a.type == ActionType.call).length;
         toCall > 0 ? b('Limp', 'limp', ActionType.call) : b('Check', 'check', ActionType.check);
-        raise('OR', 'or', LinearHandFlow.openSize(p) + limps);
+        raise('OR', 'or', LinearHandFlow.openSize(p) + v.limps);
         b('All-In', 'allin', ActionType.allIn);
       case 1:
         toCall > 0 ? b('Call ${toCall.toStringAsFixed(1)}', 'call', ActionType.call) : b('Check', 'check', ActionType.check);
-        raise('3-Bet', '3bet', fsm.currentBet * (blind ? 4 : 3));
-        raise('Min-3B 🐟', 'min3b', fsm.minRaiseTo);
+        raise('3-Bet', '3bet', v.bet * (blind ? 4 : 3));
+        raise('Min-3B 🐟', 'min3b', v.minTo);
         b('All-In', 'allin', ActionType.allIn);
       case 2:
         if (toCall > 0) b('Fold', 'fold', ActionType.fold);
         toCall > 0 ? b('Call ${toCall.toStringAsFixed(1)}', 'call', ActionType.call) : b('Check', 'check', ActionType.check);
-        raise('4-Bet', '4bet', fsm.currentBet * 2.4);
+        raise('4-Bet', '4bet', v.bet * 2.4);
         b('All-In', 'allin', ActionType.allIn);
       case 3:
         if (toCall > 0) b('Fold', 'fold', ActionType.fold);
@@ -76,6 +90,33 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
     }
     return out;
   }
+
+  /// Botones contextuales del nivel actual para [p]; [apply] ejecuta (villano: seatAct, Hero manual: heroManual).
+  List<Widget> _levelButtons(Position p, void Function(ActionType t, double amt) apply) => [
+    for (final (label, code, t, amt) in _specs(p, _viewNow())) chip(label, 'act-${p.name}-$code', false, () => widget.act(() => apply(t, amt)), h: 44),
+  ];
+
+  /// Filas DETRÁS de Hero mientras Hero aún no ha hablado: al tocar, se asume la jugada del solver para Hero
+  /// (asientos previos sin tocar = Fold) y se aplica la acción del villano con montos reales del nuevo estado.
+  List<Widget> _postHeroButtons(Position p, DecisionOutput d) => [
+    for (final (label, code, _, _) in _specs(p, _viewAfterHero(d)))
+      chip(
+        label,
+        'act-${p.name}-$code',
+        false,
+        () => widget.act(() {
+          flow.heroGo();
+          if (!fsm.canTap(p)) return;
+          for (final (_, c2, t2, amt2) in _specs(p, _viewNow())) {
+            if (c2 == code) {
+              flow.seatAct(p, t2, amount: amt2);
+              return;
+            }
+          }
+        }),
+        h: 44,
+      ),
+  ];
 
   String _status(Position p) {
     final last = fsm.actions.reversed.where((a) => a.street == Street.preflop && a.actor == p).firstOrNull;
@@ -190,6 +231,9 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
       }
     } else if (fsm.canTap(p)) {
       buttons.addAll(_levelButtons(p, (t, amt) => flow.seatAct(p, t, amount: amt)));
+    } else if (fsm.pendingToAct.contains(p) && fsm.pendingToAct.contains(fsm.heroPosition) && fsm.canTap(fsm.heroPosition) && !flow.manualMode) {
+      final d = fsm.projectedHeroDecision;
+      if (d != null) buttons.addAll(_postHeroButtons(p, d));
     }
     if (buttons.isNotEmpty) {
       children.add(
@@ -257,9 +301,7 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
         Padding(
           padding: const EdgeInsets.only(top: 6),
           child: Text(
-            heroActed && !heroPending
-                ? 'Toca solo a quien pagó o resubió; el resto se asume Fold'
-                : 'Toca la acción de quien entró antes que tú; los que no toques foldearon',
+            heroActed && !heroPending ? 'Responder a tu ${_status(fsm.heroPosition).replaceAll(' (Auto)', '')}:' : 'Antes de ti:',
             style: const TextStyle(color: Obsidian.textSecondary, fontSize: 12),
           ),
         ),
