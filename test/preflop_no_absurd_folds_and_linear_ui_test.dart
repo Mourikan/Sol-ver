@@ -81,7 +81,7 @@ void main() {
     expect(flow.manualMode, isTrue);
     await tapKey(t, 'hero-passive');
     expect(flow.manualMode, isFalse);
-    await tapKey(t, 'resp-call-utg');
+    await tapKey(t, 'go-flop');
     expect(flow.fsm.phase, HandPhase.flopCards);
     for (final c in ['Kc', '7d', '2h']) {
       await pick(t, c);

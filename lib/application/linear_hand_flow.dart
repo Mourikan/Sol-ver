@@ -24,6 +24,7 @@ class LinearHandFlow extends ChangeNotifier {
 
   Position get hero => fsm.heroPosition;
   bool get atHeroTurn => fsm.currentActor == hero;
+
   /// Paso 2 disponible: preflop sin ninguna acción registrada todavía.
   bool get preflopUntouched => fsm.phase == HandPhase.preflop && fsm.actions.isEmpty;
 
@@ -81,30 +82,80 @@ class LinearHandFlow extends ChangeNotifier {
   /// [Limpia]: todos los anteriores foldean.
   void scenarioClean() => _step(() => _resolve());
 
-  /// [Open de X] (+ opcionalmente un caller => squeeze spot).
-  void scenarioOpen(Position opener, {Position? caller}) => _step(() {
-        _resolve(target: opener, type: ActionType.raise, amount: openSize(opener));
-        if (caller != null && fsm.currentActor != hero) _resolve(target: caller, type: ActionType.call);
-      });
+  /// [Open de X] + cold callers (multi-select) => squeeze multiway (dinero muerto por caller).
+  void scenarioOpen(Position opener, {Position? caller, List<Position> callers = const []}) => _step(() {
+    _resolveCallers({...callers, ?caller}, opener: opener);
+  });
+
+  /// Todos los [callers] pagan (cada uno en su turno); el resto foldea/pasa hasta Hero.
+  void _resolveCallers(Set<Position> callers, {Position? opener}) {
+    var guard = 0;
+    while (fsm.currentActor != null && fsm.currentActor != hero && guard++ < 12) {
+      final p = fsm.currentActor!;
+      if (p == opener) {
+        fsm.act(p, ActionType.raise, amountBb: openSize(p));
+        continue;
+      }
+      final owes = fsm.currentBet - fsm.seats[p]!.committed > 0;
+      fsm.act(p, callers.contains(p) ? (owes ? ActionType.call : ActionType.check) : (owes ? ActionType.fold : ActionType.check));
+    }
+  }
+
+  /// Asientos entre el opener y Hero (candidatos a cold call).
+  List<Position> coldCallerCandidates(Position opener) {
+    final o = openersBeforeHero;
+    final i = o.indexOf(opener);
+    return i < 0 ? const [] : o.sublist(i + 1);
+  }
+
+  /// Villanos vivos (no Hero) en orden posicional postflop (OOP -> IP).
+  List<Position> get liveVillains => [
+    for (final p in HandFlowFSM.postflopOrder)
+      if (p != hero && (fsm.seats[p]?.alive ?? false)) p,
+  ];
+
+  /// Villanos que aún deben dinero en la ronda actual (respuesta a la acción de Hero).
+  List<Position> get pendingOwing => [
+    for (final p in HandFlowFSM.preflopOrder)
+      if (p != hero && (fsm.seats[p]?.alive ?? false) && !(fsm.seats[p]?.allIn ?? true) && fsm.currentBet - fsm.seats[p]!.committed > 0) p,
+  ];
+
+  /// Preflop tras la acción de Hero: [callers] pagan, el resto foldea => flop N-way.
+  void goToFlop(Set<Position> callers) => _step(() => _resolveCallers(callers));
+
+  /// [3-Bet de X] sobre la acción de Hero: el turno vuelve a Hero con el bote exacto.
+  void threeBetBy(Position p) {
+    final s = fsm.seats[p]!;
+    final mult = p == Position.sb || p == Position.bb ? 4.0 : 3.0;
+    final to = fsm.currentBet * mult;
+    final cap = s.committed + s.stack;
+    villain(p, ActionType.raise, amount: to > cap ? cap : to);
+  }
+
+  /// Acción de UN solo villano (el actor actual), sin tocar al resto: necesario en botes multiway.
+  void villainAct(ActionType type, {double amount = 0}) => _step(() {
+    final p = fsm.currentActor;
+    if (p == null || p == hero) return;
+    fsm.act(p, type, amountBb: amount);
+  });
+
+  /// [X Foldeó]: elimina al villano (solo en su turno) y re-evalúa el agregador multiway.
+  void villainFolded(Position p) {
+    if (fsm.currentActor == p) villainAct(ActionType.fold);
+  }
 
   /// [1+ Limpers]: [limpers] pagan 1bb; el resto foldea.
-  void scenarioLimpers(List<Position> limpers) => _step(() {
-        for (final l in limpers) {
-          if (fsm.currentActor == hero) break;
-          _resolve(target: l, type: ActionType.call);
-        }
-        _resolve();
-      });
+  void scenarioLimpers(List<Position> limpers) => _step(() => _resolveCallers(limpers.toSet()));
 
   /// [Enfrento 3-Bet]: Hero abre (tamaño estándar) y [threeBettor] 3-betea (3x IP / 4x desde las ciegas).
   void scenarioFacing3Bet(Position threeBettor) => _step(() {
-        _resolve();
-        if (fsm.currentActor != hero) return;
-        final open = openSize(hero);
-        fsm.act(hero, ActionType.raise, amountBb: open);
-        final mult = threeBettor == Position.sb || threeBettor == Position.bb ? 4.0 : 3.0;
-        _resolve(target: threeBettor, type: ActionType.raise, amount: open * mult);
-      });
+    _resolve();
+    if (fsm.currentActor != hero) return;
+    final open = openSize(hero);
+    fsm.act(hero, ActionType.raise, amountBb: open);
+    final mult = threeBettor == Position.sb || threeBettor == Position.bb ? 4.0 : 3.0;
+    _resolve(target: threeBettor, type: ActionType.raise, amount: open * mult);
+  });
 
   // ---------------- Respuestas del villano en 1 toque ----------------
   /// Todos los villanos pendientes foldean (o pasan si no deben nada).

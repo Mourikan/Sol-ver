@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' hide Card;
 
+import '../../application/dual_table_session_manager.dart';
 import '../../application/hand_flow_fsm.dart';
 import '../../application/linear_hand_flow.dart';
 import '../../core/models/decision_output.dart';
@@ -19,18 +20,119 @@ import '../widgets/two_step_card_picker.dart';
 
 /// Matte Linear Flow (Fase 11.0): sin mesa. Paso 1 mano+posición -> Paso 2 qué pasó antes (1 toque) ->
 /// Paso 3 solución + por qué + AUTO-COMMIT -> respuesta del villano / cartas de la siguiente calle en 1 toque.
+/// Fase 11.5: Dual-Table (Mesa 1 / Mesa 2) con IndexedStack => cada mesa conserva su estado al cambiar.
 class SolverCockpitScreen extends StatefulWidget {
-  const SolverCockpitScreen({super.key, this.fsm, this.flow});
+  const SolverCockpitScreen({super.key, this.fsm, this.flow, this.manager});
   final HandFlowFSM? fsm;
   final LinearHandFlow? flow;
+  final DualTableSessionManager? manager;
 
   @override
   State<SolverCockpitScreen> createState() => _SolverCockpitScreenState();
 }
 
 class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
-  late final LinearHandFlow flow = widget.flow ?? LinearHandFlow(widget.fsm);
+  late final DualTableSessionManager manager =
+      widget.manager ?? DualTableSessionManager(flowA: widget.flow ?? (widget.fsm == null ? null : LinearHandFlow(widget.fsm)));
+
+  @override
+  void initState() {
+    super.initState();
+    TacticalFeedback.keepScreenOn(true);
+  }
+
+  @override
+  void dispose() {
+    TacticalFeedback.keepScreenOn(false);
+    super.dispose();
+  }
+
+  Widget _tab(int i) {
+    final slot = manager.slots[i];
+    final on = manager.activeIndex == i;
+    final c = i == 0 ? Obsidian.cyanCall : const Color(0xFF7C3AED);
+    return Expanded(
+      child: Material(
+        color: on ? c.withValues(alpha: .22) : AppColors.surface,
+        child: InkWell(
+          key: ValueKey('tab-$i'),
+          onTap: () => manager.switchTo(i),
+          child: Container(
+            height: 44,
+            padding: const EdgeInsets.only(left: 8),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: on ? c : AppColors.border, width: on ? 3 : 1),
+              ),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${i == 0 ? '🔵' : '🟣'} ${slot.label}: ${slot.summary}',
+                      key: ValueKey('tab-summary-$i'),
+                      style: TextStyle(color: on ? AppColors.text : AppColors.muted, fontWeight: FontWeight.w700, fontSize: 12),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  key: ValueKey('rush-reset-$i'),
+                  tooltip: 'Rush Reset',
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 40, minHeight: 44),
+                  onPressed: () {
+                    TacticalFeedback.tap();
+                    manager.rushReset(i);
+                  },
+                  icon: const Text('⚡', style: TextStyle(fontSize: 16)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: AppColors.bg,
+    body: SafeArea(
+      child: ListenableBuilder(
+        listenable: manager,
+        builder: (context, _) => Column(
+          children: [
+            Row(key: const ValueKey('dual-tabs'), children: [_tab(0), _tab(1)]),
+            Expanded(
+              child: IndexedStack(
+                index: manager.activeIndex,
+                children: [for (var i = 0; i < 2; i++) TablePane(key: ValueKey('pane-$i'), flow: manager.slots[i].flow)],
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// Una mesa: flujo lineal completo (estado, breadcrumb y perfiles HUD propios).
+class TablePane extends StatefulWidget {
+  const TablePane({super.key, required this.flow});
+  final LinearHandFlow flow;
+
+  @override
+  State<TablePane> createState() => _TablePaneState();
+}
+
+class _TablePaneState extends State<TablePane> {
+  LinearHandFlow get flow => widget.flow;
   HandFlowFSM get fsm => flow.fsm;
+  final coldCallers = <Position>{};
+  final flopCallers = <Position>{};
   String? error;
   String? pendingMode; // 'squeeze' | 'limp' | 'squeeze-caller'
   Position? squeezeOpener;
@@ -50,15 +152,8 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    TacticalFeedback.keepScreenOn(true);
-  }
-
-  @override
   void dispose() {
     scroll.dispose();
-    TacticalFeedback.keepScreenOn(false);
     super.dispose();
   }
 
@@ -75,42 +170,41 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: AppColors.bg,
-    body: SafeArea(
-      child: ListenableBuilder(
-        listenable: flow,
-        builder: (context, _) {
-          _autoScroll();
-          return Column(
-            children: [
-              _header(),
-              LiveLineBreadcrumb(fsm: fsm, act: _do),
-              Expanded(
-                child: ListView(
-                  key: const ValueKey('linear-flow'),
-                  controller: scroll,
-                  padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
-                  children: [
-                    _step1(),
-                    if (fsm.board.isNotEmpty || (fsm.awaitingCards && fsm.phase != HandPhase.setup)) _boardRow(),
-                    if (fsm.awaitingCards) _picker(),
-                    if (flow.preflopUntouched && !flow.atHeroTurn) _step2(),
-                    if (_mainVillain() != null && fsm.phase != HandPhase.setup) _villainLabels(),
-                    if (flow.lastHero != null) _result(flow.lastHero!),
-                    if (fsm.phase != HandPhase.setup && !fsm.awaitingCards) _next(),
-                    if (error != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(error!, style: const TextStyle(color: AppColors.crimson, fontSize: 12)),
-                      ),
-                  ],
-                ),
+  Widget build(BuildContext context) => ColoredBox(
+    color: AppColors.bg,
+    child: ListenableBuilder(
+      listenable: flow,
+      builder: (context, _) {
+        _autoScroll();
+        return Column(
+          children: [
+            _header(),
+            LiveLineBreadcrumb(fsm: fsm, act: _do),
+            Expanded(
+              child: ListView(
+                key: const ValueKey('linear-flow'),
+                controller: scroll,
+                padding: const EdgeInsets.fromLTRB(10, 2, 10, 12),
+                children: [
+                  _step1(),
+                  if (fsm.phase != HandPhase.setup && fsm.street != Street.preflop && flow.liveVillains.isNotEmpty) _liveBar(),
+                  if (fsm.board.isNotEmpty || (fsm.awaitingCards && fsm.phase != HandPhase.setup)) _boardRow(),
+                  if (fsm.awaitingCards) _picker(),
+                  if (flow.preflopUntouched && !flow.atHeroTurn) _step2(),
+                  if (_mainVillain() != null && fsm.phase != HandPhase.setup) _villainLabels(),
+                  if (flow.lastHero != null) _result(flow.lastHero!),
+                  if (fsm.phase != HandPhase.setup && !fsm.awaitingCards) _next(),
+                  if (error != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(error!, style: const TextStyle(color: AppColors.crimson, fontSize: 12)),
+                    ),
+                ],
               ),
-            ],
-          );
-        },
-      ),
+            ),
+          ],
+        );
+      },
     ),
   );
 
@@ -164,9 +258,9 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
   );
 
   Widget _section(String title, Widget child) => Padding(
-    padding: const EdgeInsets.only(top: 10),
+    padding: const EdgeInsets.only(top: 6),
     child: Container(
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(12),
@@ -179,7 +273,7 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
             title,
             style: const TextStyle(color: AppColors.muted, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: .3),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           child,
         ],
       ),
@@ -252,10 +346,61 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
     );
   }
 
+  /// `Bote: 8.5 bb | 3 Jugadores (BB, CO, BTN) | SPR: 11.2`
+  String _potPill() {
+    final alive = [
+      for (final p in HandFlowFSM.postflopOrder)
+        if (fsm.seats[p]?.alive ?? false) p.name.toUpperCase(),
+    ];
+    return 'Bote: ${fsm.totalPotBB.toStringAsFixed(1)} bb | ${alive.length} Jugadores (${alive.join(', ')}) | '
+        'SPR: ${fsm.currentSPR?.toStringAsFixed(1) ?? '—'}';
+  }
+
+  /// Cabecera multiway: villanos vivos en orden posicional con etiqueta HUD individual y [X Foldeó].
+  Widget _liveBar() {
+    final order = [
+      for (final p in HandFlowFSM.postflopOrder)
+        if ((fsm.seats[p]?.alive ?? false)) p,
+    ];
+    final chips = <Widget>[];
+    for (var i = 0; i < order.length; i++) {
+      final p = order[i];
+      final isHero = p == fsm.heroPosition;
+      final rel = isHero ? 'Hero' : (i == 0 ? 'OOP' : (i == order.length - 1 ? 'IP' : 'MID'));
+      final tag = isHero ? null : fsm.hudOf(p)?.tag;
+      if (i > 0) chips.add(const Text('➔', style: TextStyle(color: AppColors.muted, fontSize: 12)));
+      chips.add(
+        GestureDetector(
+          key: ValueKey('live-${p.name}'),
+          onLongPress: isHero ? null : () => SmartHudQuickSheet.show(context, fsm, p),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            decoration: BoxDecoration(
+              color: fsm.currentActor == p ? Obsidian.amberCheck.withValues(alpha: .25) : AppColors.bg,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: isHero ? Obsidian.emeraldRaise : AppColors.border),
+            ),
+            child: Text(
+              '${p.name.toUpperCase()} ($rel)${tag == null ? '' : ' · ${tag.name}'}',
+              style: const TextStyle(color: AppColors.text, fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+      );
+      if (!isHero && fsm.currentActor == p && order.length > 2) {
+        chips.add(_btn('✕ Foldeó', Obsidian.crimsonFold, () => _do(() => flow.villainFolded(p)), 'fold-${p.name}', small: true));
+      }
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: Wrap(key: const ValueKey('live-bar'), spacing: 4, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: chips),
+    );
+  }
+
   Widget _boardRow() {
     final board = [...fsm.board, ...List<Card?>.filled(5 - fsm.board.length, null)];
     return _section(
-      'BOARD · Pot ${fsm.totalPotBB.toStringAsFixed(1)} bb · SPR ${fsm.currentSPR?.toStringAsFixed(1) ?? '—'}',
+      _potPill(),
       Row(
         children: [
           for (var i = 0; i < 5; i++)
@@ -296,7 +441,9 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
         chips.add(_btn('Open de ${o.name.toUpperCase()}', AppColors.surfaceHi, () => _do(() => flow.scenarioOpen(o)), 'scn-open-${o.name}', small: true));
       }
       if (flow.openersBeforeHero.length >= 2) {
-        chips.add(_btn('Open + Call (squeeze)', AppColors.surfaceHi, () => setState(() => pendingMode = 'squeeze'), 'scn-squeeze', small: true));
+        chips.add(
+          _btn('Open + ¿Quién más pagó? (Cold Callers)', AppColors.surfaceHi, () => setState(() => pendingMode = 'squeeze'), 'scn-squeeze', small: true),
+        );
       }
       if (flow.openersBeforeHero.isNotEmpty) {
         chips.add(_btn('1+ limpers', AppColors.surfaceHi, () => setState(() => pendingMode = 'limp'), 'scn-limp', small: true));
@@ -320,21 +467,30 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
         );
       }
     } else if (pendingMode == 'squeeze-caller') {
-      final o = flow.openersBeforeHero;
-      for (final c in o.sublist(o.indexOf(squeezeOpener!) + 1)) {
+      for (final c in flow.coldCallerCandidates(squeezeOpener!)) {
         chips.add(
           _btn(
-            'Pagó ${c.name.toUpperCase()}',
-            AppColors.surfaceHi,
-            () => _do(() {
-              pendingMode = null;
-              flow.scenarioOpen(squeezeOpener!, caller: c);
-            }),
+            '${coldCallers.contains(c) ? '✓ ' : ''}${c.name.toUpperCase()}',
+            coldCallers.contains(c) ? Obsidian.cyanCall : AppColors.surfaceHi,
+            () => setState(() => coldCallers.contains(c) ? coldCallers.remove(c) : coldCallers.add(c)),
             'sq-call-${c.name}',
             small: true,
           ),
         );
       }
+      chips.add(
+        _btn(
+          'Listo (${coldCallers.length} caller${coldCallers.length == 1 ? '' : 's'})',
+          Obsidian.emeraldRaise,
+          () => _do(() {
+            pendingMode = null;
+            flow.scenarioOpen(squeezeOpener!, callers: coldCallers.toList());
+            coldCallers.clear();
+          }),
+          'sq-done',
+          small: true,
+        ),
+      );
     } else if (pendingMode == 'limp') {
       for (final l in flow.openersBeforeHero) {
         chips.add(
@@ -378,7 +534,23 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
         );
       }
     }
-    if (pendingMode != null) chips.add(_btn('↩', AppColors.surfaceHi, () => setState(() => pendingMode = null), 'scn-back', small: true));
+    if (pendingMode != null) {
+      chips.add(
+        _btn(
+          '↩',
+          AppColors.surfaceHi,
+          () => setState(() {
+            pendingMode = null;
+            coldCallers.clear();
+          }),
+          'scn-back',
+          small: true,
+        ),
+      );
+    }
+    if (pendingMode == 'squeeze-caller') {
+      return _section('+ ¿QUIÉN MÁS PAGÓ ANTES DE TI? (COLD CALLERS)', Wrap(spacing: 6, runSpacing: 6, children: chips));
+    }
     return _section('2 · ¿QUÉ PASÓ ANTES DE TU TURNO?', Wrap(spacing: 6, runSpacing: 6, children: chips));
   }
 
@@ -558,6 +730,9 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
       ];
       return _section('TU TURNO — elige tu acción', Wrap(spacing: 6, runSpacing: 6, children: buttons));
     }
+    if (fsm.street == Street.preflop && toCall > 0 && flow.lastHero != null) return _flopCallers();
+    final multiway = fsm.street != Street.preflop && flow.liveVillains.length >= 2;
+    if (multiway) return _multiwayResponse(p, toCall, clampTo);
     // Respuesta del villano en 1 toque.
     final pending = <Position>[
       for (final q in HandFlowFSM.preflopOrder)
@@ -590,5 +765,70 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
       chips.add(_btn('Apostó 1bb', Obsidian.emeraldRaise, () => _do(() => flow.villain(p, ActionType.bet, amount: clampTo(1))), 'resp-bet1bb', small: true));
     }
     return _section('¿QUÉ HIZO EL RIVAL? (turno de ${p.name.toUpperCase()})', Wrap(spacing: 6, runSpacing: 6, children: chips));
+  }
+
+  /// Preflop tras la acción de Hero: `¿Quiénes pagaron al Flop?` (toggles) ➔ [IR A FLOP (N-Way)] | [3-Bet de X].
+  Widget _flopCallers() {
+    final pending = flow.pendingOwing;
+    flopCallers.removeWhere((x) => !pending.contains(x));
+    final n = flow.liveVillains.where((v) => !pending.contains(v)).length + flopCallers.length + 1;
+    final chips = <Widget>[
+      for (final v in pending)
+        _btn(
+          '${flopCallers.contains(v) ? '✓ ' : ''}${v.name.toUpperCase()}',
+          flopCallers.contains(v) ? Obsidian.cyanCall : AppColors.surfaceHi,
+          () => setState(() => flopCallers.contains(v) ? flopCallers.remove(v) : flopCallers.add(v)),
+          'fc-${v.name}',
+          small: true,
+        ),
+      _btn(
+        n == 1 ? 'Todos foldean' : 'IR A FLOP (${n == 2 ? 'HU' : '$n-Way'}) ➔',
+        n == 1 ? Obsidian.crimsonFold : Obsidian.emeraldRaise,
+        () => _do(() {
+          final cs = Set.of(flopCallers);
+          flopCallers.clear();
+          flow.goToFlop(cs);
+        }),
+        'go-flop',
+        small: true,
+      ),
+      for (final v in pending)
+        if (fsm.canRaise(v))
+          _btn(
+            '3-Bet de ${v.name.toUpperCase()}',
+            AppColors.surfaceHi,
+            () => _do(() {
+              flopCallers.clear();
+              flow.threeBetBy(v);
+            }),
+            'fc-3bet-${v.name}',
+            small: true,
+          ),
+    ];
+    return _section('¿QUIÉNES PAGARON AL FLOP?', Wrap(spacing: 6, runSpacing: 6, children: chips));
+  }
+
+  /// Postflop multiway: solo actúa el villano en turno (el resto sigue vivo).
+  Widget _multiwayResponse(Position p, double toCall, double Function(double) clampTo) {
+    final n = p.name.toUpperCase();
+    final chips = <Widget>[
+      if (toCall > 0) ...[
+        _btn('$n foldeó', Obsidian.crimsonFold, () => _do(() => flow.villainAct(ActionType.fold)), 'resp-allfold', small: true),
+        _btn('$n paga', Obsidian.cyanCall, () => _do(() => flow.villainAct(ActionType.call)), 'resp-call-${p.name}', small: true),
+        if (fsm.canRaise(p))
+          _btn(
+            '$n resube',
+            Obsidian.emeraldRaise,
+            () => _do(() => flow.villainAct(ActionType.raise, amount: clampTo(fsm.currentBet * 2.5))),
+            'resp-raise-${p.name}',
+            small: true,
+          ),
+      ] else ...[
+        _btn('$n pasó', Obsidian.amberCheck, () => _do(() => flow.villainAct(ActionType.check)), 'resp-check', small: true),
+        for (final (l, x) in [('33%', .33), ('50%', .5), ('75%', .75)])
+          _btn('Apostó $l', Obsidian.emeraldRaise, () => _do(() => flow.villainAct(ActionType.bet, amount: clampTo(fsm.pot * x))), 'resp-bet$l', small: true),
+      ],
+    ];
+    return _section('MULTIWAY · ¿QUÉ HIZO $n?', Wrap(spacing: 6, runSpacing: 6, children: chips));
   }
 }

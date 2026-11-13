@@ -118,8 +118,7 @@ class HandFlowFSM extends ChangeNotifier {
   double get totalPotBB => pot;
 
   /// La calle se cierra solo si todos los vivos no all-in actuaron y han igualado la apuesta más alta.
-  bool get isBettingRoundClosed =>
-      phase == HandPhase.flopCards || phase == HandPhase.turnCards || phase == HandPhase.riverCards || phase == HandPhase.handOver;
+  bool get isBettingRoundClosed => phase == HandPhase.flopCards || phase == HandPhase.turnCards || phase == HandPhase.riverCards || phase == HandPhase.handOver;
 
   // ---- Undo (pila de snapshots en memoria de la mano actual; no es historial persistente) ----
   final List<_Snap> _undo = [];
@@ -140,12 +139,12 @@ class HandFlowFSM extends ChangeNotifier {
   }
 
   static String _abbr(PlayerAction a) => switch (a.type) {
-        ActionType.fold => '${a.actor.name.toUpperCase()} F',
-        ActionType.check => '${a.actor.name.toUpperCase()} X',
-        ActionType.call => '${a.actor.name.toUpperCase()} C ${a.amountBb.toStringAsFixed(1)}',
-        ActionType.allIn => '${a.actor.name.toUpperCase()} AI ${a.amountBb.toStringAsFixed(1)}',
-        _ => '${a.actor.name.toUpperCase()} ${a.isAggressive ? 'R' : ''} ${a.amountBb.toStringAsFixed(1)}bb',
-      };
+    ActionType.fold => '${a.actor.name.toUpperCase()} F',
+    ActionType.check => '${a.actor.name.toUpperCase()} X',
+    ActionType.call => '${a.actor.name.toUpperCase()} C ${a.amountBb.toStringAsFixed(1)}',
+    ActionType.allIn => '${a.actor.name.toUpperCase()} AI ${a.amountBb.toStringAsFixed(1)}',
+    _ => '${a.actor.name.toUpperCase()} ${a.isAggressive ? 'R' : ''} ${a.amountBb.toStringAsFixed(1)}bb',
+  };
 
   /// Ejecuta [f] con snapshot previo; si lanza, el snapshot se descarta (la pila nunca guarda pasos fantasma).
   void _step(void Function() f, String Function() label) {
@@ -161,20 +160,22 @@ class HandFlowFSM extends ChangeNotifier {
   }
 
   void _push() {
-    _undo.add(_Snap(
-      heroCards: List.of(heroCards),
-      board: List.of(board),
-      actions: List.of(actions),
-      seats: {for (final e in seats.entries) e.key: e.value.clone()},
-      phase: phase,
-      currentActor: currentActor,
-      needsToAct: Set.of(_needsToAct),
-      currentBet: _currentBet,
-      lastRaise: _lastRaiseSize,
-      potStart: _potStartStreet,
-      noReraise: Set.of(_noReraise),
-      reopens: reopensBettingForPriorActors,
-    ));
+    _undo.add(
+      _Snap(
+        heroCards: List.of(heroCards),
+        board: List.of(board),
+        actions: List.of(actions),
+        seats: {for (final e in seats.entries) e.key: e.value.clone()},
+        phase: phase,
+        currentActor: currentActor,
+        needsToAct: Set.of(_needsToAct),
+        currentBet: _currentBet,
+        lastRaise: _lastRaiseSize,
+        potStart: _potStartStreet,
+        noReraise: Set.of(_noReraise),
+        reopens: reopensBettingForPriorActors,
+      ),
+    );
     if (_undo.length > 64) _undo.removeAt(0);
   }
 
@@ -257,8 +258,7 @@ class HandFlowFSM extends ChangeNotifier {
   ReadProfile readOf(Position p) {
     final base = ReadProfile.fromVillainProfile(effectiveProfile(p));
     final hud = hudOf(p);
-    return ReadProfile(base.archetype, base.reasons,
-        pfr: hud?.stats.pfr, vpip: hud?.stats.vpip, threeBet: hud?.stats.threeBet, mentalState: mentalOf(p));
+    return ReadProfile(base.archetype, base.reasons, pfr: hud?.stats.pfr, vpip: hud?.stats.vpip, threeBet: hud?.stats.threeBet, mentalState: mentalOf(p));
   }
 
   void setPresets(Position p, List<AnonymousReadPreset> presets) {
@@ -306,27 +306,32 @@ class HandFlowFSM extends ChangeNotifier {
   }
 
   Street get street => switch (phase) {
-        HandPhase.flop || HandPhase.turnCards => Street.flop,
-        HandPhase.turn || HandPhase.riverCards => Street.turn,
-        HandPhase.river || HandPhase.handOver when board.length == 5 => Street.river,
-        _ => Street.preflop,
-      };
+    HandPhase.flop || HandPhase.turnCards => Street.flop,
+    HandPhase.turn || HandPhase.riverCards => Street.turn,
+    HandPhase.river || HandPhase.handOver when board.length == 5 => Street.river,
+    _ => Street.preflop,
+  };
 
   double get pot => _potStartStreet + seats.values.fold<double>(0, (s, x) => s + x.committed);
   double get currentBet => _currentBet;
-  List<Position> get alive => [for (final p in preflopOrder) if (seats[p]?.alive ?? false) p];
+  List<Position> get alive => [
+    for (final p in preflopOrder)
+      if (seats[p]?.alive ?? false) p,
+  ];
 
-  Set<int> get deadCardIds => {for (final c in [...heroCards, ...board]) c.id};
+  Set<int> get deadCardIds => {
+    for (final c in [...heroCards, ...board]) c.id,
+  };
 
   bool get awaitingCards => phase == HandPhase.setup || phase == HandPhase.flopCards || phase == HandPhase.turnCards || phase == HandPhase.riverCards;
 
   int get cardsNeeded => switch (phase) {
-        HandPhase.setup => 2 - heroCards.length,
-        HandPhase.flopCards => 3 - (board.length),
-        HandPhase.turnCards => 4 - board.length,
-        HandPhase.riverCards => 5 - board.length,
-        _ => 0,
-      };
+    HandPhase.setup => 2 - heroCards.length,
+    HandPhase.flopCards => 3 - (board.length),
+    HandPhase.turnCards => 4 - board.length,
+    HandPhase.riverCards => 5 - board.length,
+    _ => 0,
+  };
 
   bool get isStreetActionClosed => phase != HandPhase.setup && _needsToAct.isEmpty;
 
@@ -473,10 +478,17 @@ class HandFlowFSM extends ChangeNotifier {
     }
     _currentBet = 0;
     _lastRaiseSize = 1.0;
-    phase = switch (board.length) { 3 => HandPhase.flop, 4 => HandPhase.turn, _ => HandPhase.river };
+    phase = switch (board.length) {
+      3 => HandPhase.flop,
+      4 => HandPhase.turn,
+      _ => HandPhase.river,
+    };
     _needsToAct
       ..clear()
-      ..addAll([for (final p in postflopOrder) if (seats[p]!.alive && !seats[p]!.allIn) p]);
+      ..addAll([
+        for (final p in postflopOrder)
+          if (seats[p]!.alive && !seats[p]!.allIn) p,
+      ]);
     if (_needsToAct.length < 2) _needsToAct.clear();
     currentActor = _nextFrom(null);
     if (currentActor == null) _closeStreet();
@@ -527,7 +539,8 @@ class HandFlowFSM extends ChangeNotifier {
   }
 
   void _act(Position p, ActionType type, double amountBb) {
-    if (!canRaise(p) && (type == ActionType.bet || type == ActionType.raise || (type == ActionType.allIn && seats[p]!.stack > _currentBet - seats[p]!.committed))) {
+    if (!canRaise(p) &&
+        (type == ActionType.bet || type == ActionType.raise || (type == ActionType.allIn && seats[p]!.stack > _currentBet - seats[p]!.committed))) {
       throw IllegalAction('${p.name.toUpperCase()}: el all-in incompleto no reabre la subida (solo fold/call)');
     }
     if (p != currentActor) {
@@ -586,7 +599,10 @@ class HandFlowFSM extends ChangeNotifier {
           final full = increment >= _lastRaiseSize - 1e-9;
           final pending = Set.of(_needsToAct);
           _currentBet = s.committed;
-          final others = [for (final q in _order) if (q != p && seats[q]!.alive && !seats[q]!.allIn) q];
+          final others = [
+            for (final q in _order)
+              if (q != p && seats[q]!.alive && !seats[q]!.allIn) q,
+          ];
           if (full) {
             _lastRaiseSize = math.max(_lastRaiseSize, increment);
             _noReraise.clear();
@@ -595,7 +611,10 @@ class HandFlowFSM extends ChangeNotifier {
             // Incomplete_ShortStack_AllIn_Rule (GGPoker): un all-in que no completa la subida mínima NO reabre la apuesta
             // para quien ya actuó en la ronda: solo puede foldear o pagar la diferencia.
             reopensBettingForPriorActors = false;
-            _noReraise.addAll([for (final q in others) if (!pending.contains(q)) q]);
+            _noReraise.addAll([
+              for (final q in others)
+                if (!pending.contains(q)) q,
+            ]);
           }
           _needsToAct
             ..clear()
@@ -668,6 +687,12 @@ class HandFlowFSM extends ChangeNotifier {
       actions: List.of(actions),
       villainProfile: v == null ? ProfileDefaults.defaultFor(stake, mode: engineMode) : effectiveProfile(v),
       activePlayers: alive.length,
+      activeVillains: alive.length >= 3
+          ? [
+              for (final p in alive)
+                if (p != heroPosition) VillainSeatState(p, profile: effectiveProfile(p)),
+            ]
+          : const [],
       anteBb: anteBb,
       hasStraddle: hasStraddle,
       seatStacksBb: {for (final s in seats.values) s.position: s.stack + s.committed},
@@ -698,7 +723,10 @@ class HandFlowFSM extends ChangeNotifier {
         final toCall = _currentBet - seats[heroPosition]!.committed;
         final potBefore = pot - toCall;
         final r = VillainRangeInspector.inspect(s, read, potBefore: potBefore, toCall: toCall, manualPresets: manual);
-        d = d.copyWith(perceivedVillainRange: r, justification: DecisionJustifier.build(s, read, d, r, potBefore: potBefore, toCall: toCall));
+        d = d.copyWith(
+          perceivedVillainRange: r,
+          justification: DecisionJustifier.build(s, read, d, r, potBefore: potBefore, toCall: toCall),
+        );
       }
       activeRecommendation = d;
     } catch (e) {
