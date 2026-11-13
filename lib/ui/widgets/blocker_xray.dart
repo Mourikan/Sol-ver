@@ -39,8 +39,14 @@ class BlockerXRay {
     if (board.isEmpty) return c.rank == Rank.ace || c.rank == Rank.king ? XRay.nutBlocker : null;
     final fs = _suitWith(board, 3);
     if (fs >= 0 && c.suit.index == fs) {
-      final on = {for (final x in board) if (x.suit.index == fs) x.rank.value};
-      final free = [for (var r = 14; r >= 2; r--) if (!on.contains(r)) r].take(2);
+      final on = {
+        for (final x in board)
+          if (x.suit.index == fs) x.rank.value,
+      };
+      final free = [
+        for (var r = 14; r >= 2; r--)
+          if (!on.contains(r)) r,
+      ].take(2);
       if (free.contains(c.rank.value)) return XRay.nutBlocker;
     }
     var mask = 0;
@@ -62,10 +68,10 @@ class BlockerXRay {
   }
 
   static (String, Color) label(XRay x) => switch (x) {
-        XRay.nutBlocker => ('🔒 NUT BLOCKER', Obsidian.cyanCall),
-        XRay.unblockerOk => ('⚡ UNBLOCKER OK', const Color(0xFF4D8DFF)),
-        XRay.blocksBluffs => ('⚠️ BLOCKS BLUFFS', Obsidian.amberCheck),
-      };
+    XRay.nutBlocker => ('🔒 NUT BLOCKER', Obsidian.cyanCall),
+    XRay.unblockerOk => ('⚡ UNBLOCKER OK', const Color(0xFFCBD5E1)),
+    XRay.blocksBluffs => ('⚠️ BLOCKS BLUFFS', Obsidian.amberCheck),
+  };
 }
 
 class BlockerXRayBadge extends StatelessWidget {
@@ -78,8 +84,17 @@ class BlockerXRayBadge extends StatelessWidget {
     final (t, c) = BlockerXRay.label(x!);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 3),
-      decoration: BoxDecoration(color: c.withValues(alpha: .16), borderRadius: BorderRadius.circular(4), border: Border.all(color: c.withValues(alpha: .7), width: 1)),
-      child: FittedBox(child: Text(t, style: TextStyle(color: c, fontSize: 9, fontWeight: FontWeight.w900))),
+      decoration: BoxDecoration(
+        color: c.withValues(alpha: .16),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: c.withValues(alpha: .7), width: 1),
+      ),
+      child: FittedBox(
+        child: Text(
+          t,
+          style: TextStyle(color: c, fontSize: 9, fontWeight: FontWeight.w900),
+        ),
+      ),
     );
   }
 }

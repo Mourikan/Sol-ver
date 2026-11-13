@@ -10,10 +10,7 @@ class PlayingCardWidget extends StatelessWidget {
   final bool focus;
 
   @override
-  Widget build(BuildContext context) => AspectRatio(
-        aspectRatio: 0.72,
-        child: CustomPaint(painter: _CardPainter(card, focus)),
-      );
+  Widget build(BuildContext context) => AspectRatio(aspectRatio: 0.72, child: CustomPaint(painter: _CardPainter(card, focus)));
 }
 
 class _CardPainter extends CustomPainter {
@@ -27,24 +24,40 @@ class _CardPainter extends CustomPainter {
     final c = card;
     if (c == null) {
       canvas.drawRRect(r, Paint()..color = AppColors.surface);
-      canvas.drawRRect(r, Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = focus ? 2 : 1
-        ..color = focus ? AppColors.amber : AppColors.border);
+      canvas.drawRRect(
+        r,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = focus ? 2 : 1
+          ..color = focus ? AppColors.amber : AppColors.border,
+      );
       return;
     }
     final col = AppColors.suit(c.suit);
     canvas.drawRRect(
-        r,
-        Paint()
-          ..shader = LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [const Color(0xFF1C2433), const Color(0xFF121722)])
-              .createShader(Offset.zero & size));
-    canvas.drawRRect(r, Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4
-      ..color = col.withValues(alpha: .85));
+      r,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [const Color(0xFF1E2128), const Color(0xFF15171C)],
+        ).createShader(Offset.zero & size),
+    );
+    canvas.drawRRect(
+      r,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.4
+        ..color = col.withValues(alpha: .85),
+    );
     void text(String t, double fs, Offset at, {FontWeight w = FontWeight.w900}) {
-      final tp = TextPainter(text: TextSpan(text: t, style: TextStyle(color: col, fontSize: fs, fontWeight: w, height: 1)), textDirection: TextDirection.ltr)..layout();
+      final tp = TextPainter(
+        text: TextSpan(
+          text: t,
+          style: TextStyle(color: col, fontSize: fs, fontWeight: w, height: 1),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
       tp.paint(canvas, at - Offset(tp.width / 2, tp.height / 2));
     }
 

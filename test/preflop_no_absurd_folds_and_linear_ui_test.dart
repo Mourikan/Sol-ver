@@ -69,8 +69,8 @@ void main() {
     final flow = await boot(t, const Size(412, 1800));
     await pick(t, 'Tc');
     await pick(t, 'Td');
-    await tapKey(t, 'act-utg-open25');
-    await tapKey(t, 'hero-row-go');
+    await tapKey(t, 'who-utg');
+    await tapKey(t, 'act-open');
     expect(flow.lastHero, isNotNull);
     expect(flow.lastHero!.action, isNot(DecisionAction.fold));
     expect(flow.fsm.currentActor, isNot(Position.btn), reason: 'la acción de Hero ya se asumió ejecutada');
@@ -88,8 +88,8 @@ void main() {
       await pick(t, c);
     }
     expect(flow.fsm.phase, HandPhase.flop);
-    expect(find.byKey(const ValueKey('act-utg-check')), findsOneWidget, reason: 'UTG actúa primero: 1 toque');
-    await tapKey(t, 'act-utg-check');
+    expect(find.byKey(const ValueKey('dock-passive')), findsOneWidget, reason: 'UTG actúa primero: 1 toque');
+    await tapKey(t, 'dock-passive');
     expect(flow.lastHeroStreet, Street.flop);
     expect(t.takeException(), isNull);
   });
@@ -99,8 +99,8 @@ void main() {
       final flow = await boot(t, size, hero: Position.bb);
       await pick(t, 'Ah');
       await pick(t, 'Kd');
-      await tapKey(t, 'act-btn-open25');
-      await tapKey(t, 'hero-row-go');
+      await tapKey(t, 'who-btn');
+      await tapKey(t, 'act-open');
       expect(flow.lastHero, isNotNull);
       final pot = 1.5 + 2.5;
       await tapKey(t, 'peek-169');

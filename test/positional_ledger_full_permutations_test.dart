@@ -54,15 +54,14 @@ void main() {
     await tapKey(t, 'pos-mp');
     expect(flow.fsm.heroPosition, Position.mp);
     expect(flow.lastHero, isNull, reason: 'sin auto-commit hasta tocar la fila de Hero');
-    expect(find.byKey(const ValueKey('row-utg')), findsOneWidget);
-    await tapKey(t, 'hero-row-go');
+    expect(find.byKey(const ValueKey('who-utg')), findsOneWidget);
+    await tapKey(t, 'nobody-in');
     expect(flow.fsm.seats[Position.utg]!.alive, isFalse);
-    expect(find.byKey(const ValueKey('row-utg')), findsNothing, reason: 'UTG foldeado se borra de la lista');
     expect(flow.lastHero!.action, DecisionAction.betRaise);
-    await tapKey(t, 'act-btn-call');
+    await tapKey(t, 'paid-btn');
+    await tapKey(t, 'paid-bb');
+    await tapKey(t, 'go-flop');
     expect(flow.fsm.seats[Position.co]!.alive, isFalse);
-    await tapKey(t, 'act-bb-call');
-    if (flow.fsm.phase == HandPhase.preflop) await tapKey(t, 'all-fold');
     expect(flow.fsm.seats[Position.sb]!.alive, isFalse);
     expect(flow.fsm.phase, HandPhase.flopCards);
     for (final c in ['Qh', '7d', '2c']) {
@@ -71,7 +70,7 @@ void main() {
     expect(flow.fsm.activeSeats, [Position.bb, Position.mp, Position.btn]);
     expect(find.byKey(const ValueKey('row-bb')), findsOneWidget);
     expect(find.byKey(const ValueKey('row-co')), findsNothing);
-    expect(find.byKey(const ValueKey('act-bb-check')), findsOneWidget);
+    expect(t.widget<FilledButton>(find.byKey(const ValueKey('dock-passive'))).onPressed, isNotNull);
     expect(t.takeException(), isNull);
   });
 

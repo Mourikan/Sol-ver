@@ -13,7 +13,10 @@ import '../widgets/decision_and_why_panel.dart';
 import '../widgets/live_line_breadcrumb.dart';
 import '../widgets/peek_169_heatmap.dart';
 import '../widgets/playing_card_widget.dart';
+import '../widgets/bet_size_scrubber_bar.dart';
+import '../widgets/fixed_action_dock.dart';
 import '../widgets/positional_ledger_view.dart';
+import '../widgets/preflop_before_after_cards.dart';
 import '../widgets/two_step_card_picker.dart';
 
 /// Matte Linear Flow (Fase 11.0): sin mesa. Paso 1 mano+posición -> Paso 2 qué pasó antes (1 toque) ->
@@ -48,10 +51,10 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
   Widget _tab(int i) {
     final slot = manager.slots[i];
     final on = manager.activeIndex == i;
-    final c = i == 0 ? Obsidian.cyanCall : const Color(0xFF7C3AED);
+    const c = Obsidian.buttonActive;
     return Expanded(
       child: Material(
-        color: on ? c.withValues(alpha: .22) : AppColors.surface,
+        color: on ? Obsidian.buttonDefault : Obsidian.surfacePanel,
         child: InkWell(
           key: ValueKey('tab-$i'),
           onTap: () => manager.switchTo(i),
@@ -130,6 +133,8 @@ class _TablePaneState extends State<TablePane> {
   LinearHandFlow get flow => widget.flow;
   HandFlowFSM get fsm => flow.fsm;
   bool positionChosen = false;
+  double scrub = 2.5;
+  String _scrubCtx = '';
 
   /// Law_2: si Hero abre la acción (UTG) y ya eligió mano + posición, el solver actúa con 0 toques.
   void _heroFirstIn() {
@@ -181,9 +186,11 @@ class _TablePaneState extends State<TablePane> {
       listenable: flow,
       builder: (context, _) {
         _autoScroll();
+        _syncScrub();
         return Column(
           children: [
             _header(),
+            Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: _step1()),
             LiveLineBreadcrumb(fsm: fsm, act: _do),
             Expanded(
               child: ListView(
@@ -191,11 +198,11 @@ class _TablePaneState extends State<TablePane> {
                 controller: scroll,
                 padding: const EdgeInsets.fromLTRB(10, 2, 10, 12),
                 children: [
-                  _step1(),
                   if (fsm.board.isNotEmpty || (fsm.awaitingCards && fsm.phase != HandPhase.setup)) _boardRow(),
                   if (fsm.awaitingCards) _picker(),
-                  if (fsm.phase != HandPhase.setup && !fsm.awaitingCards && fsm.phase != HandPhase.handOver)
-                    PositionalLedgerView(flow: flow, act: _do, heroManual: _heroManual()),
+                  PreflopBeforeAfterCards(flow: flow, scrub: scrub, onScrub: (v) => setState(() => scrub = v), act: _do),
+                  if (fsm.street != Street.preflop && !fsm.awaitingCards && fsm.phase != HandPhase.handOver) PositionalLedgerView(flow: flow, act: _do),
+                  if (flow.manualMode && flow.atHeroTurn) _section('TU TURNO — elige tu acción', _heroManual()),
                   if (flow.lastHero != null) _result(flow.lastHero!),
                   if (fsm.phase == HandPhase.handOver) _handOver(),
                   if (error != null)
@@ -206,11 +213,24 @@ class _TablePaneState extends State<TablePane> {
                 ],
               ),
             ),
+            if (_dockVisible) FixedActionDock(flow: flow, scrub: scrub, onScrub: (v) => setState(() => scrub = v), act: _do),
           ],
         );
       },
     ),
   );
+
+  bool get _dockVisible => fsm.phase != HandPhase.setup && !fsm.awaitingCards && fsm.phase != HandPhase.handOver;
+
+  /// Valor por defecto de la barra al cambiar el contexto (calle / nueva acción).
+  void _syncScrub() {
+    final ctx = '${fsm.phase.index}-${fsm.actions.length}-${fsm.board.length}';
+    if (ctx == _scrubCtx) return;
+    _scrubCtx = ctx;
+    final raw = fsm.street == Street.preflop ? (fsm.currentBet <= 1 ? 2.5 : fsm.currentBet * 3) : (fsm.currentBet == 0 ? fsm.pot * .5 : fsm.currentBet * 3);
+    final hi = FixedActionDock.maxFor(fsm);
+    scrub = BetSizeScrubberBar.snap(raw).clamp(1.0, hi < 1 ? 1.0 : hi).toDouble();
+  }
 
   Widget _header() => SizedBox(
     height: 44,
@@ -299,7 +319,7 @@ class _TablePaneState extends State<TablePane> {
       key: ValueKey(key),
       style: FilledButton.styleFrom(
         backgroundColor: f == null ? AppColors.bg : c,
-        foregroundColor: Colors.white,
+        foregroundColor: Obsidian.onColor(f == null ? AppColors.bg : c),
         minimumSize: const Size(48, 48),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -328,7 +348,7 @@ class _TablePaneState extends State<TablePane> {
                   child: Column(
                     children: [
                       SizedBox(
-                        height: 64,
+                        height: 56,
                         child: PlayingCardWidget(hero[i], focus: setup && fsm.heroCards.length == i, key: ValueKey('slot-hero-$i')),
                       ),
                       SizedBox(height: 16, child: hero[i] == null ? null : BlockerXRayBadge(BlockerXRay.of(hero[i]!, fsm.board), key: ValueKey('xray-$i'))),
@@ -337,30 +357,50 @@ class _TablePaneState extends State<TablePane> {
                 ),
               const SizedBox(width: 6),
               Expanded(
-                child: Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
+                child: Column(
+                  key: const ValueKey('pos-grid'),
                   children: [
-                    for (final p in HandFlowFSM.preflopOrder)
-                      _btn(
-                        p.name.toUpperCase(),
-                        p == fsm.heroPosition ? Obsidian.emeraldRaise : AppColors.surfaceHi,
-                        setup || flow.preflopUntouched
-                            ? () => _do(() {
-                                flow.setPosition(p);
-                                positionChosen = true;
-                                _heroFirstIn();
-                              })
-                            : null,
-                        'pos-${p.name}',
-                        small: true,
-                      ),
+                    for (final row in [HandFlowFSM.preflopOrder.sublist(0, 3), HandFlowFSM.preflopOrder.sublist(3)])
+                      Row(children: [for (final p in row) Expanded(child: _posBtn(p, setup || flow.preflopUntouched))]),
                   ],
                 ),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  /// Botón de posición en cuadrícula fija 2x3 (misma coordenada siempre).
+  Widget _posBtn(Position p, bool enabled) {
+    final sel = p == fsm.heroPosition;
+    return Padding(
+      padding: const EdgeInsets.all(2),
+      child: SizedBox(
+        height: 36,
+        child: FilledButton(
+          key: ValueKey('pos-${p.name}'),
+          style: FilledButton.styleFrom(
+            backgroundColor: sel ? Obsidian.buttonActive : Obsidian.buttonDefault,
+            foregroundColor: sel ? Obsidian.buttonActiveText : Obsidian.buttonDefaultText,
+            disabledBackgroundColor: sel ? Obsidian.buttonActive : Obsidian.surfacePanel,
+            disabledForegroundColor: sel ? Obsidian.buttonActiveText : Obsidian.textMuted,
+            padding: EdgeInsets.zero,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: const BorderSide(color: Obsidian.borderFine),
+            ),
+          ),
+          onPressed: enabled
+              ? () => _do(() {
+                  flow.setPosition(p);
+                  positionChosen = true;
+                  _heroFirstIn();
+                })
+              : null,
+          child: Text(p.name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+        ),
       ),
     );
   }
@@ -461,6 +501,15 @@ class _TablePaneState extends State<TablePane> {
               ],
             ),
           ),
+          if (!flow.manualMode && fsm.canUndo && fsm.actions.any((a) => a.actor == fsm.heroPosition))
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                key: const ValueKey('override'),
+                onPressed: () => _do(flow.overrideHero),
+                child: const Text('Cambiar mi jugada', style: TextStyle(color: AppColors.muted, fontSize: 12)),
+              ),
+            ),
           if (j != null) ...[
             const SizedBox(height: 8),
             _why('Lectura del rival', j.villainReadExplanation, 'why-1'),
