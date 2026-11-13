@@ -11,8 +11,11 @@ import 'wizard_step_views.dart';
 /// Tabla Preflop ordenada UTG ➔ BB (Fase 16.0): filas sin botón Fold obligatorio (no tocar = Fold),
 /// botones por nivel de apuesta (Unopened / OR / 3-Bet / 4-Bet / 5-Bet+) y re-apertura del turno de Hero.
 class PreflopOrderedTableView extends StatefulWidget {
-  const PreflopOrderedTableView({super.key, required this.flow, required this.act});
+  const PreflopOrderedTableView({super.key, required this.flow, required this.act, this.resizeOnly = false});
   final LinearHandFlow flow;
+
+  /// true => solo la barra de re-ajuste de la última subida del villano (p. ej. cuando el Call de Hero cerró la calle).
+  final bool resizeOnly;
   final void Function(VoidCallback f) act;
 
   /// Nº de subidas preflop (OR = 1, 3-Bet = 2, 4-Bet = 3, 5-Bet = 4).
@@ -38,7 +41,7 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
     final can = fsm.canRaise(p);
     final out = <Widget>[];
     void b(String label, String code, ActionType t, [double amt = 0]) =>
-        out.add(chip(label, 'act-$n-$code', false, () => widget.act(() => apply(t, amt)), h: 40));
+        out.add(chip(label, 'act-$n-$code', false, () => widget.act(() => apply(t, amt)), h: 44));
     void raise(String label, String code, double to) {
       if (!can) return;
       final x = BetSizeScrubberBar.snap(to < fsm.minRaiseTo ? fsm.minRaiseTo : to);
@@ -107,7 +110,7 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
     for (var i = a.length - 1; i >= 0; i--) {
       if (a[i].street != Street.preflop) return -1;
       if (a[i].actor == fsm.heroPosition) continue;
-      if (a[i].type == ActionType.fold) return -1;
+      if (a[i].type == ActionType.fold) continue; // folds a esa subida: se conservan al re-ajustar
       return a[i].type == ActionType.raise ? i : -1;
     }
     return -1;
@@ -115,11 +118,21 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
 
   void _applyResize(int idx, double to) {
     final p = fsm.actions[idx].actor;
+    final folded = [
+      for (final a in fsm.actions.skip(idx + 1))
+        if (a.type == ActionType.fold && a.actor != fsm.heroPosition) a.actor,
+    ];
+    final heroWasIn = fsm.actions.skip(idx + 1).any((a) => a.actor == fsm.heroPosition);
     while (fsm.actions.length > idx && fsm.canUndo) {
       fsm.undo();
     }
     flow.manualMode = false;
     raiseOrShove(flow, p, to);
+    // Restaura los folds frente a esa subida y re-evalúa a Hero con el nuevo tamaño.
+    for (final f in folded) {
+      if (fsm.canTap(f)) flow.seatAct(f, ActionType.fold);
+    }
+    if (heroWasIn && fsm.pendingToAct.contains(fsm.heroPosition) && fsm.canTap(fsm.heroPosition)) flow.heroGo();
   }
 
   Widget _row(Position p, int resizeIdx) {
@@ -147,8 +160,10 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
             InkWell(
               key: ValueKey('hud-${p.name}'),
               onTap: () => SmartHudQuickSheet.show(context, fsm, p),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+                alignment: Alignment.center,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Text(
                   '[$tag ▾]',
                   style: const TextStyle(color: Obsidian.textMuted, fontSize: 11, fontWeight: FontWeight.w700),
@@ -177,22 +192,14 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
       buttons.addAll(_levelButtons(p, (t, amt) => flow.seatAct(p, t, amount: amt)));
     }
     if (buttons.isNotEmpty) {
-      children.add(Padding(padding: const EdgeInsets.only(top: 6), child: Wrap(spacing: 5, runSpacing: 5, children: buttons)));
-    }
-    if (!hero && resizeIdx >= 0 && fsm.actions[resizeIdx].actor == p) {
-      if (_resizeIdx != resizeIdx) {
-        _resizeIdx = resizeIdx;
-        _resize = fsm.actions[resizeIdx].amountBb;
-      }
       children.add(
-        slider('Ajustar tamaño de ${p.name.toUpperCase()}: ${_resize!.toStringAsFixed(1)} bb', _resize!, capOf(fsm, p), (v) => setState(() => _resize = v)),
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Wrap(spacing: 5, runSpacing: 5, children: buttons),
+        ),
       );
-      if ((_resize! - fsm.actions[resizeIdx].amountBb).abs() > 1e-9) {
-        children.add(
-          chip('Aplicar ${_resize!.toStringAsFixed(1)} bb', 'resize-${p.name}', true, () => widget.act(() => _applyResize(resizeIdx, _resize!)), h: 40),
-        );
-      }
     }
+    if (!hero && resizeIdx >= 0 && fsm.actions[resizeIdx].actor == p) children.addAll(_resizeBar(p, resizeIdx));
     return Container(
       key: ValueKey('row-${p.name}'),
       margin: const EdgeInsets.only(top: 5),
@@ -206,8 +213,32 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
     );
   }
 
+  /// Barra contextual para re-ajustar la última subida del villano; Hero se re-evalúa al aplicar.
+  List<Widget> _resizeBar(Position p, int resizeIdx) {
+    if (_resizeIdx != resizeIdx) {
+      _resizeIdx = resizeIdx;
+      _resize = fsm.actions[resizeIdx].amountBb;
+    }
+    return [
+      slider('Ajustar tamaño de ${p.name.toUpperCase()}: ${_resize!.toStringAsFixed(1)} bb', _resize!, capOf(fsm, p), (v) => setState(() => _resize = v)),
+      if ((_resize! - fsm.actions[resizeIdx].amountBb).abs() > 1e-9)
+        chip(
+          'Aplicar ${_resize!.toStringAsFixed(1)} bb (recalcular mi jugada)',
+          'resize-${p.name}',
+          true,
+          () => widget.act(() => _applyResize(resizeIdx, _resize!)),
+          h: 44,
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.resizeOnly) {
+      final ri = _resizableIdx();
+      if (ri < 0) return const SizedBox.shrink();
+      return Column(key: const ValueKey('resize-only'), crossAxisAlignment: CrossAxisAlignment.stretch, children: _resizeBar(fsm.actions[ri].actor, ri));
+    }
     final seats = [
       for (final p in HandFlowFSM.preflopOrder)
         if (fsm.seats[p]?.alive ?? false) p,

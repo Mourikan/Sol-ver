@@ -32,7 +32,7 @@ class BetSizeScrubberBar extends StatelessWidget {
     final v = value.clamp(min, hi).toDouble();
     final pct = potBb == null || potBb! <= 0 ? '' : ' · ${(v / potBb! * 100).round()}%';
     Widget arrow(String k, String g, double d) => SizedBox(
-      width: 40,
+      width: 44,
       height: height,
       child: TextButton(
         key: ValueKey(k),

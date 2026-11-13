@@ -57,7 +57,7 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
           key: ValueKey('tab-$i'),
           onTap: () => manager.switchTo(i),
           child: Container(
-            height: 44,
+            height: 48,
             padding: const EdgeInsets.only(left: 8),
             decoration: BoxDecoration(
               border: Border(
@@ -81,7 +81,7 @@ class _SolverCockpitScreenState extends State<SolverCockpitScreen> {
                   key: ValueKey('rush-reset-$i'),
                   tooltip: 'Rush Reset',
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 40, minHeight: 44),
+                  constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
                   onPressed: () {
                     TacticalFeedback.tap();
                     manager.rushReset(i);
@@ -214,7 +214,7 @@ class _TablePaneState extends State<TablePane> {
             ),
             // Bottom-Docked Thumb Keypad: el teclado de cartas siempre anclado abajo.
             if (fsm.awaitingCards)
-              Container(key: const ValueKey('picker-dock'), color: Obsidian.surfacePanel, padding: const EdgeInsets.fromLTRB(8, 0, 8, 6), child: _picker()),
+              Container(key: const ValueKey('picker-dock'), color: Obsidian.surfacePanel, padding: const EdgeInsets.fromLTRB(4, 0, 4, 6), child: _picker()),
           ],
         );
       },
@@ -238,7 +238,11 @@ class _TablePaneState extends State<TablePane> {
       ),
       // Si la acción de Hero cerró la calle, su jugada + porqué siguen visibles mientras se piden las cartas.
       WizardStep.boardCards => Column(
-        children: [if (flow.lastHero != null && fsm.actions.isNotEmpty && fsm.actions.last.actor == fsm.heroPosition) _result(flow.lastHero!), _boardRow()],
+        children: [
+          if (flow.lastHero != null && fsm.actions.isNotEmpty && fsm.actions.last.actor == fsm.heroPosition) _result(flow.lastHero!),
+          if (fsm.board.isEmpty) PreflopOrderedTableView(flow: flow, act: _do, resizeOnly: true),
+          _boardRow(),
+        ],
       ),
       WizardStep.streetAction => Column(
         children: [
@@ -360,6 +364,7 @@ class _TablePaneState extends State<TablePane> {
           ),
           TextButton(
             key: const ValueKey('new-hand'),
+            style: TextButton.styleFrom(minimumSize: const Size(48, 44)),
             onPressed: () => _do(() {
               pendingMode = null;
               limpers.clear();
@@ -440,16 +445,14 @@ class _TablePaneState extends State<TablePane> {
                     ],
                   ),
                 ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Column(
-                  key: const ValueKey('pos-grid'),
-                  children: [
-                    for (final row in [HandFlowFSM.preflopOrder.sublist(0, 3), HandFlowFSM.preflopOrder.sublist(3)])
-                      Row(children: [for (final p in row) Expanded(child: _posBtn(p, fsm.heroCards.length == 2 && flow.preflopUntouched))]),
-                  ],
-                ),
-              ),
+            ],
+          ),
+          // Cuadrícula fija 3x2 a ancho completo (targets >= 46dp en 360px).
+          Column(
+            key: const ValueKey('pos-grid'),
+            children: [
+              for (final row in [HandFlowFSM.preflopOrder.sublist(0, 3), HandFlowFSM.preflopOrder.sublist(3)])
+                Row(children: [for (final p in row) Expanded(child: _posBtn(p, fsm.heroCards.length == 2 && flow.preflopUntouched))]),
             ],
           ),
         ],
@@ -463,7 +466,7 @@ class _TablePaneState extends State<TablePane> {
     return Padding(
       padding: const EdgeInsets.all(2),
       child: SizedBox(
-        height: 36,
+        height: 46,
         child: FilledButton(
           key: ValueKey('pos-${p.name}'),
           style: FilledButton.styleFrom(
@@ -523,9 +526,9 @@ class _TablePaneState extends State<TablePane> {
       HandPhase.turnCards => 'Turn',
       _ => 'River',
     };
-    return _section(
-      title.toUpperCase(),
-      TwoStepCardPicker(
+    return Padding(
+      padding: const EdgeInsets.only(top: 6),
+      child: TwoStepCardPicker(
         dead: fsm.deadCardIds,
         title: title,
         onPick: (c) => _do(() {

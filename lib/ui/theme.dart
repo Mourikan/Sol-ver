@@ -45,7 +45,7 @@ ThemeData buildTheme() => ThemeData(
   scaffoldBackgroundColor: AppColors.bg,
   colorScheme: const ColorScheme.dark(primary: AppColors.accent, onPrimary: Color(0xFF0C0D10), surface: AppColors.surface, error: AppColors.danger),
   useMaterial3: true,
-  visualDensity: VisualDensity.compact,
+  visualDensity: VisualDensity.standard, // targets táctiles >= 44dp (Fase 16.5)
 );
 
 class CardChip extends StatelessWidget {
