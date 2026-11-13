@@ -245,23 +245,55 @@ class _TablePaneState extends State<TablePane> {
     };
   }
 
-  /// Cinta de 1 línea: `Tu Mano + Pos | Bote: X bb | Jugadores vivos`.
+  /// Fila 2 de estado vivo: `[PREFLOP] ➔ [FLOP] ➔ [TURN] ➔ [RIVER] ➔ [SHOWDOWN]` + `Bote | SPR | Vivos`.
   Widget _ribbon() {
-    final cards = fsm.heroCards.length == 2 ? '${fsm.heroCards[0]}${fsm.heroCards[1]}' : '--';
-    final alive = fsm.phase == HandPhase.setup ? 6 : fsm.activeSeats.length;
+    final sp = fsm.screenPhase;
+    final idx = switch (sp) {
+      ScreenPhase.setupHero || ScreenPhase.preflopAction => 0,
+      ScreenPhase.pickFlop => 1,
+      ScreenPhase.pickTurn => 2,
+      ScreenPhase.pickRiver => 3,
+      ScreenPhase.postflopStreetAction => fsm.street.index,
+      ScreenPhase.handFinished => 4,
+    };
+    const names = ['PREFLOP', 'FLOP', 'TURN', 'RIVER', 'SHOWDOWN'];
+    final cards = fsm.heroCards.length == 2 ? '${fsm.heroCards[0]}${fsm.heroCards[1]} ' : '';
+    final alive = fsm.phase == HandPhase.setup ? '6' : fsm.activeSeats.map((p) => p.name.toUpperCase()).join(' ');
+    TextStyle st(bool on) => Obsidian.num(size: 11, color: on ? Obsidian.buttonActiveText : Obsidian.textMuted, weight: FontWeight.w800);
     return Container(
-      height: 28,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      alignment: Alignment.centerLeft,
       color: Obsidian.surfacePanel,
-      child: FittedBox(
-        fit: BoxFit.scaleDown,
-        alignment: Alignment.centerLeft,
-        child: Text(
-          '$cards ${fsm.heroPosition.name.toUpperCase()} | Bote: ${fsm.totalPotBB.toStringAsFixed(1)} bb | $alive vivos',
-          key: const ValueKey('ribbon'),
-          style: Obsidian.num(size: 13, color: Obsidian.textPrimary, weight: FontWeight.w700),
-        ),
+      padding: const EdgeInsets.fromLTRB(10, 3, 10, 3),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Row(
+              key: const ValueKey('street-progress'),
+              children: [
+                for (var i = 0; i < names.length; i++) ...[
+                  if (i > 0) const Text(' ➔ ', style: TextStyle(color: Obsidian.textMuted, fontSize: 11)),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: i == idx ? Obsidian.buttonActive : Obsidian.buttonDefault, borderRadius: BorderRadius.circular(5)),
+                    child: Text(names[i], key: i == idx ? const ValueKey('street-current') : null, style: st(i == idx)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '$cards${fsm.heroPosition.name.toUpperCase()} | Bote: ${fsm.totalPotBB.toStringAsFixed(1)} bb | SPR: ${fsm.currentSPR?.toStringAsFixed(1) ?? '—'} | Vivos: [ $alive ]',
+              key: const ValueKey('ribbon'),
+              style: Obsidian.num(size: 12, color: Obsidian.textPrimary, weight: FontWeight.w700),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -601,7 +633,38 @@ class _TablePaneState extends State<TablePane> {
     ),
   );
 
-  Widget _handOver() => _section('MANO TERMINADA', _btn('Nueva mano ↺', Obsidian.emeraldRaise, () => _do(flow.newHand), 'end-new-hand'));
+  /// Ventana 7_HAND_FINISHED: cómo terminó, bote final, última lectura del rival y [⚡ Empezar Nueva Mano].
+  Widget _handOver() {
+    final pot = fsm.totalPotBB.toStringAsFixed(1);
+    final (title, detail) = switch (fsm.endReason) {
+      HandEndReason.foldWin => ('MANO GANADA POR FOLD', 'Rivales foldearon — Ganaste el bote de $pot bb'),
+      HandEndReason.heroFolded => ('FOLDEASTE', 'Mano terminada para ti en ${fsm.street.name.toUpperCase()} · bote $pot bb'),
+      _ => ('SHOWDOWN', 'SHOWDOWN — Mano completada hasta el River · bote $pot bb'),
+    };
+    final r = flow.lastHero?.perceivedVillainRange;
+    return _section(
+      'MANO TERMINADA',
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            title,
+            key: const ValueKey('finish-title'),
+            style: Obsidian.num(size: 22, color: Obsidian.textPrimary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            detail,
+            key: const ValueKey('finish-detail'),
+            style: const TextStyle(color: Obsidian.textSecondary, fontSize: 13),
+          ),
+          if (r != null && r.totalActiveCombos > 0) ...[const SizedBox(height: 8), SizedBox(height: 22, child: RangeBar(r))],
+          const SizedBox(height: 12),
+          SizedBox(height: 60, child: _btn('⚡ Empezar Nueva Mano', Obsidian.emeraldRaise, () => _do(flow.newHand), 'end-new-hand')),
+        ],
+      ),
+    );
+  }
 
   /// Botones manuales de Hero (tras [Cambiar mi acción]).
   Widget _heroManual() {

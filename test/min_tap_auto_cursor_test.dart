@@ -90,11 +90,10 @@ void main() {
     expect(flow.lastHeroStreet, Street.flop);
     expect(flow.lastHero!.action, DecisionAction.betRaise, reason: 'Hero auto c-bet');
     expect(fsm.currentActorSeat, Position.bb, reason: 'el cursor regresa solo a BB');
-    for (final k in ['v-fold', 'v-call', 'v-raise']) {
+    for (final k in ['v-fold', 'v-call', 'v-r3x']) {
       expect(t.widget<FilledButton>(find.byKey(ValueKey(k))).onPressed, isNotNull, reason: k);
     }
     final heroBet = fsm.currentHighBetBB;
-    await tapKey(t, 'v-raise');
     await scrubTo(t, (heroBet * 3 * 2).roundToDouble() / 2);
     await tapKey(t, 'v-bar');
     expect(flow.lastHeroStreet, Street.flop);

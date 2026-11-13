@@ -4,7 +4,9 @@ import '../../application/hand_flow_fsm.dart';
 import '../../application/linear_hand_flow.dart';
 import '../../core/models/game_state.dart';
 import '../theme/obsidian_theme.dart';
+import '../theme.dart';
 import 'bet_size_scrubber_bar.dart';
+import 'smarthud_quick_sheet.dart';
 
 /// Single-Focus Stepper Wizard (Fase 14.0): una sola pregunta en pantalla a la vez.
 enum WizardStep { handAndSeat, before, heroAndAfter, boardCards, streetAction, heroManual, handOver }
@@ -18,7 +20,7 @@ class WizardSteps {
   static WizardStep of(LinearHandFlow f, {required bool positionChosen}) {
     final fsm = f.fsm;
     if (fsm.phase == HandPhase.setup) return WizardStep.handAndSeat;
-    if (fsm.phase == HandPhase.handOver) return WizardStep.handOver;
+    if (fsm.screenPhase == ScreenPhase.handFinished) return WizardStep.handOver;
     if (fsm.awaitingCards) return WizardStep.boardCards;
     if (fsm.street == Street.preflop && fsm.actions.isEmpty && !positionChosen) return WizardStep.handAndSeat;
     if (f.atHeroTurn) return heroActed(fsm, fsm.street) || f.manualMode || fsm.street != Street.preflop ? WizardStep.heroManual : WizardStep.before;
@@ -350,84 +352,82 @@ class VillainTurnStep extends StatefulWidget {
 class _VillainTurnStepState extends State<VillainTurnStep> with _WizardKit {
   LinearHandFlow get flow => widget.flow;
   HandFlowFSM get fsm => flow.fsm;
-  bool raising = false;
-  String _ctx = '';
 
   @override
   Widget build(BuildContext context) {
     final p = fsm.currentActorSeat!;
-    final ctx = '$p-${fsm.actions.length}';
-    if (ctx != _ctx) {
-      _ctx = ctx;
-      raising = false;
-    }
     final s = fsm.seats[p]!;
     final toCall = fsm.currentBet - s.committed;
     final pos = p.name.toUpperCase();
     final tag = fsm.hudOf(p)?.tag.name ?? s.profile.name;
-    final street = switch (fsm.street) {
-      Street.flop => 'Flop',
-      Street.turn => 'Turn',
-      Street.river => 'River',
-      Street.preflop => 'Preflop',
-    };
-    void bet(double f) => widget.act(() => _raiseOrShove(flow, p, BetSizeScrubberBar.snap(fsm.pot * f)));
-    final body = <Widget>[];
+    final street = fsm.street.name.toUpperCase();
+    final board = fsm.board.map((c) => '${c.rank.symbol}${AppColors.suitGlyph(c.suit)}').join(' ');
+    final canRaise = fsm.canRaise(p);
+    void to(double x) => widget.act(() => _raiseOrShove(flow, p, BetSizeScrubberBar.snap(x)));
+    final body = <Widget>[
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton(
+          key: const ValueKey('v-hud'),
+          onPressed: () => SmartHudQuickSheet.show(context, fsm, p),
+          child: Text(
+            '[Perfil: $tag ▾]',
+            style: const TextStyle(color: Obsidian.textSecondary, fontSize: 12, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ),
+    ];
     if (toCall <= 0) {
       body.addAll([
-        big('Pasó (Check)', 'v-check', () => widget.act(() => flow.seatAct(p, ActionType.check)), primary: false),
+        big('Check', 'v-check', () => widget.act(() => flow.seatAct(p, ActionType.check)), primary: false),
         const SizedBox(height: 6),
         Row(
           children: [
-            chip('Apostó 33%', 'v-b33', false, fsm.canRaise(p) ? () => bet(.33) : null, expand: true),
+            chip('Bet 33%', 'v-b33', false, canRaise ? () => to(fsm.pot * .33) : null, expand: true),
             const SizedBox(width: 6),
-            chip('Apostó 50%', 'v-b50', false, fsm.canRaise(p) ? () => bet(.5) : null, expand: true),
+            chip('Bet 50%', 'v-b50', false, canRaise ? () => to(fsm.pot * .5) : null, expand: true),
             const SizedBox(width: 6),
-            chip('Apostó 75%', 'v-b75', false, fsm.canRaise(p) ? () => bet(.75) : null, expand: true),
+            chip('Bet 75%', 'v-b75', false, canRaise ? () => to(fsm.pot * .75) : null, expand: true),
           ],
         ),
         const SizedBox(height: 6),
-        big('All-In', 'v-allin', () => widget.act(() => flow.seatAct(p, ActionType.allIn)), primary: false),
-        slider('O desliza apuesta exacta de $pos: ${widget.scrub.toStringAsFixed(1)} bb', widget.scrub, _cap(fsm, p), widget.onScrub, pot: fsm.pot),
-        big('Apostó ${widget.scrub.toStringAsFixed(1)} bb', 'v-bar', () => widget.act(() => _raiseOrShove(flow, p, widget.scrub))),
+        Row(
+          children: [
+            chip('Bet 1bb 🐟', 'v-b1', false, canRaise ? () => to(1) : null, expand: true),
+            const SizedBox(width: 6),
+            chip('All-In', 'v-allin', false, () => widget.act(() => flow.seatAct(p, ActionType.allIn)), expand: true),
+          ],
+        ),
+        slider('Ajustar Bet: ${widget.scrub.toStringAsFixed(1)} bb', widget.scrub, _cap(fsm, p), widget.onScrub, pot: fsm.pot),
+        big('Bet ${widget.scrub.toStringAsFixed(1)} bb', 'v-bar', canRaise ? () => to(widget.scrub) : null),
       ]);
     } else {
       body.addAll([
         Row(
           children: [
-            chip('Foldeó ❌', 'v-fold', false, () => widget.act(() => flow.seatAct(p, ActionType.fold)), h: 54, expand: true),
+            chip('Fold ❌', 'v-fold', false, () => widget.act(() => flow.seatAct(p, ActionType.fold)), h: 54, expand: true),
             const SizedBox(width: 6),
-            chip('Pagó (Call ${toCall.toStringAsFixed(1)}bb)', 'v-call', false, () => widget.act(() => flow.seatAct(p, ActionType.call)), h: 54, expand: true),
+            chip('Call ${toCall.toStringAsFixed(1)}bb', 'v-call', false, () => widget.act(() => flow.seatAct(p, ActionType.call)), h: 54, expand: true),
           ],
         ),
         const SizedBox(height: 6),
         Row(
           children: [
-            chip(
-              'Subió (Raise)',
-              'v-raise',
-              raising,
-              fsm.canRaise(p)
-                  ? () => setState(() {
-                      raising = !raising;
-                      if (raising) widget.onScrub(BetSizeScrubberBar.snap(fsm.currentBet * 3));
-                    })
-                  : null,
-              h: 54,
-              expand: true,
-            ),
+            chip('Min-Raise 2x 🐟', 'v-minr', false, canRaise ? () => to(fsm.minRaiseTo) : null, expand: true),
             const SizedBox(width: 6),
-            chip('All-In', 'v-allin', false, () => widget.act(() => flow.seatAct(p, ActionType.allIn)), h: 54, expand: true),
+            chip('Raise 3x', 'v-r3x', false, canRaise ? () => to(fsm.currentBet * 3) : null, expand: true),
+            const SizedBox(width: 6),
+            chip('All-In', 'v-allin', false, () => widget.act(() => flow.seatAct(p, ActionType.allIn)), expand: true),
           ],
         ),
-        if (raising) ...[
-          slider('Monto del Raise de $pos: ${widget.scrub.toStringAsFixed(1)} bb', widget.scrub, _cap(fsm, p), widget.onScrub, pot: fsm.pot),
-          big('Subió a ${widget.scrub.toStringAsFixed(1)} bb', 'v-bar', () => widget.act(() => _raiseOrShove(flow, p, widget.scrub))),
-        ],
+        slider('Ajustar Raise a: ${widget.scrub.toStringAsFixed(1)} bb', widget.scrub, _cap(fsm, p), widget.onScrub, pot: fsm.pot),
+        big('Raise a ${widget.scrub.toStringAsFixed(1)} bb', 'v-bar', canRaise ? () => to(widget.scrub) : null),
+        const SizedBox(height: 6),
+        big('Resto Foldeó', 'rest-fold', () => widget.act(flow.resolveStreet), primary: false),
       ]);
     }
     return card(
-      'Turno de $pos ($tag): ¿Qué hizo en el $street?',
+      '$street [$board] — Turno de $pos: ¿Qué hizo?',
       toCall > 0 ? 'Debe ${toCall.toStringAsFixed(1)} bb' : 'Nadie ha apostado en esta calle',
       body,
       'step-villain',

@@ -11,7 +11,8 @@ class TwoStepCardPicker extends StatefulWidget {
   final String title;
 
   static const ranks = [Rank.ace, Rank.king, Rank.queen, Rank.jack, Rank.ten, Rank.nine, Rank.eight, Rank.seven, Rank.six, Rank.five, Rank.four, Rank.three, Rank.two];
-  static const suits = [(Suit.spades, 'Picas'), (Suit.hearts, 'Corazones'), (Suit.diamonds, 'Diamantes'), (Suit.clubs, 'Tréboles')];
+  /// Selector puro: solo el símbolo gráfico del palo (cero texto).
+  static const suits = [Suit.spades, Suit.hearts, Suit.diamonds, Suit.clubs];
 
   @override
   State<TwoStepCardPicker> createState() => _TwoStepCardPickerState();
@@ -42,12 +43,12 @@ class _TwoStepCardPickerState extends State<TwoStepCardPicker> {
         ])
       else
         Row(children: [
-          for (final (su, name) in TwoStepCardPicker.suits)
+          for (final su in TwoStepCardPicker.suits)
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 3),
                 child: _Big(
-                  '${AppColors.suitGlyph(su)}\n$name',
+                  AppColors.suitGlyph(su),
                   key: ValueKey('suit-${su.symbol}'),
                   color: AppColors.suit(su),
                   height: 64,

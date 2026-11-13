@@ -14,6 +14,12 @@ import '../core/reads/read_presets_catalog.dart';
 import '../core/reads/villain_range_inspector.dart';
 import 'solver_controller.dart';
 
+/// Ventanas del StreetByStreetWizard (Fase 15.0), derivadas 100% del estado de la mano.
+enum ScreenPhase { setupHero, preflopAction, pickFlop, pickTurn, pickRiver, postflopStreetAction, handFinished }
+
+/// Cómo terminó la mano.
+enum HandEndReason { foldWin, showdown, heroFolded }
+
 enum HandPhase { setup, preflop, flopCards, flop, turnCards, turn, riverCards, river, handOver }
 
 class SeatState {
@@ -514,6 +520,26 @@ class HandFlowFSM extends ChangeNotifier {
   final Set<Position> _noReraise = {};
   bool reopensBettingForPriorActors = true;
   bool canRaise(Position p) => !_noReraise.contains(p);
+
+  /// Ventana activa: Hero foldeado => mano terminada para el usuario aunque sigan villanos.
+  ScreenPhase get screenPhase {
+    if (phase == HandPhase.setup) return ScreenPhase.setupHero;
+    if (phase == HandPhase.handOver || (seats[heroPosition] != null && !seats[heroPosition]!.alive)) return ScreenPhase.handFinished;
+    return switch (phase) {
+      HandPhase.preflop => ScreenPhase.preflopAction,
+      HandPhase.flopCards => ScreenPhase.pickFlop,
+      HandPhase.turnCards => ScreenPhase.pickTurn,
+      HandPhase.riverCards => ScreenPhase.pickRiver,
+      _ => ScreenPhase.postflopStreetAction,
+    };
+  }
+
+  /// Motivo del cierre (solo con [screenPhase] == handFinished).
+  HandEndReason? get endReason {
+    if (screenPhase != ScreenPhase.handFinished) return null;
+    if (seats[heroPosition] != null && !seats[heroPosition]!.alive) return HandEndReason.heroFolded;
+    return alive.length <= 1 ? HandEndReason.foldWin : HandEndReason.showdown;
+  }
 
   /// Law_1_Deterministic_Auto_Cursor: asiento al que apunta el cursor autónomo (cola circular `pendingToAct`).
   Position? get currentActorSeat => currentActor;
