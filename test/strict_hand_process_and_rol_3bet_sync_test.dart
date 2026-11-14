@@ -164,7 +164,6 @@ void main() {
     }
     await tapKey(t, 'act-utg-4bet');
     await scrubTo(t, 19.0);
-    await tapKey(t, 'resize-utg');
     expect(fsm.actions.lastWhere((a) => a.actor == Position.utg).amountBb, 19.0);
     expect(fsm.actions.last.actor == Position.btn || fsm.screenPhase != ScreenPhase.preflopAction, isTrue, reason: 'Hero vs 4-Bet re-evaluado');
     expect(find.textContaining('ACTUALIZADO VS UTG 4-Bet 19.0bb'), findsOneWidget);
@@ -203,7 +202,6 @@ void main() {
     await tapKey(t, 'act-co-call');
     await tapKey(t, 'act-sb-3bet');
     await scrubTo(t, 11.0);
-    await tapKey(t, 'resize-sb');
     expect(fsm.actions.lastWhere((a) => a.actor == Position.sb).amountBb, 11.0);
     final sq = fsm.actions.lastIndexWhere((a) => a.actor == Position.sb);
     expect(fsm.actions.skip(sq).any((a) => a.actor == Position.mp), isTrue, reason: 'no se salta el squeeze: Hero decide');

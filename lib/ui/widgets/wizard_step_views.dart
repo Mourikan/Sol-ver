@@ -40,7 +40,7 @@ class WizardSteps {
 
 /// Piezas visuales comunes del wizard (monocromas, botones grandes).
 mixin WizardKit<T extends StatefulWidget> on State<T> {
-  Widget chip(String label, String key, bool selected, VoidCallback? f, {double h = 44, bool expand = false}) {
+  Widget chip(String label, String key, bool selected, VoidCallback? f, {double h = 46, bool expand = false}) {
     final b = SizedBox(
       height: h,
       child: FilledButton(
@@ -50,7 +50,7 @@ mixin WizardKit<T extends StatefulWidget> on State<T> {
           foregroundColor: selected ? Obsidian.buttonActiveText : Obsidian.buttonDefaultText,
           disabledBackgroundColor: Obsidian.surfacePanel,
           disabledForegroundColor: Obsidian.textMuted,
-          minimumSize: const Size(48, 44),
+          minimumSize: const Size(48, 46),
           padding: const EdgeInsets.symmetric(horizontal: 12),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
@@ -102,7 +102,15 @@ mixin WizardKit<T extends StatefulWidget> on State<T> {
   );
 
   /// Barra deslizable contextual: siempre con su etiqueta explícita encima.
-  Widget slider(String text, double value, double max, ValueChanged<double> onChanged, {double? pot}) => Column(
+  Widget slider(
+    String text,
+    double value,
+    double max,
+    ValueChanged<double> onChanged, {
+    double? pot,
+    ValueChanged<double>? onCommit,
+    bool arrowsCommit = true,
+  }) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       Padding(
@@ -113,7 +121,7 @@ mixin WizardKit<T extends StatefulWidget> on State<T> {
           style: Obsidian.num(size: 13, color: Obsidian.textPrimary, weight: FontWeight.w700),
         ),
       ),
-      BetSizeScrubberBar(value: value, max: max, potBb: pot, onChanged: onChanged),
+      BetSizeScrubberBar(value: value, max: max, potBb: pot, onChanged: onChanged, onCommit: onCommit, arrowsCommit: arrowsCommit),
     ],
   );
 }
@@ -147,6 +155,16 @@ class _VillainTurnStepState extends State<VillainTurnStep> with WizardKit {
   LinearHandFlow get flow => widget.flow;
   HandFlowFSM get fsm => flow.fsm;
 
+  /// Opt_3: nº de villanos que hablan antes de Hero sin apuesta en la calle (atajo [Check hasta mí]).
+  int get _checkToHero {
+    final hero = fsm.heroPosition;
+    if (fsm.currentBet > 0 || !fsm.pendingToAct.contains(hero) || !fsm.canTap(hero)) return 0;
+    final seats = fsm.activeSeats;
+    final ci = seats.indexOf(fsm.currentActorSeat!), hi = seats.indexOf(hero);
+    if (ci < 0 || hi <= ci) return 0;
+    return seats.sublist(ci, hi).where(fsm.pendingToAct.contains).length;
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = fsm.currentActorSeat!;
@@ -174,6 +192,7 @@ class _VillainTurnStepState extends State<VillainTurnStep> with WizardKit {
     if (toCall <= 0) {
       body.addAll([
         big('Check', 'v-check', () => widget.act(() => flow.seatAct(p, ActionType.check)), primary: false),
+        if (_checkToHero >= 2) ...[const SizedBox(height: 6), big('✓ Check hasta mí ($_checkToHero villanos)', 'check-to-me', () => widget.act(flow.heroGo))],
         const SizedBox(height: 6),
         Row(
           children: [
@@ -192,7 +211,15 @@ class _VillainTurnStepState extends State<VillainTurnStep> with WizardKit {
             chip('All-In', 'v-allin', false, () => widget.act(() => flow.seatAct(p, ActionType.allIn)), expand: true),
           ],
         ),
-        slider('Ajustar Bet: ${widget.scrub.toStringAsFixed(1)} bb', widget.scrub, capOf(fsm, p), widget.onScrub, pot: fsm.pot),
+        slider(
+          'Ajustar Bet: ${widget.scrub.toStringAsFixed(1)} bb',
+          widget.scrub,
+          capOf(fsm, p),
+          widget.onScrub,
+          pot: fsm.pot,
+          arrowsCommit: false,
+          onCommit: canRaise ? to : null,
+        ),
         big('Bet ${widget.scrub.toStringAsFixed(1)} bb', 'v-bar', canRaise ? () => to(widget.scrub) : null),
       ]);
     } else {
@@ -214,7 +241,15 @@ class _VillainTurnStepState extends State<VillainTurnStep> with WizardKit {
             chip('All-In', 'v-allin', false, () => widget.act(() => flow.seatAct(p, ActionType.allIn)), expand: true),
           ],
         ),
-        slider('Ajustar Raise a: ${widget.scrub.toStringAsFixed(1)} bb', widget.scrub, capOf(fsm, p), widget.onScrub, pot: fsm.pot),
+        slider(
+          'Ajustar Raise a: ${widget.scrub.toStringAsFixed(1)} bb',
+          widget.scrub,
+          capOf(fsm, p),
+          widget.onScrub,
+          pot: fsm.pot,
+          arrowsCommit: false,
+          onCommit: canRaise ? to : null,
+        ),
         big('Raise a ${widget.scrub.toStringAsFixed(1)} bb', 'v-bar', canRaise ? () => to(widget.scrub) : null),
         const SizedBox(height: 6),
         big('Resto Foldeó', 'rest-fold', () => widget.act(flow.resolveStreet), primary: false),

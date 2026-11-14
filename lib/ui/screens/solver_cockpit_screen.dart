@@ -214,7 +214,13 @@ class _TablePaneState extends State<TablePane> {
         ],
       ),
       WizardStep.heroManual => Column(children: [if (fsm.board.isNotEmpty) _boardRow(), _section('TU TURNO — ¿qué hiciste tú?', _heroManual())]),
-      WizardStep.handOver => Column(children: [_handOver()]),
+      // Si Hero foldeó preflop, la barra del villano sigue ajustable (re-evalúa a Hero al soltar).
+      WizardStep.handOver => Column(
+        children: [
+          if (fsm.board.isEmpty) PreflopOrderedTableView(flow: flow, act: _do, resizeOnly: true),
+          _handOver(),
+        ],
+      ),
     };
   }
 
@@ -284,7 +290,7 @@ class _TablePaneState extends State<TablePane> {
   }
 
   Widget _header() => SizedBox(
-    height: 44,
+    height: 48,
     child: Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
@@ -319,6 +325,7 @@ class _TablePaneState extends State<TablePane> {
             key: const ValueKey('undo'),
             tooltip: 'Deshacer último toque',
             onPressed: fsm.canUndo ? () => _do(_undo) : null,
+            constraints: const BoxConstraints(minWidth: 48, minHeight: 46),
             icon: const Text(
               '↶',
               style: TextStyle(color: AppColors.text, fontSize: 20, fontWeight: FontWeight.w800),
@@ -326,7 +333,7 @@ class _TablePaneState extends State<TablePane> {
           ),
           TextButton(
             key: const ValueKey('new-hand'),
-            style: TextButton.styleFrom(minimumSize: const Size(48, 44)),
+            style: TextButton.styleFrom(minimumSize: const Size(48, 46)),
             onPressed: () => _do(() {
               pendingMode = null;
               limpers.clear();
@@ -687,7 +694,7 @@ class _TablePaneState extends State<TablePane> {
               if (r.classWeights.isNotEmpty)
                 TextButton(
                   key: const ValueKey('peek-169'),
-                  style: TextButton.styleFrom(minimumSize: const Size(48, 44)),
+                  style: TextButton.styleFrom(minimumSize: const Size(48, 46)),
                   onPressed: () => Peek169Heatmap.show(context, r.classWeights),
                   child: const Text('Ver 13x13'),
                 ),

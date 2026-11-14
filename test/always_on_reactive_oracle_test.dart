@@ -98,7 +98,6 @@ void main() {
     expect(find.text('ACTUALIZADO VS BTN 3-Bet 7.5bb'), findsOneWidget);
     final before = oracle(t);
     await scrubTo(t, 22.0);
-    await tapKey(t, 'resize-btn');
     expect(fsm.currentHighBetBB, 22.0);
     expect(find.text('ACTUALIZADO VS BTN 3-Bet 22.0bb'), findsOneWidget, reason: 'recalculado al nuevo tamaño');
     expectOracle(t, 'tras barra');

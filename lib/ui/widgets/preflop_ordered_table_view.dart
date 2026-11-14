@@ -91,8 +91,34 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
 
   /// Botones contextuales del nivel actual para [p]; [apply] ejecuta (villano: seatAct, Hero manual: heroManual).
   List<Widget> _levelButtons(Position p, void Function(ActionType t, double amt) apply) => [
-    for (final (label, code, t, amt) in _specs(p, _viewNow())) chip(label, 'act-${p.name}-$code', false, () => widget.act(() => apply(t, amt)), h: 44),
+    for (final (label, code, t, amt) in _specs(p, _viewNow())) ...[
+      // Opt_1: frente a una subida de Hero, [Call ➔ Flop] cierra el preflop en 1 toque (resto = Fold); [+Call] añade callers.
+      if (code == 'call' && p != fsm.heroPosition && _heroRaisedLast)
+        chip(
+          'Call ➔ Flop',
+          'act-${p.name}-callflop',
+          true,
+          () => widget.act(() {
+            apply(t, amt);
+            if (fsm.phase == HandPhase.preflop && !fsm.pendingToAct.contains(fsm.heroPosition)) flow.resolveStreet();
+          }),
+          h: 46,
+        ),
+      chip(
+        code == 'call' && p != fsm.heroPosition && _heroRaisedLast ? '+Call' : label,
+        'act-${p.name}-$code',
+        false,
+        () => widget.act(() => apply(t, amt)),
+        h: 46,
+      ),
+    ],
   ];
+
+  /// La última subida preflop es de Hero y Hero ya no debe actuar (los villanos responden a su OR/ROL/3-Bet/4-Bet).
+  bool get _heroRaisedLast {
+    final a = fsm.actions.reversed.where((x) => x.street == Street.preflop && x.isAggressive).firstOrNull;
+    return a != null && a.actor == fsm.heroPosition && !fsm.pendingToAct.contains(fsm.heroPosition);
+  }
 
   /// Filas DETRÁS de Hero mientras Hero aún no ha hablado: al tocar, se asume la jugada del solver para Hero
   /// (asientos previos sin tocar = Fold) y se aplica la acción del villano con montos reales del nuevo estado.
@@ -112,7 +138,7 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
             }
           }
         }),
-        h: 44,
+        h: 46,
       ),
   ];
 
@@ -202,7 +228,7 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
               key: ValueKey('hud-${p.name}'),
               onTap: () => SmartHudQuickSheet.show(context, fsm, p),
               child: Container(
-                constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+                constraints: const BoxConstraints(minHeight: 46, minWidth: 46),
                 alignment: Alignment.center,
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Text(
@@ -236,7 +262,7 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
                 }
               }
             }),
-            h: 44,
+            h: 46,
           ),
         );
       }
@@ -274,16 +300,17 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
       _resizeIdx = resizeIdx;
       _resize = fsm.actions[resizeIdx].amountBb;
     }
+    // Opt_2 Zero_Apply_Button: soltar el deslizador (o tocar una flecha) aplica el tamaño y re-evalúa a Hero.
     return [
-      slider('Ajustar tamaño de ${p.name.toUpperCase()}: ${_resize!.toStringAsFixed(1)} bb', _resize!, capOf(fsm, p), (v) => setState(() => _resize = v)),
-      if ((_resize! - fsm.actions[resizeIdx].amountBb).abs() > 1e-9)
-        chip(
-          'Aplicar ${_resize!.toStringAsFixed(1)} bb (recalcular mi jugada)',
-          'resize-${p.name}',
-          true,
-          () => widget.act(() => _applyResize(resizeIdx, _resize!)),
-          h: 44,
-        ),
+      slider(
+        'Ajustar tamaño de ${p.name.toUpperCase()}: ${_resize!.toStringAsFixed(1)} bb',
+        _resize!,
+        capOf(fsm, p),
+        (v) => setState(() => _resize = v),
+        onCommit: (v) {
+          if ((v - fsm.actions[resizeIdx].amountBb).abs() > 1e-9) widget.act(() => _applyResize(resizeIdx, v));
+        },
+      ),
     ];
   }
 

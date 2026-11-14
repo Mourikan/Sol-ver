@@ -84,7 +84,7 @@ class PinnedOracleHeader extends StatelessWidget {
                 if (onOverride != null)
                   TextButton(
                     key: const ValueKey('override'),
-                    style: TextButton.styleFrom(minimumSize: const Size(48, 44)),
+                    style: TextButton.styleFrom(minimumSize: const Size(48, 46)),
                     onPressed: onOverride,
                     child: const Text('Hice otra cosa', style: TextStyle(color: Obsidian.textSecondary, fontSize: 12)),
                   ),

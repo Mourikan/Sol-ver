@@ -111,7 +111,6 @@ void main() {
     await tapKey(t, 'act-co-or');
     expect(scrubValue(t), 2.5);
     await scrubTo(t, 4.5);
-    await tapKey(t, 'resize-co');
     /* L1: Hero auto-aplicado sin [Mi turno] */
     final open = flow.fsm.actions.firstWhere((a) => a.actor == Position.co);
     expect(open.type, ActionType.raise);

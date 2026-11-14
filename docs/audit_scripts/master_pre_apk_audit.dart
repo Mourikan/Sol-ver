@@ -33,7 +33,7 @@ Future<void> main() async {
   final an = await run(flutter, ['analyze', '--no-pub']);
   final anOk = an.contains('No issues found!');
   final anLine = anOk ? '0 errors, 0 warnings, 0 infos' : (grab(an, RegExp(r'(\d+ issues? found)')) ?? 'fallo');
-  final tests = await run(flutter, ['test', '--no-pub']);
+  final tests = await run(flutter, ['test', '--no-pub', '--reporter', 'expanded']);
   final passed = int.tryParse(grab(tests, RegExp(r'\+(\d+)(?: ~\d+)?: All tests passed!')) ?? '') ?? 0;
   final failedLine = grab(tests, RegExp(r'\+(\d+ -\d+): Some tests failed'));
   final testsOk = passed > 0 && failedLine == null;

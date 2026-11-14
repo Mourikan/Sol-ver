@@ -6,15 +6,28 @@ import '../theme/obsidian_theme.dart';
 /// Barra Deslizadora Universal (Fase 13.0): `1.0bb ◄───●───► Stack` en pasos de 0.5bb con háptica suave por paso.
 /// Geometría fija: altura constante en preflop y postflop (memoria muscular).
 class BetSizeScrubberBar extends StatelessWidget {
-  const BetSizeScrubberBar({super.key, required this.value, required this.max, required this.onChanged, this.min = 1.0, this.potBb});
+  const BetSizeScrubberBar({
+    super.key,
+    required this.value,
+    required this.max,
+    required this.onChanged,
+    this.onCommit,
+    this.arrowsCommit = true,
+    this.min = 1.0,
+    this.potBb,
+  });
   final double value;
   final double min;
   final double max;
   final double? potBb;
   final ValueChanged<double> onChanged;
 
+  /// Zero_Apply_Button: se dispara al SOLTAR el deslizador y en cada toque de flecha (auto-aplica el tamaño).
+  final ValueChanged<double>? onCommit;
+  final bool arrowsCommit;
+
   static const step = 0.5;
-  static const height = 44.0;
+  static const height = 46.0;
 
   static double snap(double x) => (x / step).roundToDouble() * step;
 
@@ -32,12 +45,16 @@ class BetSizeScrubberBar extends StatelessWidget {
     final v = value.clamp(min, hi).toDouble();
     final pct = potBb == null || potBb! <= 0 ? '' : ' · ${(v / potBb! * 100).round()}%';
     Widget arrow(String k, String g, double d) => SizedBox(
-      width: 44,
+      width: 46,
       height: height,
       child: TextButton(
         key: ValueKey(k),
         style: TextButton.styleFrom(padding: EdgeInsets.zero, foregroundColor: Obsidian.textPrimary),
-        onPressed: () => _set(v + d),
+        onPressed: () {
+          final nv = snap(v + d).clamp(min, max).toDouble();
+          _set(v + d);
+          if (arrowsCommit) onCommit?.call(nv);
+        },
         child: Text(g, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
       ),
     );
@@ -60,7 +77,14 @@ class BetSizeScrubberBar extends StatelessWidget {
                 overlayColor: Obsidian.buttonActive.withValues(alpha: .12),
                 trackHeight: 3,
               ),
-              child: Slider(key: const ValueKey('scrub-slider'), value: v, min: min, max: hi, onChanged: _set),
+              child: Slider(
+                key: const ValueKey('scrub-slider'),
+                value: v,
+                min: min,
+                max: hi,
+                onChanged: _set,
+                onChangeEnd: (x) => onCommit?.call(snap(x).clamp(min, max).toDouble()),
+              ),
             ),
           ),
           arrow('scrub-plus', '►', step),

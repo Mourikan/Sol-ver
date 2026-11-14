@@ -211,14 +211,12 @@ void main() {
     expect(fsm.currentHighBetBB, 4.0, reason: 'min-3B legal = 2.5 + 1.5');
     expect(find.text('Ajustar tamaño de BTN: 4.0 bb'), findsOneWidget, reason: 'barra junto a la acción ajustada');
     await scrubTo(t, 5.0);
-    await tapKey(t, 'resize-btn');
     expect(fsm.currentHighBetBB, 5.0, reason: 'Min-3Bet re-ajustado a 5bb');
     /* L1: Hero auto-aplicado sin [Mi turno] */
     expect(fsm.actions.last.actor, Position.co, reason: 'Hero evaluado vs 3-Bet de 5bb');
     final d1 = flow.lastHero;
     final pot1 = fsm.totalPotBB;
     await scrubTo(t, 6.0);
-    await tapKey(t, 'resize-btn');
     expect(fsm.currentHighBetBB, greaterThanOrEqualTo(6.0));
     expect(identical(flow.lastHero, d1), isFalse, reason: 're-evaluación del solver con el nuevo tamaño');
     expect(fsm.totalPotBB, isNot(pot1));
