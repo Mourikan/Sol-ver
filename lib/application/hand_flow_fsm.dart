@@ -125,7 +125,7 @@ class HandFlowFSM extends ChangeNotifier {
   }
 
   /// Law_1_State_Signature_Invalidation: firma única del estado (mano + posición + board + historial de acciones).
-  String get stateSignature => '${heroCards.join()}|${heroPosition.name}|${board.join()}|${actions.map(_abbr).join(',')}';
+  String get stateSignature => '${heroCards.join()}|${heroPosition.name}|S${tableStackBB.toStringAsFixed(1)}|${board.join()}|${actions.map(_abbr).join(',')}';
 
   String _oracleKey = '';
   OracleSnapshot? _oracleCache;
@@ -321,6 +321,24 @@ class HandFlowFSM extends ChangeNotifier {
 
   void setStack(Position p, double bb) {
     _stacks[p] = bb;
+    notifyListeners();
+  }
+
+  /// Stack de mesa (inicio de mano) de Hero: base del selector `[Stack: Xbb ▾]`.
+  double get tableStackBB => _stacks[heroPosition] ?? startingStackBb;
+
+  /// Selector rápido de stack efectivo: fija el stack de inicio de TODOS los asientos (persistente entre manos)
+  /// y, si la mano está en curso, desplaza los stacks vivos conservando lo ya invertido. Re-evalúa al instante.
+  void setEffectiveStack(double bb) {
+    for (final p in preflopOrder) {
+      final oldStart = _stacks[p] ?? startingStackBb;
+      _stacks[p] = bb;
+      final s = seats[p];
+      if (s == null) continue;
+      s.stack = math.max(0, s.stack + (bb - oldStart));
+      s.allIn = s.stack <= 1e-9 && (s.committed > 0 || actions.any((a) => a.actor == p));
+    }
+    _refreshRecommendation();
     notifyListeners();
   }
 
@@ -821,7 +839,7 @@ class HandFlowFSM extends ChangeNotifier {
       stake: stake,
       heroPosition: heroPosition,
       villainPosition: v,
-      effectiveStackBb: postflop ? eff : startingStackBb,
+      effectiveStackBb: postflop ? eff : (v == null ? tableStackBB : math.min(tableStackBB, _stacks[v] ?? startingStackBb)),
       potBb: postflop ? _potStartStreet : pot,
       hero: HoleCards(heroCards[0], heroCards[1]),
       board: board.length >= 3 ? List.of(board) : const [],

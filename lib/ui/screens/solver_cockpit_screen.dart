@@ -163,6 +163,7 @@ class _TablePaneState extends State<TablePane> {
         return Column(
           children: [
             _header(),
+            if (_stackOpen) _stackPicker(),
             _ribbon(),
             if (step != WizardStep.handAndSeat) _pinnedOracle(),
             Expanded(
@@ -190,6 +191,50 @@ class _TablePaneState extends State<TablePane> {
   );
 
   WizardStep? _lastStep;
+  bool _stackOpen = false;
+
+  static const stackPresets = [20.0, 30.0, 40.0, 50.0, 60.0, 80.0, 100.0, 125.0, 150.0, 200.0];
+
+  /// Selector rápido de stack efectivo: presets de Cash / Rush & Cash + ajuste fino de 5bb (re-evaluación en vivo).
+  Widget _stackPicker() {
+    final cur = fsm.tableStackBB;
+    Widget b(String label, String key, double v, {bool sel = false}) => SizedBox(
+      height: 46,
+      child: FilledButton(
+        key: ValueKey(key),
+        style: FilledButton.styleFrom(
+          backgroundColor: sel ? Obsidian.buttonActive : Obsidian.buttonDefault,
+          foregroundColor: sel ? Obsidian.buttonActiveText : Obsidian.buttonDefaultText,
+          minimumSize: const Size(52, 46),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+            side: const BorderSide(color: Obsidian.borderFine),
+          ),
+        ),
+        onPressed: () => _do(() {
+          // Law_1: el stack forma parte de la firma; la jugada especulativa de Hero se rehace con el nuevo SPR.
+          if (spec.active) spec.rollback();
+          fsm.setEffectiveStack(v < 5 ? 5 : v);
+        }),
+        child: Text(label, style: Obsidian.num(size: 13, color: sel ? Obsidian.buttonActiveText : Obsidian.buttonDefaultText)),
+      ),
+    );
+    return Container(
+      key: const ValueKey('stack-picker'),
+      color: Obsidian.surfacePanel,
+      padding: const EdgeInsets.fromLTRB(8, 4, 8, 6),
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          b('−5', 'stack-minus5', cur - 5),
+          for (final v in stackPresets) b(v.toStringAsFixed(0), 'stack-${v.toStringAsFixed(0)}', v, sel: (v - cur).abs() < 1e-9),
+          b('+5', 'stack-plus5', cur + 5),
+        ],
+      ),
+    );
+  }
 
   void _setScrub(double v) => setState(() => scrub = v);
 
@@ -292,7 +337,7 @@ class _TablePaneState extends State<TablePane> {
   Widget _header() => SizedBox(
     height: 48,
     child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Row(
         children: [
           Expanded(
@@ -321,6 +366,24 @@ class _TablePaneState extends State<TablePane> {
               ),
             ),
           ),
+          SizedBox(
+            height: 46,
+            child: TextButton(
+              key: const ValueKey('stack-chip'),
+              style: TextButton.styleFrom(
+                minimumSize: const Size(48, 46),
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                backgroundColor: _stackOpen ? Obsidian.buttonActive : Obsidian.buttonDefault,
+                foregroundColor: _stackOpen ? Obsidian.buttonActiveText : Obsidian.textPrimary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () => setState(() => _stackOpen = !_stackOpen),
+              child: Text(
+                '${fsm.tableStackBB.toStringAsFixed(0)}bb ▾',
+                style: Obsidian.num(size: 13, color: _stackOpen ? Obsidian.buttonActiveText : Obsidian.textPrimary),
+              ),
+            ),
+          ),
           IconButton(
             key: const ValueKey('undo'),
             tooltip: 'Deshacer último toque',
@@ -333,7 +396,7 @@ class _TablePaneState extends State<TablePane> {
           ),
           TextButton(
             key: const ValueKey('new-hand'),
-            style: TextButton.styleFrom(minimumSize: const Size(48, 46)),
+            style: TextButton.styleFrom(minimumSize: const Size(48, 46), padding: const EdgeInsets.symmetric(horizontal: 6)),
             onPressed: () => _do(() {
               pendingMode = null;
               limpers.clear();

@@ -108,6 +108,7 @@ mixin WizardKit<T extends StatefulWidget> on State<T> {
     double max,
     ValueChanged<double> onChanged, {
     double? pot,
+    double? rangePot,
     ValueChanged<double>? onCommit,
     bool arrowsCommit = true,
   }) => Column(
@@ -121,7 +122,7 @@ mixin WizardKit<T extends StatefulWidget> on State<T> {
           style: Obsidian.num(size: 13, color: Obsidian.textPrimary, weight: FontWeight.w700),
         ),
       ),
-      BetSizeScrubberBar(value: value, max: max, potBb: pot, onChanged: onChanged, onCommit: onCommit, arrowsCommit: arrowsCommit),
+      BetSizeScrubberBar(value: value, max: max, potBb: pot, rangePotBb: rangePot, onChanged: onChanged, onCommit: onCommit, arrowsCommit: arrowsCommit),
     ],
   );
 }

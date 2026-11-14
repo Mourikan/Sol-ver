@@ -70,13 +70,18 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
         b('All-In', 'allin', ActionType.allIn);
       case 1:
         toCall > 0 ? b('Call ${toCall.toStringAsFixed(1)}', 'call', ActionType.call) : b('Check', 'check', ActionType.check);
-        raise('3-Bet', '3bet', v.bet * (blind ? 4 : 3));
+        // Branch_2: tras un ROL / Iso-Raise (limp previo) el 3-Bet está disponible para todos, incluido el limper (Limp-3Bet).
+        raise(_isRol ? (_limped(p) ? 'Limp-3Bet' : '3-Bet (vs ROL)') : '3-Bet', '3bet', v.bet * (blind ? 4 : 3));
         raise('Min-3B 🐟', 'min3b', v.minTo);
         b('All-In', 'allin', ActionType.allIn);
       case 2:
+        // Branch_1: asiento sin fichas voluntarias frente a OR + 3-Bet => Farha (cold-call) / Cold 4-Bet.
+        final cold = !_voluntary(p);
         if (toCall > 0) b('Fold', 'fold', ActionType.fold);
-        toCall > 0 ? b('Call ${toCall.toStringAsFixed(1)}', 'call', ActionType.call) : b('Check', 'check', ActionType.check);
-        raise('4-Bet', '4bet', v.bet * 2.4);
+        toCall > 0
+            ? b(cold ? 'Call ${toCall.toStringAsFixed(1)} (Farha)' : 'Call ${toCall.toStringAsFixed(1)}', 'call', ActionType.call)
+            : b('Check', 'check', ActionType.check);
+        raise(cold ? '4-Bet (Cold 4B)' : '4-Bet', '4bet', v.bet * 2.4);
         b('All-In', 'allin', ActionType.allIn);
       case 3:
         if (toCall > 0) b('Fold', 'fold', ActionType.fold);
@@ -105,7 +110,7 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
           h: 46,
         ),
       chip(
-        code == 'call' && p != fsm.heroPosition && _heroRaisedLast ? '+Call' : label,
+        code == 'call' && p != fsm.heroPosition && _heroRaisedLast ? (label.contains('Farha') ? '+Call (Farha)' : '+Call') : label,
         'act-${p.name}-$code',
         false,
         () => widget.act(() => apply(t, amt)),
@@ -114,10 +119,33 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
     ],
   ];
 
+  /// Hubo limp(s) antes de la 1ra subida preflop (ROL / Iso-Raise).
+  bool get _isRol {
+    for (final a in fsm.actions) {
+      if (a.street != Street.preflop) continue;
+      if (a.isAggressive) return false;
+      if (a.type == ActionType.call) return true;
+    }
+    return false;
+  }
+
+  bool _limped(Position p) {
+    for (final a in fsm.actions) {
+      if (a.street != Street.preflop || a.isAggressive) return false;
+      if (a.actor == p && a.type == ActionType.call) return true;
+    }
+    return false;
+  }
+
+  /// El asiento puso fichas voluntariamente en preflop (limp/call/raise; las ciegas no cuentan).
+  bool _voluntary(Position p) => fsm.actions.any((a) => a.street == Street.preflop && a.actor == p && a.type != ActionType.fold);
+
   /// La última subida preflop es de Hero y Hero ya no debe actuar (los villanos responden a su OR/ROL/3-Bet/4-Bet).
   bool get _heroRaisedLast {
-    final a = fsm.actions.reversed.where((x) => x.street == Street.preflop && x.isAggressive).firstOrNull;
-    return a != null && a.actor == fsm.heroPosition && !fsm.pendingToAct.contains(fsm.heroPosition);
+    // Hero ya actuó en la órbita y no debe responder: cualquier Call puede cerrar el preflop (resto = Fold).
+    final heroIn = fsm.actions.any((x) => x.street == Street.preflop && x.actor == fsm.heroPosition && x.type != ActionType.fold);
+    final raised = fsm.actions.any((x) => x.street == Street.preflop && x.isAggressive);
+    return heroIn && raised && !fsm.pendingToAct.contains(fsm.heroPosition);
   }
 
   /// Filas DETRÁS de Hero mientras Hero aún no ha hablado: al tocar, se asume la jugada del solver para Hero
@@ -307,6 +335,7 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
         _resize!,
         capOf(fsm, p),
         (v) => setState(() => _resize = v),
+        rangePot: fsm.totalPotBB,
         onCommit: (v) {
           if ((v - fsm.actions[resizeIdx].amountBb).abs() > 1e-9) widget.act(() => _applyResize(resizeIdx, v));
         },
