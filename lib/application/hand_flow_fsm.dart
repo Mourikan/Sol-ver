@@ -14,6 +14,14 @@ import '../core/reads/read_presets_catalog.dart';
 import '../core/reads/villain_range_inspector.dart';
 import 'solver_controller.dart';
 
+/// Decisión del Oráculo ligada a la firma de estado en la que se calculó (Law_1).
+class OracleSnapshot {
+  const OracleSnapshot(this.decision, this.signature, this.street);
+  final DecisionOutput decision;
+  final String signature;
+  final Street street;
+}
+
 /// Ventanas del StreetByStreetWizard (Fase 15.0), derivadas 100% del estado de la mano.
 enum ScreenPhase { setupHero, preflopAction, pickFlop, pickTurn, pickRiver, postflopStreetAction, handFinished }
 
@@ -114,6 +122,23 @@ class HandFlowFSM extends ChangeNotifier {
   void notifyListeners() {
     _version++;
     super.notifyListeners();
+  }
+
+  /// Law_1_State_Signature_Invalidation: firma única del estado (mano + posición + board + historial de acciones).
+  String get stateSignature => '${heroCards.join()}|${heroPosition.name}|${board.join()}|${actions.map(_abbr).join(',')}';
+
+  String _oracleKey = '';
+  OracleSnapshot? _oracleCache;
+
+  /// Decisión FRESCA de Hero para la firma actual (turno de Hero o proyección con asientos en blanco = Fold).
+  /// null solo si Hero no tiene decisión posible en este nodo (ya actuó y esperan villanos, walk, mano cerrada).
+  OracleSnapshot? get liveOracle {
+    final key = '$_version|$stateSignature';
+    if (key == _oracleKey) return _oracleCache;
+    _oracleKey = key;
+    final d = currentActor == heroPosition && activeRecommendation != null ? activeRecommendation : projectedHeroDecision;
+    _oracleCache = d == null ? null : OracleSnapshot(d, stateSignature, street);
+    return _oracleCache;
   }
 
   /// Always_On_Reactive_Oracle (R2/R3/R4): decisión de Hero en el nodo actual SIN tocar [Mi turno].

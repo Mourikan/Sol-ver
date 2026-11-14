@@ -13,7 +13,22 @@ class PostflopRanges {
 
   static final _cache = <String, Float32List>{};
 
+  /// Manos que un limp-caller no tiene (las habría subido): mismo prior que `UnmappedSpotsResolver.limpCallerTop`.
+  static const limpCallerTop = ['AA', 'KK', 'QQ', 'JJ', 'AKs', 'AKo'];
+
   static Float32List defendVsOpen(Position defender, Position opener, RakeTier tier) {
+    // ROL / Iso pot: el defensor habló ANTES del agresor (limp -> call al iso). No existe nodo vsRfi para ese orden:
+    // rango = su propio RFI sin el top que nunca limp-callea (LIMP_CALL_CAPPED: AA-JJ, AK fuera).
+    if (defender != Position.bb && defender.index < opener.index) {
+      return _cache.putIfAbsent('LIMPCALL_${defender.name}_${tier.name}', () {
+        final base = Float32List.fromList(PreflopRangesDb.rfi(defender, tier).weights[PreflopAction.raise]!);
+        final top = RangeNotation.parse(limpCallerTop.join(','));
+        for (var i = 0; i < 169; i++) {
+          base[i] = base[i] * (1 - top[i]);
+        }
+        return base;
+      });
+    }
     if (defender != Position.bb) {
       final c = PreflopRangesDb.vsRfi(defender, opener, tier).weights[PreflopAction.call];
       if (c != null && Matrix169.percent(c) > 0) return c;
@@ -52,7 +67,8 @@ class PostflopRanges {
       return (tb, call);
     }
     return (
-      PreflopRangesDb.rfi(pfa, tier).weights[PreflopAction.raise]!,
+      // BB no tiene RFI: su subida sobre limpers (iso desde la BB) usa el rango de subida de la otra ciega (SB).
+      PreflopRangesDb.rfi(pfa == Position.bb ? Position.sb : pfa, tier).weights[PreflopAction.raise]!,
       defendVsOpen(defender, pfa, tier),
     );
   }

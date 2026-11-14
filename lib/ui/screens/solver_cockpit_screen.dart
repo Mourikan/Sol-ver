@@ -511,12 +511,24 @@ class _TablePaneState extends State<TablePane> {
     if (fsm.heroCards.length < 2) return null;
     final finished = fsm.screenPhase == ScreenPhase.handFinished;
     if (!finished) {
-      if (fsm.currentActorSeat == fsm.heroPosition && fsm.activeRecommendation != null) return (fsm.activeRecommendation!, false);
-      final p = fsm.projectedHeroDecision;
-      if (p != null) return (p, false);
+      // Law_1: decisión fresca ligada a la firma de estado actual.
+      final live = fsm.liveOracle;
+      if (live != null && live.signature == fsm.stateSignature) return (live.decision, false);
     }
     final last = flow.lastHero;
     return last == null ? null : (last, true);
+  }
+
+  bool _isManual(DecisionOutput d, Street st) {
+    final a = fsm.actions.reversed.where((x) => x.actor == fsm.heroPosition && x.street == st).firstOrNull;
+    if (a == null) return false;
+    final k = switch (a.type) {
+      ActionType.fold => DecisionAction.fold,
+      ActionType.check => DecisionAction.check,
+      ActionType.call => DecisionAction.call,
+      _ => DecisionAction.betRaise,
+    };
+    return k != d.action;
   }
 
   static String _street(Street s) => switch (s) {
@@ -552,7 +564,16 @@ class _TablePaneState extends State<TablePane> {
   String _actionText(DecisionOutput d, bool applied, Street st) {
     final heroAct = applied ? fsm.actions.reversed.where((a) => a.actor == fsm.heroPosition && a.street == st).firstOrNull : null;
     final hero = fsm.seats[fsm.heroPosition];
-    switch (d.action) {
+    // Bug_3: tras [Hice otra cosa] la etiqueta refleja la acción REAL de Hero (no la recomendación anterior).
+    final kind = heroAct == null
+        ? d.action
+        : switch (heroAct.type) {
+            ActionType.fold => DecisionAction.fold,
+            ActionType.check => DecisionAction.check,
+            ActionType.call => DecisionAction.call,
+            _ => DecisionAction.betRaise,
+          };
+    switch (kind) {
       case DecisionAction.fold:
         return 'ACCIÓN: FOLD';
       case DecisionAction.check:
@@ -567,9 +588,10 @@ class _TablePaneState extends State<TablePane> {
           final aggr = fsm.actions.where((a) => a.street == Street.preflop && a.isAggressive).toList();
           var lvl = aggr.length;
           if (heroAct != null && heroAct.isAggressive) lvl = aggr.indexOf(heroAct);
-          final limps = fsm.actions.any((a) => a.street == Street.preflop && a.type == ActionType.call);
+          final upto = heroAct == null ? fsm.actions.length : fsm.actions.indexOf(heroAct);
+          final limps = fsm.actions.take(upto).any((a) => a.street == Street.preflop && a.type == ActionType.call);
           final n = switch (lvl) {
-            0 => limps ? 'ISO' : 'OR',
+            0 => limps ? 'ROL / ISO-RAISE' : 'OR',
             1 => '3-BET',
             2 => '4-BET',
             3 => '5-BET',
@@ -628,7 +650,9 @@ class _TablePaneState extends State<TablePane> {
     final canOverride = applied && !flow.manualMode && fsm.canUndo && fsm.actions.any((a) => a.actor == fsm.heroPosition);
     final status = flow.manualMode && fsm.currentActorSeat == fsm.heroPosition
         ? 'Elige tu acción abajo'
-        : (applied ? '✓ El solver asume que hiciste esta jugada' : '◷ En vivo: asientos sin tocar = Fold');
+        : (applied
+              ? (_isManual(d, st) ? '✎ Jugada manual registrada · el solver recalcula en tu próximo turno' : '✓ El solver asume que hiciste esta jugada')
+              : '◷ En vivo: asientos sin tocar = Fold');
     return PinnedOracleHeader(
       contextLine: ctx,
       action: _actionText(d, applied, st),

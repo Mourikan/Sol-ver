@@ -1,5 +1,11 @@
 # CLAUDE.md - Directrices del Proyecto APK GTO 6-Max
 
+## 0000. SKILL: [STRICT_HAND_PROCESS_AND_ORACLE_SYNC] (proceso de mano y Oráculo sincronizado)
+- `Law_1_State_Signature_Invalidation`: todo estado tiene `stateSignature` (`heroCards + heroPos + board + actionHistory`); si cambia, la decisión previa del Oráculo queda INVALIDADA y se re-evalúa obligatoriamente (`OracleSnapshot.signature == fsm.stateSignature`).
+- `Law_2_Deterministic_Event_Replay`: cualquier toque de villano (Limp/OR/Call/3B/4B/5B/Bet/Raise/Fold/barra) re-evalúa la calle desde el primer actor (rollback exacto de la especulación + re-aplicación de Hero); `Limp` previo => nodo `ROL / Iso-Raise`.
+- `Law_3_Full_ReRaise_Orbit_Return`: tras OR/ROL/3-Bet de Hero, todo 3-Bet/4-Bet posterior (o del limper/abridor original) devuelve el turno a Hero con evaluación `Facing_3Bet/Facing_4Bet`; prohibido cerrar la calle o saltar el turno.
+- `Law_4_Postflop_Pot_Type_Continuity`: Flop/Turn/River reciben `potType`, `totalPotBB`, `effectiveStackBB` y `aggressorSeat` exactos del preflop (SRP / ROL_Iso / 3Bet / 4Bet) y emiten decisión válida en cada turno de Hero.
+
 ## 000. SKILL: [MIN_TAP_AUTO_CURSOR_UX] (ley permanente de ergonomía y flujo de mano)
 - `Law_1_Deterministic_Auto_Cursor`: la UI jamás pregunta "¿quién sigue?"; `HandFlowFSM` calcula y resalta siempre `currentActorSeat` según NLHE 6-Max.
 - `Law_2_Zero_Tap_Hero_Turn`: si `currentActorSeat == heroSeat`, el solver emite `DecisionOutput`, se auto-aplica (Auto-Commit) y el cursor pasa al siguiente villano vivo; `[Cambiar mi jugada]` hace rollback en 1 toque.
