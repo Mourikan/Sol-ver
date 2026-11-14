@@ -177,7 +177,7 @@ void main() {
   testWidgets('U3 Hero OR -> 3-Bet de la BB -> turno de Hero reabierto (sin toques extra)', (t) async {
     final flow = await start(t, 'Ac', 'Jc', 'btn');
     final fsm = flow.fsm;
-    await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     expect(flow.lastHero!.action, DecisionAction.betRaise);
     await tapKey(t, 'act-bb-3bet');
     expect(fsm.seats[Position.sb]!.alive, isFalse);
@@ -205,7 +205,7 @@ void main() {
   testWidgets('U4 Barra contextual: Min-3B a 5bb y re-ajuste a 6bb recalculan a Hero; bet postflop 3.5bb', (t) async {
     final flow = await start(t, 'Qh', 'Jh', 'co');
     final fsm = flow.fsm;
-    await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     expect(fsm.currentHighBetBB, 2.5);
     await tapKey(t, 'act-btn-min3b');
     expect(fsm.currentHighBetBB, 4.0, reason: 'min-3B legal = 2.5 + 1.5');
@@ -213,7 +213,7 @@ void main() {
     await scrubTo(t, 5.0);
     await tapKey(t, 'resize-btn');
     expect(fsm.currentHighBetBB, 5.0, reason: 'Min-3Bet re-ajustado a 5bb');
-    await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     expect(fsm.actions.last.actor, Position.co, reason: 'Hero evaluado vs 3-Bet de 5bb');
     final d1 = flow.lastHero;
     final pot1 = fsm.totalPotBB;
@@ -241,9 +241,9 @@ void main() {
 
   testWidgets('U5 Oráculo visible al cerrar la calle + [Hice otra cosa]', (t) async {
     final flow = await start(t, 'As', 'Qs', 'co');
-    await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     await tapKey(t, 'act-btn-3bet');
-    await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     final fsm = flow.fsm;
     if (fsm.screenPhase == ScreenPhase.pickFlop) {
       expect(find.byKey(const ValueKey('hero-result')), findsOneWidget, reason: 'oráculo NO desaparece al pedir el flop');
@@ -302,7 +302,7 @@ void main() {
     for (final k in ['undo', 'new-hand']) {
       expect(t.getSize(find.byKey(ValueKey(k))).height, greaterThanOrEqualTo(44), reason: k);
     }
-    await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     final n = flow.fsm.actions.length;
     await tapKey(t, 'undo');
     expect(flow.fsm.actions.length, lessThan(n), reason: 'Deshacer físico funciona');
@@ -343,16 +343,16 @@ void main() {
   testWidgets('Tap-count benchmark', (t) async {
     // Steal preflop: mano + posición + [Mi turno] + [Todos foldearon].
     var flow = await start(t, 'Ah', 'Td', 'btn');
-    await tapKey(t, 'hero-go');
-    await tapKey(t, 'advance-flop');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
+    await tapKey(t, 'all-fold');
     expect(flow.fsm.screenPhase, ScreenPhase.handFinished);
     // ignore: avoid_print
     print('TAPS_STEAL $taps');
     // Defensa vs 3-Bet: Hero CO abre, BTN 3-Bet, SB/BB sin tocar.
     flow = await start(t, 'Ah', 'Qd', 'co');
-    await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     await tapKey(t, 'act-btn-3bet');
-    await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     expect(flow.fsm.actions.last.actor, Position.co);
     // ignore: avoid_print
     print('TAPS_DEF3B $taps');

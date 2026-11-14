@@ -72,12 +72,13 @@ void main() {
     final fsm = flow.fsm;
     expectOracle(t, 'tras posición');
     expect(oracle(t), 'ACCIÓN: OR a 2.5 bb');
-    expect(fsm.actions, isEmpty, reason: 'sin tocar [Mi turno]');
+    expect(fsm.actions.lastWhere((a) => a.actor == Position.btn).amountBb, 2.5, reason: 'L1: OR auto-aplicado sin [Mi turno]');
+    expect(find.byKey(const ValueKey('hero-go')), findsNothing);
     await tapKey(t, 'act-utg-or');
     expect(oracle(t), 'ACCIÓN: 3-BET a 7.5 bb', reason: 'vs UTG OR, sin tocar MP/CO ni [Mi turno]');
     expect(ctx(t), contains('BTN vs UTG OR 2.5bb'));
     expect(find.text('ACTUALIZADO VS UTG OR 2.5bb'), findsOneWidget);
-    expect(fsm.actions.any((a) => a.actor == Position.btn), isFalse, reason: 'proyección, no ejecución');
+    expect(fsm.actions.lastWhere((a) => a.actor == Position.btn).amountBb, 7.5, reason: 'L1: 3-Bet re-aplicado en vivo');
     await tapKey(t, 'act-mp-3bet');
     expect(oracle(t), anyOf(startsWith('ACCIÓN: 4-BET'), startsWith('ACCIÓN: CALL'), startsWith('ACCIÓN: ALL-IN')));
     expect(ctx(t), contains('MP 3-Bet 7.5bb'));

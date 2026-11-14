@@ -15,6 +15,7 @@ import '../widgets/pinned_oracle_header.dart';
 import '../widgets/playing_card_widget.dart';
 import '../widgets/bet_size_scrubber_bar.dart';
 import '../widgets/preflop_ordered_table_view.dart';
+import '../widgets/speculative_hero_controller.dart';
 import '../widgets/wizard_step_views.dart';
 import '../widgets/two_step_card_picker.dart';
 
@@ -70,9 +71,33 @@ class _TablePaneState extends State<TablePane> {
   double scrub = 2.5;
   String _scrubCtx = '';
 
-  /// Law_2: si Hero abre la acción (UTG) y ya eligió mano + posición, el solver actúa con 0 toques.
-  void _heroFirstIn() {
-    if (positionChosen && flow.preflopUntouched && flow.atHeroTurn && flow.lastHero == null) flow.heroGo();
+  /// L1 (Fase 17.5): auto-aplicación especulativa de Hero sin [Mi turno].
+  late final spec = SpeculativeHeroController(flow);
+
+  /// [↶ Deshacer]: deshace la especulación + el último toque real del usuario (si solo había especulación,
+  /// vuelve a la elección de posición).
+  void _undo() {
+    if (spec.active) {
+      spec.rollback();
+      if (fsm.actions.isNotEmpty && fsm.canUndo) {
+        fsm.undo();
+      } else {
+        positionChosen = false;
+      }
+      flow.manualMode = false;
+    } else {
+      flow.undoLast();
+    }
+  }
+
+  /// L3: bote preflop ya igualado entre Hero y >= 1 villano con asientos en blanco pendientes => teclado de flop listo.
+  bool get _flopReady {
+    if (fsm.phase != HandPhase.preflop || fsm.awaitingCards || fsm.screenPhase == ScreenPhase.handFinished) return false;
+    final hero = fsm.heroPosition;
+    if (fsm.pendingToAct.contains(hero) || !WizardSteps.heroActed(fsm, Street.preflop)) return false;
+    final cur = fsm.currentActorSeat;
+    if (cur == null || cur == hero) return false;
+    return fsm.activeSeats.any((p) => p != hero && (fsm.seats[p]!.allIn || fsm.seats[p]!.committed >= fsm.currentBet - 1e-9));
   }
 
   final coldCallers = <Position>{};
@@ -105,6 +130,7 @@ class _TablePaneState extends State<TablePane> {
     setState(() {
       try {
         f();
+        spec.maybeSpeculate(positionChosen: positionChosen);
         error = null;
       } on Object catch (e) {
         error = e.toString();
@@ -121,8 +147,13 @@ class _TablePaneState extends State<TablePane> {
       builder: (context, _) {
         _autoScroll();
         _syncScrub();
-        if (fsm.phase == HandPhase.setup) positionChosen = false; // cada mano: 1° mano -> 2° posición
-        final step = WizardSteps.of(flow, positionChosen: positionChosen);
+        if (fsm.phase == HandPhase.setup) {
+          positionChosen = false; // cada mano: 1° mano -> 2° posición
+          spec.reset();
+        }
+        var step = WizardSteps.of(flow, positionChosen: positionChosen);
+        // Fold especulativo de Hero: la tabla sigue abierta para añadir villanos en blanco (re-evaluación en vivo).
+        if (spec.active && step == WizardStep.handOver) step = WizardStep.preflopTable;
         if (step != _lastStep) {
           _lastStep = step;
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -150,7 +181,7 @@ class _TablePaneState extends State<TablePane> {
               ),
             ),
             // Bottom-Docked Thumb Keypad: el teclado de cartas siempre anclado abajo.
-            if (fsm.awaitingCards)
+            if (fsm.awaitingCards || _flopReady)
               Container(key: const ValueKey('picker-dock'), color: Obsidian.surfacePanel, padding: const EdgeInsets.fromLTRB(4, 0, 4, 6), child: _picker()),
           ],
         );
@@ -167,7 +198,7 @@ class _TablePaneState extends State<TablePane> {
     return switch (step) {
       WizardStep.handAndSeat => _step1(),
       WizardStep.preflopTable => Column(
-        children: [PreflopOrderedTableView(flow: flow, act: _do)],
+        children: [PreflopOrderedTableView(flow: flow, act: _do, spec: spec)],
       ),
       // Si la acción de Hero cerró la calle, su jugada + porqué siguen visibles mientras se piden las cartas.
       WizardStep.boardCards => Column(
@@ -287,7 +318,7 @@ class _TablePaneState extends State<TablePane> {
           IconButton(
             key: const ValueKey('undo'),
             tooltip: 'Deshacer último toque',
-            onPressed: fsm.canUndo ? () => _do(flow.undoLast) : null,
+            onPressed: fsm.canUndo ? () => _do(_undo) : null,
             icon: const Text(
               '↶',
               style: TextStyle(color: AppColors.text, fontSize: 20, fontWeight: FontWeight.w800),
@@ -383,7 +414,7 @@ class _TablePaneState extends State<TablePane> {
             key: const ValueKey('pos-grid'),
             children: [
               for (final row in [HandFlowFSM.preflopOrder.sublist(0, 3), HandFlowFSM.preflopOrder.sublist(3)])
-                Row(children: [for (final p in row) Expanded(child: _posBtn(p, fsm.heroCards.length == 2 && flow.preflopUntouched))]),
+                Row(children: [for (final p in row) Expanded(child: _posBtn(p, fsm.heroCards.length == 2 && (flow.preflopUntouched || spec.onlySpec)))]),
             ],
           ),
         ],
@@ -413,9 +444,9 @@ class _TablePaneState extends State<TablePane> {
           ),
           onPressed: enabled
               ? () => _do(() {
+                  if (spec.onlySpec) spec.rollback();
                   flow.setPosition(p);
                   positionChosen = true;
-                  _heroFirstIn();
                 })
               : null,
           child: Text(p.name.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
@@ -451,12 +482,15 @@ class _TablePaneState extends State<TablePane> {
   }
 
   Widget _picker() {
-    final title = switch (fsm.phase) {
-      HandPhase.setup => 'Tu mano (${fsm.heroCards.length + 1}/2)',
-      HandPhase.flopCards => 'Flop (${fsm.board.length + 1}/3)',
-      HandPhase.turnCards => 'Turn',
-      _ => 'River',
-    };
+    final l3 = _flopReady;
+    final title = l3
+        ? 'Toca 1ra carta del Flop (o añade otro villano arriba)'
+        : switch (fsm.phase) {
+            HandPhase.setup => 'Tu mano (${fsm.heroCards.length + 1}/2)',
+            HandPhase.flopCards => 'Flop (${fsm.board.length + 1}/3)',
+            HandPhase.turnCards => 'Turn',
+            _ => 'River',
+          };
     return Padding(
       padding: const EdgeInsets.only(top: 6),
       child: TwoStepCardPicker(
@@ -464,8 +498,9 @@ class _TablePaneState extends State<TablePane> {
         title: title,
         onPick: (c) => _do(() {
           TacticalFeedback.tap();
-          flow.pickCard(c);
-          _heroFirstIn();
+          // L3: la 1ra carta del flop cierra preflop implícitamente (asientos en blanco = Fold).
+          if (fsm.phase == HandPhase.preflop && !fsm.awaitingCards) flow.resolveStreet();
+          if (fsm.awaitingCards) flow.pickCard(c);
         }),
       ),
     );
@@ -524,7 +559,8 @@ class _TablePaneState extends State<TablePane> {
         return 'ACCIÓN: CHECK';
       case DecisionAction.call:
         final amt = heroAct?.amountBb ?? (hero == null ? 0.0 : fsm.currentBet);
-        return 'ACCIÓN: CALL ${amt.toStringAsFixed(1)} bb';
+        final bb = st == Street.preflop && fsm.heroPosition == Position.bb;
+        return 'ACCIÓN${bb ? ' EN BB' : ''}: CALL ${amt.toStringAsFixed(1)} bb';
       case DecisionAction.betRaise:
         final to = heroAct?.amountBb ?? d.sizing?.bb ?? 0;
         if (st == Street.preflop) {
@@ -564,8 +600,20 @@ class _TablePaneState extends State<TablePane> {
     final vs = vAgg == null ? (st == Street.preflop ? 'limpia' : 'sin apuesta') : '${vAgg.actor.name.toUpperCase()} ${_villainActLabel(vAgg)}';
     final ctx = '[${_street(st)}${board.isEmpty ? '' : ' $board'} • ${fsm.heroPosition.name.toUpperCase()} vs $vs]';
     final last = fsm.actions.isEmpty ? null : fsm.actions.last;
-    final banner = !applied && last != null && last.actor != fsm.heroPosition && last.isAggressive
-        ? 'ACTUALIZADO VS ${last.actor.name.toUpperCase()} ${_villainActLabel(last)}'
+    // R3: banner cuando la decisión vigente responde a una agresión del villano (proyectada o ya auto-aplicada).
+    PlayerAction? trigger;
+    if (!applied) {
+      trigger = last;
+    } else {
+      final hi = fsm.actions.lastIndexWhere((a) => a.actor == fsm.heroPosition && a.street == st);
+      for (var i = hi - 1; i >= 0; i--) {
+        if (fsm.actions[i].type == ActionType.fold) continue;
+        trigger = fsm.actions[i];
+        break;
+      }
+    }
+    final banner = trigger != null && trigger.actor != fsm.heroPosition && trigger.isAggressive
+        ? 'ACTUALIZADO VS ${trigger.actor.name.toUpperCase()} ${_villainActLabel(trigger)}'
         : null;
     final ev = d.actionEVs ?? const <String, double>{};
     final evKey = switch (d.action) {

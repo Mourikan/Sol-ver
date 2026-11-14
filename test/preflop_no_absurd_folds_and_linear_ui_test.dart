@@ -71,7 +71,7 @@ void main() {
     await pick(t, 'Td');
     await tapKey(t, 'pos-btn');
     await tapKey(t, 'act-utg-or');
-    if (find.byKey(const ValueKey('hero-go')).evaluate().isNotEmpty) await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     expect(flow.lastHero, isNotNull);
     expect(flow.lastHero!.action, isNot(DecisionAction.fold));
     expect(flow.fsm.currentActor, isNot(Position.btn), reason: 'la acción de Hero ya se asumió ejecutada');
@@ -83,8 +83,8 @@ void main() {
     expect(flow.manualMode, isTrue);
     await tapKey(t, 'act-btn-call');
     expect(flow.manualMode, isFalse);
-    await tapKey(t, 'advance-flop');
-    expect(flow.fsm.phase, HandPhase.flopCards);
+    // L3: bote igualado (UTG + Hero) => teclado de flop listo; la 1ra carta auto-foldea SB/BB.
+    expect(find.text('Toca 1ra carta del Flop (o añade otro villano arriba): rango'), findsOneWidget);
     for (final c in ['Kc', '7d', '2h']) {
       await pick(t, c);
     }
@@ -102,7 +102,7 @@ void main() {
       await pick(t, 'Kd');
       await tapKey(t, 'pos-bb');
       await tapKey(t, 'act-btn-or');
-      if (find.byKey(const ValueKey('hero-go')).evaluate().isNotEmpty) await tapKey(t, 'hero-go');
+      /* L1: Hero auto-aplicado sin [Mi turno] */
       expect(flow.lastHero, isNotNull);
       final pot = 1.5 + 2.5;
       await tapKey(t, 'peek-169');

@@ -7,13 +7,17 @@ import '../../core/models/game_state.dart';
 import '../theme/obsidian_theme.dart';
 import 'bet_size_scrubber_bar.dart';
 import 'smarthud_quick_sheet.dart';
+import 'speculative_hero_controller.dart';
 import 'wizard_step_views.dart';
 
 /// Tabla Preflop ordenada UTG ➔ BB (Fase 16.0): filas sin botón Fold obligatorio (no tocar = Fold),
 /// botones por nivel de apuesta (Unopened / OR / 3-Bet / 4-Bet / 5-Bet+) y re-apertura del turno de Hero.
 class PreflopOrderedTableView extends StatefulWidget {
-  const PreflopOrderedTableView({super.key, required this.flow, required this.act, this.resizeOnly = false});
+  const PreflopOrderedTableView({super.key, required this.flow, required this.act, this.resizeOnly = false, this.spec});
   final LinearHandFlow flow;
+
+  /// L1: controlador de la auto-aplicación especulativa de Hero (filas en blanco auto-foldeadas siguen tocables).
+  final SpeculativeHeroController? spec;
 
   /// true => solo la barra de re-ajuste de la última subida del villano (p. ej. cuando el Call de Hero cerró la calle).
   final bool resizeOnly;
@@ -32,16 +36,10 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
   double? _resize;
   int _resizeIdx = -1;
 
-  /// Vista del nivel de apuesta (real o proyectada tras la acción de Hero).
-  ({int r, double bet, double minTo, int limps}) _viewNow() => (
-    r: PreflopOrderedTableView.raises(fsm),
-    bet: fsm.currentBet,
-    minTo: fsm.minRaiseTo,
-    limps: fsm.actions.where((a) => a.street == Street.preflop && a.type == ActionType.call).length,
-  );
+  LevelView _viewNow() => levelViewOf(fsm);
 
   /// Proyección del nivel tras la jugada recomendada de Hero (para tocar filas posteriores sin [Mi turno]).
-  ({int r, double bet, double minTo, int limps}) _viewAfterHero(DecisionOutput d) {
+  LevelView _viewAfterHero(DecisionOutput d) {
     final v = _viewNow();
     if (d.action != DecisionAction.betRaise || d.sizing == null) return v;
     final to = d.sizing!.bb;
@@ -50,7 +48,7 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
   }
 
   /// Especificación de botones por nivel: (etiqueta, código, tipo, monto).
-  List<(String, String, ActionType, double)> _specs(Position p, ({int r, double bet, double minTo, int limps}) v) {
+  List<(String, String, ActionType, double)> _specs(Position p, LevelView v) {
     final s = fsm.seats[p]!;
     final toCall = v.bet - s.committed;
     final cap = s.committed + s.stack;
@@ -119,6 +117,7 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
   ];
 
   String _status(Position p) {
+    if (widget.spec != null && widget.spec!.active && widget.spec!.folded.contains(p)) return 'Fold (auto · toca si entró)';
     final last = fsm.actions.reversed.where((a) => a.street == Street.preflop && a.actor == p).firstOrNull;
     final s = fsm.seats[p]!;
     if (last == null) return s.committed > 0 ? 'ciega ${s.committed.toStringAsFixed(1)}' : '';
@@ -177,6 +176,7 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
   }
 
   Widget _row(Position p, int resizeIdx) {
+    final spec = widget.spec;
     final hero = p == fsm.heroPosition;
     final cur = fsm.currentActorSeat == p;
     final tag = hero ? null : (fsm.hudOf(p)?.tag.name ?? fsm.seats[p]!.profile.name);
@@ -218,14 +218,25 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
     if (hero) {
       if (flow.manualMode && cur) {
         buttons.addAll(_levelButtons(p, (t, amt) => flow.heroManual(t, amount: amt)));
-      } else if (fsm.pendingToAct.contains(p) && fsm.canTap(p) && !cur) {
+      }
+    } else if (spec != null && spec.active && spec.folded.contains(p) && spec.view != null) {
+      // Asiento en blanco auto-foldeado: tocarlo deshace la especulación y re-aplica a Hero en vivo.
+      for (final (label, code, _, _) in _specs(p, spec.view!)) {
         buttons.add(
           chip(
-            PreflopOrderedTableView.raises(fsm) == 0 ? '★ Mi turno ➔ (nadie más entró)' : '★ Mi turno ➔ (resto sin tocar = Fold)',
-            'hero-go',
-            true,
-            () => widget.act(flow.heroGo),
-            h: 46,
+            label,
+            'act-${p.name}-$code',
+            false,
+            () => widget.act(() {
+              spec.rollback();
+              for (final (_, c2, t2, amt2) in _specs(p, _viewNow())) {
+                if (c2 == code) {
+                  flow.seatAct(p, t2, amount: amt2);
+                  return;
+                }
+              }
+            }),
+            h: 44,
           ),
         );
       }
@@ -283,9 +294,11 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
       if (ri < 0) return const SizedBox.shrink();
       return Column(key: const ValueKey('resize-only'), crossAxisAlignment: CrossAxisAlignment.stretch, children: _resizeBar(fsm.actions[ri].actor, ri));
     }
+    final spec = widget.spec;
+    final specOn = spec != null && spec.active;
     final seats = [
       for (final p in HandFlowFSM.preflopOrder)
-        if (fsm.seats[p]?.alive ?? false) p,
+        if ((fsm.seats[p]?.alive ?? false) || (specOn && spec.folded.contains(p))) p,
     ];
     final ri = _resizableIdx();
     final heroPending = fsm.pendingToAct.contains(fsm.heroPosition);
@@ -306,9 +319,10 @@ class _PreflopOrderedTableViewState extends State<PreflopOrderedTableView> with 
           ),
         ),
         for (final p in seats) _row(p, ri),
-        if (heroActed && !heroPending && fsm.currentActorSeat != null && fsm.currentActorSeat != fsm.heroPosition) ...[
+        // Sin botones de confirmación: solo [Todos Foldearon] si nadie igualó a Hero (con bote igualado, el teclado de flop cierra).
+        if (heroActed && !heroPending && stay <= 1 && fsm.currentActorSeat != null && fsm.currentActorSeat != fsm.heroPosition) ...[
           const SizedBox(height: 8),
-          big(stay <= 1 ? 'Todos Foldearon (Ganaste el bote)' : '✓ Avanzar al Flop ($stay Jugadores) ➔', 'advance-flop', () => widget.act(flow.resolveStreet)),
+          big('Todos Foldearon (Ganaste el bote)', 'all-fold', () => widget.act(flow.resolveStreet), primary: false),
         ],
       ],
     );

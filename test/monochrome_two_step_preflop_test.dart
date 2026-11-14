@@ -59,12 +59,12 @@ void main() {
       await tapKey(t, 'pos-btn');
       expect(find.byKey(const ValueKey('preflop-table')), findsOneWidget);
       await tapKey(t, 'act-co-or');
-      if (find.byKey(const ValueKey('hero-go')).evaluate().isNotEmpty) await tapKey(t, 'hero-go');
+      /* L1: Hero auto-aplicado sin [Mi turno] */
       expect(flow.lastHero!.action, DecisionAction.betRaise, reason: 'Auto-Commit del 3-Bet');
       expect(find.byKey(const ValueKey('preflop-table')), findsOneWidget);
       expect(find.textContaining('✓ El solver asume'), findsOneWidget);
       await tapKey(t, 'act-co-call');
-      if (find.byKey(const ValueKey('advance-flop')).evaluate().isNotEmpty) await tapKey(t, 'advance-flop');
+      
       expect(fsm.phase, HandPhase.flopCards);
       expect(fsm.activeSeats, [Position.co, Position.btn]);
       for (final c in ['Qs', '7d', '2c']) {
@@ -89,14 +89,14 @@ void main() {
     await tapKey(t, 'pos-btn');
     await tapKey(t, 'act-utg-or');
     await tapKey(t, 'act-mp-call');
-    if (find.byKey(const ValueKey('hero-go')).evaluate().isNotEmpty) await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     expect(fsm.seats[Position.co]!.alive, isFalse);
     expect(flow.lastHero, isNotNull);
     await tapKey(t, 'override');
     expect(flow.manualMode, isTrue);
     await tapKey(t, 'act-btn-call');
     await tapKey(t, 'act-bb-call');
-    if (find.byKey(const ValueKey('advance-flop')).evaluate().isNotEmpty) await tapKey(t, 'advance-flop');
+    
     expect(fsm.phase, HandPhase.flopCards);
     expect(fsm.activeSeats, [Position.bb, Position.utg, Position.mp, Position.btn]);
     expect(fsm.totalPotBB, closeTo(10.5, 1e-9));
@@ -112,7 +112,7 @@ void main() {
     expect(scrubValue(t), 2.5);
     await scrubTo(t, 4.5);
     await tapKey(t, 'resize-co');
-    if (find.byKey(const ValueKey('hero-go')).evaluate().isNotEmpty) await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     final open = flow.fsm.actions.firstWhere((a) => a.actor == Position.co);
     expect(open.type, ActionType.raise);
     expect(open.amountBb, 4.5);

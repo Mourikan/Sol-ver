@@ -48,10 +48,10 @@ void main() {
     await pick(t, 'Kd');
     await tapKey(t, 'pos-btn');
     expect(taps, 5);
-    expect(fsm.currentActorSeat, Position.utg, reason: 'Law_1: el cursor arranca solo en UTG');
-    expect(find.byKey(const ValueKey('all-fold')), findsNothing);
+    expect(fsm.currentActorSeat, Position.sb, reason: 'L1: OR de Hero auto-aplicado al elegir posición; cursor en SB');
+    expect(find.byKey(const ValueKey('all-fold')), findsOneWidget, reason: 'steal: [Todos Foldearon]');
     await tapKey(t, 'act-co-or');
-    if (find.byKey(const ValueKey('hero-go')).evaluate().isNotEmpty) await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     expect(fsm.seats[Position.utg]!.alive, isFalse);
     expect(fsm.seats[Position.mp]!.alive, isFalse);
     expect(flow.lastHero!.action, DecisionAction.betRaise, reason: 'Law_2: 0 toques en el turno de Hero');
@@ -60,7 +60,7 @@ void main() {
     expect(fsm.pendingToAct, containsAll([Position.sb, Position.bb, Position.co]));
     expect(find.textContaining('✓ El solver asume'), findsOneWidget);
     await tapKey(t, 'act-co-call');
-    if (find.byKey(const ValueKey('advance-flop')).evaluate().isNotEmpty) await tapKey(t, 'advance-flop');
+    
     expect(taps, 7);
     expect(fsm.seats[Position.sb]!.alive, isFalse);
     expect(fsm.seats[Position.bb]!.alive, isFalse);
@@ -76,10 +76,10 @@ void main() {
     await pick(t, 'As');
     await pick(t, 'Kd');
     await tapKey(t, 'pos-btn');
-    if (find.byKey(const ValueKey('hero-go')).evaluate().isNotEmpty) await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     expect(flow.lastHero!.action, DecisionAction.betRaise);
     await tapKey(t, 'act-bb-call');
-    if (find.byKey(const ValueKey('advance-flop')).evaluate().isNotEmpty) await tapKey(t, 'advance-flop');
+    
     expect(fsm.seats[Position.sb]!.alive, isFalse);
     expect(fsm.phase, HandPhase.flopCards);
     for (final c in ['Kh', '7c', '2d']) {

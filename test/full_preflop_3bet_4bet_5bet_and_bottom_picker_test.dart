@@ -59,19 +59,18 @@ void main() {
       expect(find.byKey(ValueKey('row-$p')), findsOneWidget);
     }
     expect(has('act-utg-fold'), isFalse, reason: 'cero botón Fold en filas sin abrir');
-    await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     expect(fsm.seats[Position.utg]!.alive || fsm.seats[Position.mp]!.alive, isFalse);
     expect(flow.lastHero!.action, DecisionAction.betRaise);
     expect(fsm.currentHighBetBB, 2.5, reason: 'OR 2.5bb auto-aplicado');
-    expect(find.byKey(const ValueKey('row-utg')), findsNothing, reason: 'foldeados se ocultan');
+    expect(find.text('Fold (auto · toca si entró)'), findsNWidgets(2), reason: 'UTG/MP en blanco = Fold especulativo (tocables)');
     for (final k in ['act-btn-call', 'act-btn-3bet', 'act-btn-min3b', 'act-btn-allin']) {
       expect(has(k), isTrue, reason: k);
     }
     await tapKey(t, 'act-btn-3bet');
     expect(fsm.currentHighBetBB, 7.5);
-    expect(fsm.phase, HandPhase.preflop, reason: 'la calle NO se cierra');
-    expect(fsm.pendingToAct, contains(Position.co));
-    await tapKey(t, 'hero-go');
+    // L1: SB/BB en blanco = Fold y Hero responde al 3-Bet al instante (sin [Mi turno]).
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     expect(fsm.seats[Position.sb]!.alive || fsm.seats[Position.bb]!.alive, isFalse);
     expect(fsm.actions.last.actor, Position.co, reason: 'Hero re-evaluado vs 3-Bet');
     expect(find.byKey(const ValueKey('why-1')), findsOneWidget, reason: 'porqué en español');
@@ -96,7 +95,7 @@ void main() {
     final fsm = flow.fsm;
     await tapKey(t, 'act-utg-or');
     await tapKey(t, 'act-mp-3bet');
-    await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     expect(fsm.seats[Position.co]!.alive, isFalse);
     await heroDoes(t, flow, DecisionAction.betRaise, 'act-btn-4bet');
     expect(PreflopRaises.of(fsm), 3, reason: 'cold 4-Bet');
@@ -149,7 +148,7 @@ void main() {
     await pick(t, 'Kd');
     await tapKey(t, 'pos-co');
     await tapKey(t, 'act-utg-or');
-    await tapKey(t, 'hero-go');
+    /* L1: Hero auto-aplicado sin [Mi turno] */
     expect(flow.lastHero, isNotNull);
     expect(t.takeException(), isNull);
   });

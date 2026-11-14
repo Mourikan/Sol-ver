@@ -181,6 +181,11 @@ class HandFlowFSM extends ChangeNotifier {
   final List<String> _labels = [];
   bool get canUndo => _undo.isNotEmpty;
 
+  int _trimmed = 0;
+
+  /// Contador monótono de pasos vivos (para rollback exacto de la auto-aplicación especulativa de Hero).
+  int get stepSeq => _trimmed + _undo.length;
+
   /// Etiqueta legible de cada paso de la mano actual (alineada con la pila de snapshots; '' = paso oculto).
   List<String> get stepLabels => List.unmodifiable(_labels);
 
@@ -232,7 +237,10 @@ class HandFlowFSM extends ChangeNotifier {
         reopens: reopensBettingForPriorActors,
       ),
     );
-    if (_undo.length > 64) _undo.removeAt(0);
+    if (_undo.length > 64) {
+      _undo.removeAt(0);
+      _trimmed++;
+    }
   }
 
   /// Deshace el último paso (acción o carta) de la mano en curso.
@@ -409,6 +417,7 @@ class HandFlowFSM extends ChangeNotifier {
 
   void reset() {
     _undo.clear();
+    _trimmed = 0;
     _labels.clear();
     heroCards.clear();
     board.clear();

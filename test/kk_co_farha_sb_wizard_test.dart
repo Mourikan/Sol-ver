@@ -44,7 +44,7 @@ void main() {
       expect(find.text('★ TÚ (CO)'), findsOneWidget);
       await tapKey(t, 'act-utg-or');
       expect(find.text('Ajustar tamaño de UTG: 2.5 bb'), findsOneWidget);
-      if (find.byKey(const ValueKey('hero-go')).evaluate().isNotEmpty) await tapKey(t, 'hero-go');
+      /* L1: Hero auto-aplicado sin [Mi turno] */
       expect(fsm.seats[Position.mp]!.alive, isFalse);
 
       // PASO 3: jugada auto-aplicada + quién entró después.
@@ -59,7 +59,7 @@ void main() {
       }
       await tapKey(t, 'act-sb-call');
       await tapKey(t, 'act-utg-call');
-      if (find.byKey(const ValueKey('advance-flop')).evaluate().isNotEmpty) await tapKey(t, 'advance-flop');
+      
 
       // PASO 4: cartas del flop.
       expect(step('boardCards'), findsOneWidget);
